@@ -1,0 +1,82 @@
+{
+  "expo": {
+    "name": "PolyLive BIM",
+    "slug": "polylive-bim",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFFFFF"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Capturar fotos de levantamiento BIM"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Geolocalización para levantamiento topográfico"
+        }
+      ],
+      "expo-file-system",
+      [
+        "react-native-ble-plx",
+        {
+          "isBackgroundEnabled": false,
+          "neverForLocation": false,
+          "bluetoothAlwaysPermission": "Conectar a dispositivo Huepa BLE para mediciones de distancia"
+        }
+      ]
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.polylivebim",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Capturar fotos de levantamiento BIM",
+        "NSBluetoothPeripheralUsageDescription": "Conectar a dispositivo Huepa BLE para mediciones de distancia",
+        "NSBluetoothAlwaysUsageDescription": "Conectar a dispositivo Huepa BLE para mediciones de distancia",
+        "NSLocationWhenInUseUsageDescription": "GPS para geolocalización del levantamiento"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
+      },
+      "package": "com.polylivebim",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.INTERNET"
+      ]
+    },
+    "extra": {
+      "eas": {
+        "projectId": "6609f093-633a-4c64-955c-c8648c8897d5"
+      }
+    },
+    "owner": "opjose98",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/6609f093-633a-4c64-955c-c8648c8897d5"
+    }
+  }
+}
