@@ -1,0 +1,41 @@
+# ==== app-bim-typescript (React Native / Expo / TypeScript) ====
+app-bim-typescript/node_modules/
+app-bim-typescript/.expo/
+app-bim-typescript/dist/
+app-bim-typescript/web-build/
+app-bim-typescript/*.jsbundle
+app-bim-typescript/android/
+app-bim-typescript/ios/
+app-bim-typescript/*.apk
+app-bim-typescript/*.aab
+app-bim-typescript/*.ipa
+app-bim-typescript/coverage/
+app-bim-typescript/.git-backup-preunification/
+app-bim-typescript/%ProgramData%/
+
+# ==== _LevON/LevON (Flutter/Dart — referencia de lectura) ====
+_LevON/LevON/build/
+_LevON/LevON/.dart_tool/
+_LevON/LevON/.flutter-plugins
+_LevON/LevON/.flutter-plugins-dependencies
+_LevON/LevON/.packages
+_LevON/LevON/.git-backup-preflutter/
+_LevON/LevON/**/Pods/
+_LevON/LevON/log.txt
+
+# ==== Local tooling ====
+.claude/
+
+# ==== General ====
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+.env
+.env.local
+.env*.local
