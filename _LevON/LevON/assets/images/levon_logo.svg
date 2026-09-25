@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500">
+  <defs>
+    <linearGradient id="toolGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#6EC6F0"/>
+      <stop offset="100%" style="stop-color:#1A6EB5"/>
+    </linearGradient>
+    <linearGradient id="nGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#4DBDE8"/>
+      <stop offset="100%" style="stop-color:#1A6EB5"/>
+    </linearGradient>
+    <filter id="cardShadow" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="6" stdDeviation="12" flood-color="#00000028"/>
+    </filter>
+  </defs>
+
+  <!-- White rounded card background -->
+  <rect width="500" height="500" rx="98" fill="white" filter="url(#cardShadow)"/>
+
+  <!-- ── FLOOR PLAN (left/center) ── dark navy walls -->
+  <!-- Top horizontal wall -->
+  <rect x="44" y="44" width="238" height="40" rx="5" fill="#163770"/>
+  <!-- Left vertical wall -->
+  <rect x="44" y="44" width="40" height="308" rx="5" fill="#163770"/>
+  <!-- Horizontal middle divider (creates upper room with LEV) -->
+  <rect x="84" y="192" width="198" height="36" rx="5" fill="#163770"/>
+  <!-- Inner right wall (lower section, below divider) -->
+  <rect x="242" y="192" width="40" height="160" rx="5" fill="#163770"/>
+  <!-- Bottom wall (partial — leaves door gap) -->
+  <rect x="44" y="312" width="136" height="40" rx="5" fill="#163770"/>
+
+  <!-- Door indicator — dashed line at bottom opening -->
+  <line x1="184" y1="332" x2="244" y2="332"
+        stroke="#163770" stroke-width="11"
+        stroke-dasharray="15,11" stroke-linecap="round"/>
+
+  <!-- "LEV" text inside upper room -->
+  <text x="163" y="178"
+        font-family="'Arial Black', 'Arial Bold', Arial, sans-serif"
+        font-weight="900"
+        font-size="80"
+        fill="#263145"
+        text-anchor="middle">LEV</text>
+
+  <!-- ── RIGHT SIDE: measurement tool + N ── -->
+
+  <!-- Upward arrow shaft -->
+  <line x1="388" y1="172" x2="388" y2="98"
+        stroke="url(#toolGrad)" stroke-width="15" stroke-linecap="round"/>
+  <!-- Arrow head -->
+  <polygon points="388,52 364,106 412,106" fill="#6EC6F0"/>
+
+  <!-- "N" — large, blue gradient -->
+  <text x="378" y="328"
+        font-family="'Arial Black', 'Arial Bold', Arial, sans-serif"
+        font-weight="900"
+        font-size="172"
+        fill="url(#nGrad)"
+        text-anchor="middle">N</text>
+
+  <!-- Plumb-bob / spirit level shaft -->
+  <line x1="395" y1="334" x2="395" y2="414"
+        stroke="url(#toolGrad)" stroke-width="11" stroke-linecap="round"/>
+  <!-- Outer ring -->
+  <circle cx="395" cy="448" r="36" fill="none" stroke="#1A6EB5" stroke-width="11"/>
+  <!-- Inner bubble -->
+  <circle cx="395" cy="448" r="15" fill="#1A6EB5"/>
+</svg>
