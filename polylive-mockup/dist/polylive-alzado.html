@@ -1,0 +1,1986 @@
+<!DOCTYPE html>
+<!-- =====================================================================
+     PolyLive · Mockup · SurveyScreen · Vista Alzado (frontal de muro)
+     alzado.html — misma estructura que planta, catálogos distintos.
+     Navegación: double-tap en un muro de planta.html llega aquí.
+     ===================================================================== -->
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PolyLive · SurveyScreen · Alzado (mockup)</title>
+<style>
+/* =====================================================================
+   PolyLive · Mockup SurveyScreen · Vista Planta
+   styles.css — hoja única del mockup
+   ---------------------------------------------------------------------
+   Índice
+     1. Tokens (colores, sombras, medidas)
+     2. Temas del lienzo (claro / oscuro / alto contraste)
+     3. Base y marco del teléfono
+     4. Primitivas reutilizables (botones, tooltip, check, toast)
+     5. Status bar (2 filas)
+     6. Lienzo: world, muros, cuadrícula
+     7. BPC · Barra de Propiedades Contextual
+     8. Chip de nivel actual
+     9. FAB de creación (inferior derecha)
+    10. FAB de vista + Filtros/Capas (superior derecha)
+    11. Herramientas de lienzo (inferior izquierda)
+    12. Selectores de rango: Nivel y Fase (lateral izquierdo)
+    13. Ventanas flotantes
+    14. Drawer de configuración (⋮)
+   Convención: prefijo por componente (sb-, bpc-, fc-, fv-, ct-, rs-, fw-, cd-)
+   ===================================================================== */
+
+/* 1. TOKENS ------------------------------------------------------------ */
+:root{
+  --ambar:#FF8F00;          /* acción primaria / estado activo */
+  --ambar-d:#E65100;        /* acento sobre blanco (texto, borde FAB vista) */
+  --bg:#FAFAFA;             /* fondo de superficies secundarias */
+  --gris:#E0E0E0;           /* bordes, pista del selector */
+  --texto:#212121;          /* texto principal */
+  --texto-sec:#757575;      /* texto secundario */
+  --tooltip:#424242;        /* etiquetas oscuras (FAB labels, tooltips) */
+  --blanco:#FFFFFF;
+  --sombra-1:0 2px 4px rgba(0,0,0,.12);
+  --sombra-2:0 3px 8px rgba(0,0,0,.18);
+  --sombra-3:0 6px 16px rgba(0,0,0,.25);
+  --statusbar-h:96px;       /* incluye ~22px de zona segura (cámara/notch) */
+}
+
+/* 2. TEMAS DEL LIENZO (solo afectan al canvas, no a la UI) ------------- */
+.canvas{ --cv-bg:#FFFFFF; --cv-grid:#EEEEEE; --cv-dot:#BDBDBD; --cv-ink:#212121; }
+/* Oscuro: trabajo en interiores o de noche, bajo brillo, sin deslumbrar. */
+.canvas[data-tema="oscuro"]{
+  --cv-bg:#121212; --cv-grid:#2A2A2A; --cv-dot:#4A4A4A; --cv-ink:#EDEDED;
+  --cv-sel:#FFB74D; --cv-line-w:1px; --cv-sel-w:3px;
+}
+/* Alto contraste: pensado para exteriores con sol directo. La pantalla
+   se "lava" con la luz y los grises intermedios son lo primero que
+   desaparece, así que aquí se evita el gris: fondo blanco puro (el
+   máximo brillo posible del panel ayuda a vencer el reflejo), tinta
+   negra pura al máximo grosor, cuadrícula en un azul saturado que
+   sigue siendo visible cuando el negro se ve algo lavado, y el
+   color de selección es magenta (nunca se confunde con nada del lienzo,
+   ni con el amarillo/ámbar de la marca). Líneas más gruesas: un trazo
+   fino de 1px es lo primero que el sol vuelve invisible. */
+.canvas[data-tema="contraste"]{
+  --cv-bg:#FFFFFF; --cv-grid:#0B5ED7; --cv-dot:#0B5ED7; --cv-ink:#000000;
+  --cv-sel:#D500F9; --cv-line-w:2px; --cv-sel-w:5px;
+}
+
+/* 3. BASE Y MARCO ------------------------------------------------------ */
+*{box-sizing:border-box;margin:0;padding:0;font-family:Arial,Helvetica,sans-serif}
+body{background:#333;display:flex;flex-direction:column;align-items:center;gap:14px;padding:20px}
+[hidden]{display:none!important}   /* el atributo hidden siempre gana */
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--ambar);outline-offset:2px}
+.phone{
+  width:390px;height:780px;background:var(--bg);
+  border-radius:24px;overflow:hidden;position:relative;
+  box-shadow:0 0 0 8px #000;
+  user-select:none;-webkit-user-select:none;   /* los gestos no seleccionan texto */
+}
+.phone input{user-select:text;-webkit-user-select:text}
+.note{color:#aaa;font-size:11px}
+
+/* 4. PRIMITIVAS -------------------------------------------------------- */
+/* Botón de icono de la status bar (36px) */
+.icon-btn{
+  width:36px;height:36px;border-radius:8px;display:flex;
+  align-items:center;justify-content:center;font-size:18px;color:var(--texto);
+}
+.icon-btn.is-muted{background:var(--gris)}                 /* ☰ */
+.icon-btn.is-disabled{opacity:.4;cursor:default}            /* redo sin historial */
+.icon-btn.is-on{background:var(--ambar);color:#fff;border-radius:18px} /* BLE on / ⋮ abierto */
+
+/* Etiqueta oscura (labels de FAB, tooltips de selectores) */
+.tip{background:var(--tooltip);color:#fff;font-size:11px;padding:4px 8px;border-radius:6px;white-space:nowrap}
+
+/* Botón circular pequeño de opción (menús horizontales) */
+.opt{
+  width:28px;height:28px;border-radius:14px;background:#fff;border:1px solid var(--gris);
+  display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:bold;
+  color:var(--texto);flex-shrink:0;
+}
+.opt.is-on{background:var(--ambar);color:#fff;border-color:var(--ambar)}
+
+/* Casilla de verificación visual */
+.check{width:16px;height:16px;border:1px solid var(--gris);border-radius:4px;flex-shrink:0}
+.check.is-on{background:var(--ambar);border-color:var(--ambar)}
+
+/* Etiqueta de estado (drawer) */
+.tag{background:var(--bg);border:1px solid var(--gris);border-radius:6px;padding:3px 8px;font-size:11px;color:var(--texto)}
+.tag.is-on{background:var(--ambar);color:#fff;border-color:var(--ambar)}
+button.tag{cursor:pointer}
+
+/* Aviso breve (reemplaza alert) */
+.toast{
+  position:absolute;left:50%;bottom:96px;transform:translateX(-50%);
+  background:var(--tooltip);color:#fff;font-size:12px;padding:8px 12px;border-radius:8px;
+  box-shadow:var(--sombra-2);z-index:40;opacity:0;transition:opacity .25s;pointer-events:none;
+  max-width:300px;text-align:center;
+}
+.toast.is-visible{opacity:1}
+
+/* 5. STATUS BAR -------------------------------------------------------- */
+.statusbar{
+  height:var(--statusbar-h);background:#fff;border-bottom:1px solid var(--gris);
+  display:flex;flex-direction:column;justify-content:flex-end;gap:4px;
+  padding:22px 12px 6px 12px;           /* 22px: zona de cámara/notch */
+}
+.sb-row1{display:flex;align-items:center;justify-content:center;height:24px}
+.sb-row2{display:flex;align-items:center;justify-content:space-between;height:36px}
+.sb-right{display:flex;align-items:center;gap:8px}
+.sb-title{font-size:13px;color:var(--texto)}
+.sb-title b{font-size:14px}
+
+/* 6. LIENZO ------------------------------------------------------------ */
+.canvas{
+  position:absolute;top:var(--statusbar-h);bottom:0;left:0;right:0;
+  background-color:var(--cv-bg);overflow:hidden;
+}
+/* Cuadrícula: capas combinables (líneas y/o puntos) */
+.canvas.grid-lineas{
+  background-image:linear-gradient(var(--cv-grid) var(--cv-line-w,1px),transparent var(--cv-line-w,1px)),
+                   linear-gradient(90deg,var(--cv-grid) var(--cv-line-w,1px),transparent var(--cv-line-w,1px));
+  background-size:40px 40px;
+}
+.canvas.grid-puntos{
+  background-image:radial-gradient(var(--cv-dot) 1.4px,transparent 1.6px);
+  background-size:20px 20px;
+}
+.canvas[data-tema="contraste"].grid-puntos{
+  background-image:radial-gradient(var(--cv-dot) 2.6px,transparent 2.8px);  /* puntos más grandes bajo sol */
+}
+.canvas.grid-lineas.grid-puntos{
+  background-image:linear-gradient(var(--cv-grid) var(--cv-line-w,1px),transparent var(--cv-line-w,1px)),
+                   linear-gradient(90deg,var(--cv-grid) var(--cv-line-w,1px),transparent var(--cv-line-w,1px)),
+                   radial-gradient(var(--cv-dot) 1.4px,transparent 1.6px);
+  background-size:40px 40px,40px 40px,20px 20px;
+}
+/* Capa escalable con el contenido dibujado (zoom) */
+.world{position:absolute;inset:0;transform-origin:50% 50%;transition:transform .2s}
+.wall{position:absolute;background:var(--cv-ink);cursor:pointer}
+.wall.is-selected{background:var(--cv-sel,var(--ambar))}
+.miter-preview{position:absolute;border:2px dashed var(--cv-sel,var(--ambar));background:rgba(255,143,0,.08);pointer-events:none}
+
+/* 7. BPC --------------------------------------------------------------- */
+.bpc{
+  position:absolute;top:10px;left:10px;right:10px;height:44px;z-index:5;
+  background:#fff;border-radius:14px;box-shadow:var(--sombra-2);
+  display:flex;align-items:center;justify-content:center;padding:0 14px;gap:14px;
+  font-size:12px;color:var(--texto-sec);white-space:nowrap;
+}
+.bpc b{color:var(--texto)}
+.bpc-drag{                               /* propiedad editable por arrastre */
+  display:flex;align-items:center;gap:6px;background:var(--bg);touch-action:none;
+  border:1px solid var(--gris);border-radius:14px;padding:4px 10px 4px 6px;cursor:ew-resize;
+}
+.bpc-drag .h{color:var(--ambar);font-size:14px}
+.bpc-drag.is-dragging{border-color:var(--ambar)}
+
+/* 8. CHIP DE NIVEL ----------------------------------------------------- */
+.level-chip{position:absolute;top:64px;left:14px;z-index:1;font-size:11px;color:var(--texto-sec);display:flex;gap:5px}
+.level-chip b{font-weight:600}
+.canvas[data-tema="oscuro"] .level-chip,.canvas[data-tema="contraste"] .level-chip{color:#BDBDBD}
+
+/* 9. FAB DE CREACIÓN --------------------------------------------------- */
+.fc-wrap{position:absolute;bottom:24px;right:16px;width:56px;height:56px;z-index:10}
+.fc-main{
+  position:absolute;bottom:0;right:0;width:56px;height:56px;border-radius:28px;
+  background:var(--ambar);color:#fff;font-size:26px;display:flex;align-items:center;justify-content:center;
+  box-shadow:0 4px 8px rgba(0,0,0,.25);
+}
+.fc-minis{position:absolute;bottom:68px;right:0;display:flex;flex-direction:column-reverse;align-items:flex-end;gap:12px}
+.fc-mini{display:flex;align-items:center;gap:8px}
+.fc-mini .btn{
+  width:44px;height:44px;border-radius:22px;background:#fff;border:1px solid var(--gris);
+  display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 2px 4px rgba(0,0,0,.15);
+}
+
+/* 10. FAB DE VISTA + FILTROS/CAPAS ------------------------------------- */
+.fv-wrap{position:absolute;top:64px;right:16px;width:41px;height:41px;z-index:10}
+.fv-main{
+  position:absolute;top:0;right:0;width:41px;height:41px;border-radius:21px;background:#fff;
+  border:2px solid var(--ambar);color:var(--ambar-d);font-size:15px;
+  display:flex;align-items:center;justify-content:center;box-shadow:var(--sombra-2);
+}
+.fv-minis{position:absolute;top:50px;right:0;display:flex;flex-direction:column;align-items:flex-end;gap:9px}
+.fv-mini{display:flex;align-items:center;gap:7px}
+.fv-mini .tip{font-size:10px;padding:3px 7px}
+.fv-mini .btn{
+  width:34px;height:34px;border-radius:17px;background:#fff;border:1px solid var(--gris);
+  display:flex;align-items:center;justify-content:center;font-size:14px;box-shadow:0 2px 4px rgba(0,0,0,.15);
+}
+.fv-mini .btn.is-on{background:var(--ambar);color:#fff;border-color:var(--ambar)}
+.fv-extra{position:absolute;top:113px;right:22px;display:flex;flex-direction:column;gap:10px;z-index:9}
+.fv-extra button{
+  width:28px;height:28px;background:#fff;border:1px solid var(--gris);border-radius:7px;
+  box-shadow:0 2px 4px rgba(0,0,0,.1);font-size:12px;color:var(--texto);
+  display:flex;align-items:center;justify-content:center;
+}
+.fv-extra button.is-on{background:var(--ambar);color:#fff;border-color:var(--ambar)}
+
+/* 11. HERRAMIENTAS DE LIENZO (esquina inferior izquierda) -------------- */
+.ct-wrap{position:absolute;bottom:24px;left:16px;width:48px;height:48px;z-index:10}
+.ct-main{
+  position:absolute;bottom:0;left:0;width:48px;height:48px;border-radius:24px;
+  background:var(--ambar);color:#fff;font-size:20px;display:flex;align-items:center;justify-content:center;
+  box-shadow:0 4px 8px rgba(0,0,0,.25);
+}
+/* Columna de 48px = ancho del botón madre → los iconos comparten eje central */
+.ct-rows{position:absolute;bottom:58px;left:0;width:48px;display:flex;flex-direction:column-reverse;align-items:center;gap:10px}
+.ct-row{display:flex;align-items:center;gap:8px;width:100%}
+.ct-fab{
+  flex:0 0 30px;width:30px;height:30px;margin-left:9px;border-radius:7px;background:#fff;
+  border:1px solid var(--gris);display:flex;align-items:center;justify-content:center;
+  font-size:14px;color:var(--texto);box-shadow:0 2px 4px rgba(0,0,0,.1);
+}
+.ct-fab.is-on{background:var(--ambar);color:#fff;border-color:var(--ambar)}
+.ct-menu{display:flex;align-items:center;gap:6px}
+.ct-menu input{width:52px;height:28px;border:1px solid var(--gris);border-radius:6px;font-size:11px;text-align:center}
+
+/* 12. SELECTORES DE RANGO (Nivel / Fase) ------------------------------- */
+.rs-group{position:absolute;left:16px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:10px;align-items:center;z-index:10}
+.rs-fab{
+  width:34px;height:34px;border-radius:17px;background:var(--ambar);color:#fff;
+  display:flex;align-items:center;justify-content:center;box-shadow:0 4px 8px rgba(0,0,0,.25);
+}
+.rs-panel{position:absolute;left:16px;top:50%;transform:translateY(-50%);width:28px;height:62%;flex-direction:column;align-items:center;z-index:10}
+.rs-panel[hidden]{display:none}
+.rs-panel:not([hidden]){display:flex}
+.rs-btns{display:flex;flex-direction:column;gap:3px;margin-bottom:6px}
+.rs-btn{
+  width:20px;height:20px;border-radius:5px;background:#fff;border:1px solid var(--gris);
+  display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:bold;color:var(--texto-sec);
+}
+.rs-btn.is-on{background:var(--ambar);color:#fff;border-color:var(--ambar)}
+.rs-track-wrap{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;width:100%}
+.rs-inf{font-size:14px;color:var(--texto-sec);line-height:1}
+.rs-track{position:relative;flex:1;width:3px;background:var(--gris);border-radius:2px;margin:6px 0}
+.rs-thumb{
+  position:absolute;left:50%;transform:translate(-50%,-50%);touch-action:none;
+  width:14px;height:14px;border-radius:7px;background:#fff;
+  border:2px solid var(--gris);box-shadow:0 2px 5px rgba(0,0,0,.25);cursor:grab;
+}
+.rs-thumb.is-active{width:19px;height:19px;border-color:#fff;z-index:3}
+.rs-thumb.is-dim{opacity:.55}
+.rs-thumb[data-slot="nivel"]{background:var(--ambar);width:19px;height:19px;border-color:#fff;z-index:3} /* central siempre naranja */
+.rs-thumb .tip{position:absolute;left:22px;top:50%;transform:translateY(-50%);font-size:10px;padding:2px 5px;border-radius:4px;pointer-events:none}
+.rs-actions{display:flex;flex-direction:column;gap:8px;margin-top:8px;align-items:center}
+.rs-act{
+  width:22px;height:22px;border-radius:11px;background:#fff;border:1px solid var(--gris);
+  display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--texto);box-shadow:var(--sombra-1);
+}
+.rs-act.is-primary{background:var(--ambar);color:#fff;border-color:var(--ambar)}
+
+/* Lista editable (ventana flotante y drawer comparten este markup) */
+.rs-cfg-row{display:flex;align-items:center;gap:6px}
+.rs-cfg-row input{border:1px solid var(--gris);border-radius:6px;padding:3px 6px;font-size:11px}
+.rs-cfg-row input[type=text]{width:74px}
+.rs-cfg-row input[type=number]{width:52px}
+.rs-cfg-row input:disabled{background:var(--bg);color:var(--texto-sec)}
+.rs-cfg-del{color:var(--texto-sec);font-size:12px;width:16px}
+.rs-cfg-add{justify-content:center;color:var(--ambar-d);font-weight:bold;font-size:12px;width:100%;padding:4px 0}
+
+/* 13. VENTANAS FLOTANTES ----------------------------------------------- */
+.fw{
+  position:absolute;background:#fff;border-radius:12px;box-shadow:var(--sombra-3);z-index:20;
+  display:flex;flex-direction:column;overflow:hidden;width:200px;
+}
+.fw[hidden]{display:none}
+.fw-header{
+  display:flex;justify-content:space-between;align-items:center;padding:10px 12px;
+  background:var(--bg);border-bottom:1px solid var(--gris);font-size:13px;font-weight:bold;color:var(--texto);
+}
+.fw-close{color:var(--texto-sec);font-size:14px}
+.fw-body{padding:10px 12px;display:flex;flex-direction:column;gap:8px;max-height:260px;overflow-y:auto}
+.fw-row{display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--texto);gap:8px}
+button.fw-row{width:100%;text-align:left}
+.fw-link{justify-content:center;color:var(--ambar-d);font-weight:bold}
+
+/* 14. DRAWER DE CONFIGURACIÓN ------------------------------------------ */
+/* Arranca bajo la status bar para que el botón ✕ siga visible y operable */
+.cd-overlay{position:absolute;top:var(--statusbar-h);left:0;right:0;bottom:0;background:rgba(0,0,0,.35);z-index:30}
+.cd-overlay[hidden]{display:none}
+.cd-drawer{position:absolute;top:0;right:0;bottom:0;width:85%;background:#fff;box-shadow:-4px 0 12px rgba(0,0,0,.25);display:flex;flex-direction:column}
+.cd-header{height:48px;flex-shrink:0;display:flex;align-items:center;padding:0 14px;border-bottom:1px solid var(--gris);font-weight:bold;font-size:15px}
+.cd-body{flex:1;overflow-y:auto;padding:4px 0}
+.cd-section{border-bottom:1px solid var(--gris)}
+.cd-head{display:flex;align-items:center;justify-content:space-between;width:100%;padding:12px 14px;font-size:13px;font-weight:bold;color:var(--texto)}
+.cd-head .chev{transition:transform .2s;color:var(--texto-sec)}
+.cd-section.is-open .chev{transform:rotate(90deg)}
+.cd-content{display:none;padding:0 14px 12px 14px;flex-direction:column;gap:2px}
+.cd-section.is-open .cd-content{display:flex}
+.cd-row{display:flex;align-items:center;justify-content:space-between;padding:5px 0;font-size:12px;color:var(--texto-sec);gap:8px}
+.cd-row input[type=text]{border:1px solid var(--gris);border-radius:6px;padding:4px 8px;font-size:12px;width:130px}
+.cd-tags{display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end}
+
+@media (prefers-reduced-motion:reduce){ *{transition:none!important} }
+
+/* =====================================================================
+   ALZADO — Componentes específicos de la vista frontal
+   ===================================================================== */
+
+/* Muro frontal: rectángulo con borde visible y fondo semitransparente */
+.alzado-muro{
+  border:3px solid var(--cv-ink);background:rgba(128,128,128,.12);
+}
+.canvas[data-tema="oscuro"] .alzado-muro{background:rgba(200,200,200,.08)}
+.canvas[data-tema="contraste"] .alzado-muro{border-width:5px}
+
+/* Líneas horizontales de nivel de referencia */
+.alzado-nivel-line{
+  height:0;border-top:1.5px dashed var(--cv-ink);opacity:.45;
+  display:flex;flex-direction:column;padding-left:14px;
+}
+.canvas[data-tema="contraste"] .alzado-nivel-line{border-top-width:2.5px;opacity:.7}
+.alzado-nivel-label{
+  pointer-events:none;position:absolute;left:14px;z-index:4;
+  line-height:1.1;
+}
+.alzado-nivel-name{
+  font-size:10px;color:var(--texto-sec);opacity:.8;display:block;
+}
+.alzado-nivel-cota{
+  font-size:9px;color:var(--texto-sec);opacity:.55;display:block;margin-top:1px;
+}
+
+/* Mini-mapa y selector de lado (alzado) */
+.minimap-box{
+  position:absolute;top:90px;left:14px;z-index:6;
+  width:100px;background:#fff;border-radius:10px;box-shadow:var(--sombra-2);
+  display:flex;flex-direction:column;align-items:center;padding:8px 6px;gap:0;
+  cursor:pointer;
+}
+.minimap-box[hidden]{display:none}
+.minimap-svg{width:80px;height:56px;pointer-events:none}
+.minimap-svg svg{width:100%;height:100%}
+
+.minimap-btn{
+  position:absolute;top:90px;left:14px;z-index:6;
+  width:34px;height:34px;border-radius:17px;background:#fff;border:1px solid var(--gris);
+  display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--texto-sec);
+  box-shadow:var(--sombra-1);cursor:pointer;
+}
+.minimap-btn[hidden]{display:none}
+
+/* Botones de acción junto al FAB de creación (alzado) */
+/* Botón volver a planta: a la izquierda del FAB+, alineado con su borde inferior.
+   FAB+ = bottom:24px right:16px 56×56. Botón = 40×40.
+   bottom = 24px (misma línea inferior que el FAB)
+   right = 16 + 56 + 8 = 80px (56 del FAB + 8 de gap) */
+.fc-action-left{
+  position:absolute;bottom:24px;right:80px;
+  width:40px;height:40px;border-radius:20px;background:#fff;border:2px solid var(--gris);
+  display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--texto);
+  box-shadow:var(--sombra-1);
+}
+/* Botón cambiar lado: arriba del FAB+, alineado con su borde derecho.
+   right = 16px (misma línea derecha que el FAB)
+   bottom = 24 + 56 + 8 = 88px */
+.fc-action-top{
+  position:absolute;bottom:88px;right:16px;
+  width:40px;height:40px;border-radius:20px;background:#fff;border:2px solid var(--ambar);
+  display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--ambar-d);
+  box-shadow:var(--sombra-1);
+}
+</style>
+</head>
+<body>
+
+<div class="phone" id="phone">
+
+  <!-- STATUS BAR · 2 filas -->
+  <header class="statusbar">
+    <div class="sb-row1"><div class="sb-title" id="sbTitle"></div></div>
+    <div class="sb-row2">
+      <button class="icon-btn is-muted" id="btnMenu" aria-label="Menú principal">☰</button>
+      <div class="sb-right">
+        <button class="icon-btn" id="btnUndo" aria-label="Deshacer">↺</button>
+        <button class="icon-btn is-disabled" id="btnRedo" aria-label="Rehacer" disabled>↻</button>
+        <button class="icon-btn" id="btnBle" aria-label="Bluetooth (mantener para opciones)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6.5 6.5 17.5 17.5 12 23V1l5.5 5.5L6.5 17.5"/></svg>
+        </button>
+        <button class="icon-btn" id="btnConfig" aria-label="Configuración">⋮</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- LIENZO DE ALZADO -->
+  <main class="canvas" id="canvas" data-tema="claro">
+    <div class="world" id="world">
+      <!-- El muro frontal y las líneas de nivel se construyen por JS -->
+    </div>
+
+    <!-- BPC (contenido por bpc-alzado.js) -->
+    <div class="bpc" id="bpc" role="toolbar" aria-label="Propiedades"></div>
+
+    <!-- Chip: muestra el muro activo (llenado por main-alzado.js) -->
+    <div class="level-chip" id="levelChip" aria-live="polite"></div>
+
+    <!-- Grupo lateral: solo Fase (sin Nivel en alzado) -->
+    <div class="rs-group" id="rsGroup"></div>
+  </main>
+
+</div>
+
+<p class="note">PolyLive · mockup Alzado · vista frontal de muro · toca el fondo para deseleccionar</p>
+
+<!-- Orden de carga: base → alzado-específicos → componentes reutilizados → main alzado -->
+<script>/* ==== js/core.js ==== */
+/* =====================================================================
+   core.js — Núcleo del mockup
+   ---------------------------------------------------------------------
+   Expone en window.PL:
+     PL.el(tag, attrs, hijos)   Crea nodos DOM de forma declarativa.
+     PL.store                   Estado central único + suscripciones por ruta.
+     PL.ui                      Gestor de paneles: garantiza "solo un panel abierto".
+     PL.FloatWindow(opts)       Fábrica de ventanas flotantes (registradas en PL.ui).
+     PL.toast(msg)              Aviso breve no bloqueante.
+     PL.gestures                longPress (tap vs mantener) y drag (arrastre).
+   No depende de ningún otro archivo. Se carga primero.
+   ===================================================================== */
+window.PL = window.PL || {};
+
+(function (PL) {
+  'use strict';
+
+  /* ------------------------------------------------------------------
+     PL.el — creador de elementos
+     attrs admite: class, text, html, style{}, dataset{}, on<evento>, y
+     cualquier atributo HTML. Valores null/false se ignoran.
+     ------------------------------------------------------------------ */
+  PL.el = function (tag, attrs, children) {
+    const n = document.createElement(tag);
+    if (attrs) {
+      Object.keys(attrs).forEach(function (k) {
+        const v = attrs[k];
+        if (v == null || v === false) return;
+        if (k === 'class') n.className = v;
+        else if (k === 'text') n.textContent = v;
+        else if (k === 'html') n.innerHTML = v;
+        else if (k === 'style' && typeof v === 'object') Object.assign(n.style, v);
+        else if (k === 'dataset') Object.assign(n.dataset, v);
+        else if (k.indexOf('on') === 0 && typeof v === 'function') n.addEventListener(k.slice(2), v);
+        else n.setAttribute(k, v === true ? '' : v);
+      });
+    }
+    [].concat(children == null ? [] : children).forEach(function (c) {
+      if (c == null || c === false) return;
+      n.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+    });
+    return n;
+  };
+
+  /* ------------------------------------------------------------------
+     PL.store — estado central
+     - Una sola fuente de verdad (ver config.js → initialState).
+     - Rutas con puntos: 'snap.nodo', 'niveles.items', 'tema'.
+     - subscribe(prefijos, fn): fn(state, ruta) se ejecuta cuando cambia
+       una ruta igual, hija o padre de algún prefijo. '*' = todo.
+     ------------------------------------------------------------------ */
+  PL.store = (function () {
+    let state = null;
+    const subs = [];
+
+    function getPath(obj, path) {
+      return path.split('.').reduce(function (o, k) { return o == null ? undefined : o[k]; }, obj);
+    }
+    function setPath(obj, path, val) {
+      const keys = path.split('.');
+      const last = keys.pop();
+      keys.reduce(function (o, k) { return o[k]; }, obj)[last] = val;
+    }
+    function matches(prefix, path) {
+      return prefix === '*' || path === prefix ||
+             path.indexOf(prefix + '.') === 0 || prefix.indexOf(path + '.') === 0;
+    }
+
+    return {
+      init: function (initial) { state = initial; },
+      get: function (path) { return path ? getPath(state, path) : state; },
+      /** Asigna un valor y notifica. */
+      set: function (path, val) { setPath(state, path, val); this.emit(path); },
+      /** Invierte un booleano. */
+      toggle: function (path) { this.set(path, !this.get(path)); },
+      /** Modifica un objeto/arreglo en sitio y notifica una sola vez. */
+      mutate: function (path, fn) { fn(this.get(path)); this.emit(path); },
+      subscribe: function (prefixes, fn) { subs.push({ prefixes: [].concat(prefixes), fn: fn }); },
+      emit: function (path) {
+        subs.forEach(function (s) {
+          if (s.prefixes.some(function (p) { return matches(p, path); })) s.fn(state, path);
+        });
+      }
+    };
+  })();
+
+  /* ------------------------------------------------------------------
+     PL.ui — gestor de paneles
+     Cada panel desplegable se registra con { isOpen(), close() }.
+     Regla global: al abrir un panel se cierran todos los demás.
+     closeAll(excepciones) acepta una clave o un arreglo de claves que
+     deben permanecer abiertas (p. ej. el selector de nivel mientras su
+     ventana de configuración está abierta).
+     Claves usadas: 'fc' 'fv' 'ct' 'rs:niveles' 'rs:fases' 'cd' 'fw:<id>'
+     ------------------------------------------------------------------ */
+  PL.ui = (function () {
+    const panels = {};
+    return {
+      register: function (key, api) { panels[key] = api; },
+      closeAll: function (except) {
+        const keep = [].concat(except || []);
+        Object.keys(panels).forEach(function (k) {
+          if (keep.indexOf(k) === -1 && panels[k].isOpen()) panels[k].close();
+        });
+      },
+      isOpen: function (key) { return !!(panels[key] && panels[key].isOpen()); },
+      keys: function () { return Object.keys(panels); }
+    };
+  })();
+
+  /* ------------------------------------------------------------------
+     PL.FloatWindow — ventana flotante con cabecera y botón ✕
+     opts: { id, title, parent, style, keep[], onOpen(), onClose() }
+     keep: paneles que NO se cierran al abrir esta ventana.
+     Devuelve { root, body, open, close, toggle, isOpen }.
+     ------------------------------------------------------------------ */
+  PL.FloatWindow = function (opts) {
+    const key = 'fw:' + opts.id;
+    const body = PL.el('div', { class: 'fw-body' });
+    const root = PL.el('div', { class: 'fw', id: 'fw-' + opts.id, hidden: true, style: opts.style, role: 'dialog', 'aria-label': opts.title }, [
+      PL.el('div', { class: 'fw-header' }, [
+        PL.el('span', { text: opts.title }),
+        PL.el('button', { class: 'fw-close', 'aria-label': 'Cerrar', text: '✕', onclick: function () { api.close(); } })
+      ]),
+      body
+    ]);
+    (opts.parent || document.body).appendChild(root);
+
+    const api = {
+      root: root, body: body,
+      isOpen: function () { return !root.hidden; },
+      open: function () {
+        PL.ui.closeAll([key].concat(opts.keep || []));
+        root.hidden = false;
+        if (opts.onOpen) opts.onOpen();
+      },
+      close: function () {
+        if (root.hidden) return;
+        root.hidden = true;
+        if (opts.onClose) opts.onClose();
+      },
+      toggle: function () { api.isOpen() ? api.close() : api.open(); }
+    };
+    PL.ui.register(key, api);
+    return api;
+  };
+
+  /* ------------------------------------------------------------------
+     PL.toast — aviso breve (1.8 s). Se monta en el teléfono.
+     ------------------------------------------------------------------ */
+  let toastEl = null, toastTimer = null;
+  PL.toast = function (msg) {
+    if (!toastEl) {
+      toastEl = PL.el('div', { class: 'toast', role: 'status', 'aria-live': 'polite' });
+      document.getElementById('phone').appendChild(toastEl);
+    }
+    toastEl.textContent = msg;
+    toastEl.classList.add('is-visible');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.classList.remove('is-visible'); }, 1800);
+  };
+
+  /* ------------------------------------------------------------------
+     PL.gestures
+     longPress(el, {ms, onTap, onLong}): distingue toque corto de
+       mantener presionado. Si se dispara onLong, el toque no cuenta.
+     drag(el, {onStart(e)→bool, onMove(e), onEnd(e)}): arrastre con
+       captura de puntero. onStart puede devolver false para cancelar.
+     ------------------------------------------------------------------ */
+  PL.gestures = {
+    longPress: function (el, o) {
+      let timer = null, fired = false;
+      const ms = o.ms || 500;
+      el.addEventListener('pointerdown', function () {
+        fired = false;
+        timer = setTimeout(function () { fired = true; timer = null; o.onLong(); }, ms);
+      });
+      el.addEventListener('pointerup', function () {
+        if (timer) { clearTimeout(timer); timer = null; if (!fired) o.onTap(); }
+      });
+      ['pointerleave', 'pointercancel'].forEach(function (ev) {
+        el.addEventListener(ev, function () { clearTimeout(timer); timer = null; });
+      });
+      // Activación por teclado (Enter/Espacio): equivale a toque corto.
+      el.addEventListener('click', function (e) { if (e.detail === 0) o.onTap(); });
+    },
+    drag: function (el, o) {
+      let active = false;
+      el.addEventListener('pointerdown', function (e) {
+        if (o.onStart && o.onStart(e) === false) return;
+        active = true;
+        if (el.setPointerCapture && e.pointerId != null) el.setPointerCapture(e.pointerId);
+      });
+      el.addEventListener('pointermove', function (e) { if (active && o.onMove) o.onMove(e); });
+      ['pointerup', 'pointercancel'].forEach(function (ev) {
+        el.addEventListener(ev, function (e) { if (active) { active = false; if (o.onEnd) o.onEnd(e); } });
+      });
+    }
+  };
+})(window.PL);
+</script>
+<script>/* ==== js/config.js ==== */
+/* =====================================================================
+   config.js — Catálogos declarativos y estado inicial
+   ---------------------------------------------------------------------
+   Todo lo que se muestra en un menú vive aquí como DATOS. Los
+   componentes solo leen estos catálogos y los pintan: para agregar una
+   categoría, vista, snap o propiedad no hace falta tocar componentes.
+   Depende de: core.js (namespace PL).
+   ===================================================================== */
+(function (PL) {
+  'use strict';
+
+  /* Propiedades editables por arrastre en la BPC.
+     paso: incremento por cada ~6 px de desplazamiento horizontal. */
+  const PROPS = {
+    espesor: { label: 'Espesor', unidad: 'cm', min: 5,  max: 60,  paso: 1 },
+    lado:    { label: 'Lado',    unidad: 'cm', min: 15, max: 100, paso: 5 },
+    peralte: { label: 'Peralte', unidad: 'cm', min: 20, max: 120, paso: 5 },
+    tamano:  { label: 'Tamaño',  unidad: 'pt', min: 6,  max: 48,  paso: 1 }
+  };
+
+  /* FAB de creación: nivel 1 = categorías, nivel 2 = herramientas.
+     props: valores por defecto que la herramienta expone en la BPC.
+     Nivel 3 (formas de creación por herramienta): PENDIENTE de definir. */
+  const CATEGORIAS = [
+    { id: 'acotado', label: 'Acotado', icon: '📏', hijos: [
+      { id: 'cota', label: 'Cota', icon: '📐' },
+      { id: 'texto', label: 'Texto', icon: '🔤', props: { tamano: 12 } },
+      { id: 'etiqueta', label: 'Etiqueta', icon: '🏷' }
+    ]},
+    { id: 'dibujo', label: 'Dibujo', icon: '✏️', hijos: [
+      { id: 'coordenada', label: 'Coordenada', icon: '📍' },
+      { id: 'linea', label: 'Línea', icon: '／' },
+      { id: 'poligono', label: 'Polígono', icon: '⬠' }
+    ]},
+    { id: 'arquitectonico', label: 'Arquitectónico', icon: '🏛', hijos: [
+      { id: 'muro', label: 'Muro', icon: '▭', props: { espesor: 15 } },
+      { id: 'columna', label: 'Columna', icon: '▮', props: { lado: 30 } },
+      { id: 'suelo', label: 'Suelo', icon: '▦', props: { espesor: 10 } }
+    ]},
+    { id: 'estructural', label: 'Estructural', icon: '🔩', hijos: [
+      { id: 'columna-e', label: 'Columna', icon: '▮', props: { lado: 30 } },
+      { id: 'viga', label: 'Viga', icon: '▬', props: { peralte: 40 } }
+    ]},
+    { id: 'auditoria', label: 'Auditoría', icon: '📋', hijos: [
+      { id: 'foto', label: 'Foto', icon: '📷' }
+    ]}
+  ];
+
+  /* FAB de vista (radio: una sola activa). */
+  const VISTAS = [
+    { id: 'estructural', label: 'Estructural', icon: '🔩' },
+    { id: 'arquitectura', label: 'Arquitectura', icon: '🏗' },
+    { id: 'topografia', label: 'Topografía', icon: '⛰' },
+    { id: 'coordinacion', label: 'Coordinación', icon: '🧭' }
+  ];
+
+  /* Ventanas Filtros y Capas (casillas independientes). */
+  const FILTROS = [
+    { id: 'muros', label: 'Muros' }, { id: 'columnas', label: 'Columnas' },
+    { id: 'cotas', label: 'Cotas' }, { id: 'fotos', label: 'Fotos' }
+  ];
+  const CAPAS = [
+    { id: 'arquitectonico', label: 'Arquitectónico' }, { id: 'estructural', label: 'Estructural' },
+    { id: 'topografia', label: 'Topografía' }, { id: 'coordinacion', label: 'Coordinación' }
+  ];
+
+  /* Herramientas de lienzo (FAB inferior izquierdo).
+     Orden del arreglo = de ABAJO hacia ARRIBA en pantalla.
+     Tipos de opción:
+       toggle → invierte un booleano del store (path)
+       radio  → asigna value a path (una activa por grupo)
+       action → ejecuta PL.actions[action]() (sin estado)
+       input  → edita un texto del store (path)
+     indicator(state) → true pinta el icono de la fila en ámbar. */
+  const CORNER_TOOLS = [
+    { id: 'escala', icon: '📐', label: 'Escala', items: [
+      { type: 'toggle', path: 'escala.acotado', txt: 'Ac', title: 'Acotado' },
+      { type: 'toggle', path: 'escala.anotativa', txt: 'An', title: 'Anotativa' },
+      { type: 'input', path: 'escala.valor', placeholder: '1:__', title: 'Escala personalizada' }
+    ]},
+    { id: 'cuadricula', icon: '▦', label: 'Cuadrícula', items: [
+      { type: 'toggle', path: 'cuadricula.lineas', txt: '▦', title: 'Cuadrícula de líneas' },
+      { type: 'toggle', path: 'cuadricula.puntos', txt: '⋮⋮', title: 'Rejilla de puntos' },
+      { type: 'toggle', path: 'cuadricula.rotacion', txt: '↻', title: 'Rotación del lienzo' }
+    ]},
+    { id: 'tema', icon: '◐', label: 'Tema', items: [
+      { type: 'radio', path: 'tema', value: 'claro', txt: '☀', title: 'Claro' },
+      { type: 'radio', path: 'tema', value: 'oscuro', txt: '☾', title: 'Oscuro' },
+      { type: 'radio', path: 'tema', value: 'contraste', txt: '◧', title: 'Alto contraste' }
+    ]},
+    { id: 'snap', icon: '⟂', label: 'Snap',
+      indicator: function (s) { return Object.keys(s.snap).some(function (k) { return s.snap[k]; }); },
+      items: [
+        { type: 'toggle', path: 'snap.nodo', txt: '•', title: 'Nodo' },
+        { type: 'toggle', path: 'snap.vertice', txt: '◆', title: 'Vértice' },
+        { type: 'toggle', path: 'snap.medio', txt: '½', title: 'Punto medio' },
+        { type: 'toggle', path: 'snap.angulo', txt: '∠', title: 'Ángulo' }
+      ]},
+    { id: 'zoom', icon: '🔍', label: 'Zoom', items: [
+      { type: 'action', action: 'zoomFit', txt: '⛶', title: 'Encuadre' },
+      { type: 'action', action: 'zoomIn', txt: '＋', title: 'Acercar' },
+      { type: 'action', action: 'zoomOut', txt: '－', title: 'Alejar' },
+      { type: 'action', action: 'zoomSel', txt: '☐', title: 'Zoom a selección' }
+    ]}
+  ];
+
+  const TEMAS = [
+    { id: 'claro', label: 'Claro' }, { id: 'oscuro', label: 'Oscuro' }, { id: 'contraste', label: 'Alto contraste' }
+  ];
+
+  /* Datos del archivo (solo lectura en el drawer). */
+  const ARCHIVO = {
+    proyecto: 'NARG29 · Sede SUMB', archivo: 'SUMB_Recinto03.plv', version: 'v1.3',
+    tamano: '4.2 MB', editado: 'Hoy, 10:42 a.m.', objetos: 128
+  };
+
+  /* Estado inicial de un selector de rango (Nivel o Fase).
+     - items: SIEMPRE ordenados por valor ascendente.
+     - Extremos ±∞ fijos (no editables ni borrables).
+     - base: valor 0, no se borra ni cambia de valor (sí de nombre).
+     - pos: ÍNDICES dentro de items para cada deslizador.
+     - activos: qué deslizadores se pueden arrastrar (toggles S/N/I). */
+  function rangeState(baseName) {
+    return {
+      items: [
+        { id: 'inf-', name: '−∞', valor: -Infinity, fijo: true },
+        { id: 'base', name: baseName, valor: 0, base: true },
+        { id: 'inf+', name: '+∞', valor: Infinity, fijo: true }
+      ],
+      pos: { superior: 2, nivel: 1, inferior: 0 },
+      activos: { superior: false, nivel: true, inferior: false },
+      seq: 0
+    };
+  }
+
+  function initialState() {
+    return {
+      proyecto: { sede: 'SUMB', recinto: 'Recinto 03', responsable: 'Jose' },
+      /* Objetos demo del lienzo: 4 muros (índice = orden en index.html). */
+      muros: [0, 1, 2, 3].map(function () { return { material: 'Ladrillo', props: { espesor: 15 } }; }),
+      seleccion: { tipo: 'Muro', ref: 1 },   // objeto seleccionado ({tipo, ref}) o null
+      herramienta: null,        // herramienta activa del FAB de creación o null
+      vista: 'arquitectura',
+      filtros: { muros: true, columnas: true, cotas: false, fotos: true },
+      capas: { arquitectonico: true, estructural: true, topografia: false, coordinacion: false },
+      zoom: 100,
+      snap: { nodo: true, vertice: false, medio: false, angulo: false },
+      tema: 'claro',
+      cuadricula: { lineas: true, puntos: false, rotacion: false },
+      escala: { acotado: false, anotativa: false, valor: '50' },
+      ble: { on: true, dispositivo: 'Leica DISTO', bateria: 82 },
+      niveles: rangeState('Nivel 0'),
+      fases: rangeState('Fase 0')
+    };
+  }
+
+  PL.config = {
+    PROPS: PROPS, CATEGORIAS: CATEGORIAS, VISTAS: VISTAS, FILTROS: FILTROS, CAPAS: CAPAS,
+    CORNER_TOOLS: CORNER_TOOLS, TEMAS: TEMAS, ARCHIVO: ARCHIVO, initialState: initialState
+  };
+})(window.PL);
+</script>
+<script>/* ==== js/config-alzado.js ==== */
+/* =====================================================================
+   config-alzado.js — Catálogos específicos de la vista de Alzado
+   ---------------------------------------------------------------------
+   Sobreescribe CATEGORIAS y ajusta initialState para el modo alzado.
+   Reutiliza VISTAS, FILTROS, CAPAS, CORNER_TOOLS, TEMAS, ARCHIVO,
+   PROPS del config.js base.
+   Depende de: config.js (ya cargado).
+   ===================================================================== */
+(function (PL) {
+  'use strict';
+
+  /* Categorías del FAB de creación en alzado */
+  PL.config.CATEGORIAS_ALZADO = [
+    { id: 'acotado', label: 'Acotado', icon: '📏', hijos: [
+      { id: 'cota', label: 'Cota', icon: '📐' },
+      { id: 'texto', label: 'Texto', icon: '🔤', props: { tamano: 12 } },
+      { id: 'etiqueta', label: 'Etiqueta', icon: '🏷' }
+    ]},
+    { id: 'dibujo', label: 'Dibujo', icon: '✏️', hijos: [
+      { id: 'coordenada', label: 'Coordenada', icon: '📍' },
+      { id: 'linea', label: 'Línea', icon: '／' },
+      { id: 'poligono', label: 'Polígono', icon: '⬠' }
+    ]},
+    { id: 'arquitectonico', label: 'Arquitectónico', icon: '🏛', hijos: [
+      { id: 'vano', label: 'Vano', icon: '▯', props: { lado: 80 } },
+      { id: 'puerta', label: 'Puerta', icon: '🚪', props: { lado: 90 } }
+    ]},
+    { id: 'estructural', label: 'Estructural', icon: '🔩', hijos: [
+      { id: 'viga', label: 'Viga', icon: '▬', props: { peralte: 40 } },
+      { id: 'cercha', label: 'Cercha', icon: '△', props: { peralte: 60 } },
+      { id: 'correa', label: 'Correa', icon: '▭', props: { peralte: 20 } }
+    ]},
+    { id: 'auditoria', label: 'Auditoría', icon: '📋', hijos: [
+      { id: 'foto', label: 'Foto', icon: '📷' }
+    ]}
+  ];
+
+  /* Estado inicial para alzado: sin selector de nivel (los niveles se
+     dibujan como líneas de referencia), con selector de fase, y el muro
+     que se está detallando. */
+  function rangeState(baseName) {
+    return {
+      items: [
+        { id: 'inf-', name: '−∞', valor: -Infinity, fijo: true },
+        { id: 'base', name: baseName, valor: 0, base: true },
+        { id: 'inf+', name: '+∞', valor: Infinity, fijo: true }
+      ],
+      pos: { superior: 2, nivel: 1, inferior: 0 },
+      activos: { superior: false, nivel: true, inferior: false },
+      seq: 0
+    };
+  }
+
+  PL.config.VISTAS_ALZADO = [
+    { id: 'estructural', label: 'Estructural', icon: '🔩' },
+    { id: 'arquitectura', label: 'Arquitectura', icon: '🏗' },
+    { id: 'coordinacion', label: 'Coordinación', icon: '🧭' }
+  ];
+
+  PL.config.initialStateAlzado = function () {
+    return {
+      proyecto: { sede: 'SUMB', recinto: 'Recinto 03', responsable: 'Jose' },
+      /* Muro que se está detallando (viene de la planta, demo). */
+      muroActivo: { id: 'M-03', nombre: 'Muro 03', ancho: 450, alto: 320, material: 'Ladrillo', props: { espesor: 15 } },
+      lado: 'A',   /* 'A' o 'B': lado del muro que se está viendo */
+      minimapa: true,  /* true=expandido, false=colapsado a botón */
+      seleccion: null,
+      herramienta: null,
+      vista: 'arquitectura',
+      filtros: { vanos: true, puertas: true, vigas: true, cotas: false, fotos: true },
+      capas: { arquitectonico: true, estructural: true, topografia: false, coordinacion: false },
+      zoom: 100,
+      snap: { nodo: true, vertice: false, medio: false, angulo: false },
+      tema: 'claro',
+      cuadricula: { lineas: true, puntos: false, rotacion: false },
+      escala: { acotado: false, anotativa: false, valor: '50' },
+      ble: { on: true, dispositivo: 'Leica DISTO', bateria: 82 },
+      /* Niveles como referencia visual (no selector interactivo). */
+      nivelesRef: [
+        { name: 'Cimentación', cota: -0.6 },
+        { name: 'Nivel 0', cota: 0 },
+        { name: 'Piso 1', cota: 3.2 }
+      ],
+      fases: rangeState('Fase 0')
+    };
+  };
+
+  /* Filtros y capas ajustados para alzado */
+  PL.config.FILTROS_ALZADO = [
+    { id: 'vanos', label: 'Vanos' }, { id: 'puertas', label: 'Puertas' },
+    { id: 'vigas', label: 'Vigas' }, { id: 'cotas', label: 'Cotas' },
+    { id: 'fotos', label: 'Fotos' }
+  ];
+})(window.PL);
+</script>
+<script>/* ==== js/components/canvas-alzado.js ==== */
+/* =====================================================================
+   components/canvas-alzado.js — Lienzo de alzado (vista frontal)
+   ---------------------------------------------------------------------
+   Muestra el muro activo como un rectángulo grande (ancho × alto).
+   Dibuja los niveles de referencia como líneas horizontales punteadas
+   con nombre arriba y cota abajo, alineados a la izquierda.
+   Reutiliza temas, cuadrícula y zoom del canvas.js base.
+   Depende de: core.js, config.js, config-alzado.js
+   ===================================================================== */
+(function (PL) {
+  'use strict';
+  PL.components = PL.components || {};
+  PL.actions = PL.actions || {};
+
+  const ZOOM_MIN = 25, ZOOM_MAX = 400, ZOOM_FACTOR = 1.25;
+  const PX_POR_M = 80;   // escala demo: 1 m = 80 px
+
+  PL.components.canvas = {
+    mount: function () {
+      const store = PL.store;
+      const canvas = document.getElementById('canvas');
+      const world = document.getElementById('world');
+
+      /* Acciones de zoom */
+      function setZoom(z) { store.set('zoom', Math.round(Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z)))); }
+      PL.actions.zoomIn = function () { setZoom(store.get('zoom') * ZOOM_FACTOR); };
+      PL.actions.zoomOut = function () { setZoom(store.get('zoom') / ZOOM_FACTOR); };
+      PL.actions.zoomFit = function () { setZoom(100); PL.toast('Encuadre: 100%'); };
+      PL.actions.zoomSel = function () { PL.toast('Zoom a selección (demo)'); };
+
+      /* Construir el muro y las líneas de nivel */
+      var labelEls = [];   // referencias a las etiquetas para reposicionar en render()
+      var lineData = [];   // datos de las líneas para recalcular posición
+
+      function buildWorld() {
+        world.innerHTML = '';
+        labelEls.forEach(function (el) { if (el.parentNode) el.parentNode.removeChild(el); });
+        labelEls = []; lineData = [];
+        var m = store.get('muroActivo');
+
+        /* Muro como rectángulo centrado */
+        var mW = m.ancho, mH = m.alto;
+        var muroEl = PL.el('div', { class: 'alzado-muro', style: {
+          width: mW + 'px', height: mH + 'px',
+          position: 'absolute',
+          left: '50%', top: '50%',
+          transform: 'translate(-50%, -50%)'
+        }});
+        world.appendChild(muroEl);
+
+        /* Líneas de nivel: las líneas van en world (escalan con zoom).
+           Las etiquetas van DIRECTAMENTE en el canvas (no escalan nunca,
+           siempre fijas a la izquierda). Su posición Y se recalcula en render(). */
+        var niveles = store.get('nivelesRef') || [];
+        niveles.forEach(function (n) {
+          lineData.push({ cota: n.cota, name: n.name });
+          // Línea dentro de world (escala con zoom)
+          var line = PL.el('div', { class: 'alzado-nivel-line', dataset: { cota: n.cota } });
+          world.appendChild(line);
+          // Etiqueta fuera de world (fija en canvas)
+          var labelBox = PL.el('div', { class: 'alzado-nivel-label' }, [
+            PL.el('span', { class: 'alzado-nivel-name', text: n.name }),
+            PL.el('span', { class: 'alzado-nivel-cota', text: (n.cota >= 0 ? '+' : '') + n.cota.toFixed(2) + ' m' })
+          ]);
+          canvas.appendChild(labelBox);
+          labelEls.push({ el: labelBox, cota: n.cota });
+        });
+      }
+
+      function render(s) {
+        canvas.dataset.tema = s.tema;
+        canvas.classList.toggle('grid-lineas', s.cuadricula.lineas);
+        canvas.classList.toggle('grid-puntos', s.cuadricula.puntos);
+        var z = s.zoom / 100;
+        world.style.transform = 'scale(' + z + ')';
+
+        /* Posicionar las líneas dentro de world (coordenadas sin zoom, world escala).
+           El muro se centra en 50%/50% de world, así que cota 0 = centro + alto/2. */
+        var m = s.muroActivo;
+        var worldH = canvas.offsetHeight;
+        var basePx = worldH / 2 + m.alto / 2;  // cota 0 en coordenadas de world
+        world.querySelectorAll('.alzado-nivel-line').forEach(function (line) {
+          var cota = parseFloat(line.dataset.cota);
+          var yWorld = basePx - (cota * PX_POR_M);
+          line.style.cssText = 'position:absolute;left:-9999px;right:-9999px;top:' + yWorld + 'px';
+        });
+
+        /* Posicionar las etiquetas en el canvas (coordenadas de pantalla).
+           Convertimos la posición de world a pantalla multiplicando por el zoom. */
+        var canvasRect = canvas.getBoundingClientRect();
+        var worldCenterY = canvasRect.height / 2;
+        labelEls.forEach(function (item) {
+          var yWorld = basePx - (item.cota * PX_POR_M);
+          // En pantalla: el centro de world está en 50% del canvas, y yWorld
+          // se mide desde el top de world. La distancia desde el centro = yWorld - worldH/2.
+          var yScreen = worldCenterY + (yWorld - worldH / 2) * z;
+          item.el.style.top = (yScreen - 6) + 'px';  // -6 para centrar verticalmente con la línea
+        });
+      }
+
+      store.subscribe(['tema', 'cuadricula', 'zoom', 'escala'], render);
+      buildWorld();
+      render(store.get());
+      /* El primer layout puede no tener aún medidas reales (offsetHeight/
+         getBoundingClientRect a 0 en el primer frame). Se reposiciona una
+         vez más tras el primer paint para que las líneas no queden
+         apiladas arriba. */
+      requestAnimationFrame(function () { render(store.get()); });
+
+      /* Tocar el fondo → deseleccionar */
+      canvas.addEventListener('click', function (e) {
+        if (e.target !== canvas && e.target !== world) return;
+        PL.ui.closeAll();
+        store.set('herramienta', null);
+        store.set('seleccion', null);
+      });
+    }
+  };
+})(window.PL);
+</script>
+<script>/* ==== js/components/statusbar.js ==== */
+/* =====================================================================
+   components/statusbar.js — Status bar (2 filas)
+   ---------------------------------------------------------------------
+   Fila 1: "Sede · Recinto" centrado (lee store.proyecto → se actualiza
+           en vivo si se edita desde el drawer).
+   Fila 2: ☰ menú principal (izq.) | ↺ ↻ · BLE · ⋮ (der.)
+   BLE:  toque corto  → enciende/apaga (círculo ámbar = encendido)
+         mantener 0.5s → abre ventana "Bluetooth (BLE)"; mientras está
+                         abierta el círculo se muestra gris.
+   ⋮ :  lo gestiona config-drawer.js (se convierte en ✕ al abrir).
+   Depende de: core.js, config.js
+   ===================================================================== */
+(function (PL) {
+  'use strict';
+  PL.components = PL.components || {};
+
+  PL.components.statusbar = {
+    mount: function () {
+      const store = PL.store;
+      const title = document.getElementById('sbTitle');
+      const btnBle = document.getElementById('btnBle');
+      const phone = document.getElementById('phone');
+
+      /* Título ---------------------------------------------------- */
+      function renderTitle(s) {
+        title.innerHTML = '';
+        title.append(PL.el('b', { text: s.proyecto.sede }), ' · ' + s.proyecto.recinto);
+      }
+      store.subscribe('proyecto', renderTitle);
+      renderTitle(store.get());
+
+      /* Ventana BLE (posicionada bajo la status bar, a la derecha) - */
+      const tagEstado = PL.el('span', { class: 'tag' });
+      const win = PL.FloatWindow({
+        id: 'ble', title: 'Bluetooth (BLE)', parent: phone,
+        style: 'top:104px;right:56px;',
+        onOpen: renderBle, onClose: renderBle
+      });
+      win.body.append(
+        PL.el('div', { class: 'fw-row' }, [PL.el('span', { text: 'Estado' }), tagEstado]),
+        PL.el('div', { class: 'fw-row' }, [PL.el('span', { text: 'Dispositivo' }), PL.el('span', { text: store.get('ble.dispositivo') })]),
+        PL.el('div', { class: 'fw-row' }, [PL.el('span', { text: 'Batería' }), PL.el('span', { text: store.get('ble.bateria') + '%' })]),
+        PL.el('button', { class: 'fw-row fw-link', text: 'Buscar dispositivos', onclick: function () { PL.toast('Buscando dispositivos BLE…'); } })
+      );
+
+      /* Botón BLE: ámbar solo si está encendido Y su ventana cerrada */
+      function renderBle() {
+        const on = store.get('ble.on');
+        btnBle.classList.toggle('is-on', on && !win.isOpen());
+        btnBle.setAttribute('aria-pressed', String(on));
+        tagEstado.textContent = on ? 'Conectado' : 'Desactivado';
+        tagEstado.classList.toggle('is-on', on);
+      }
+      store.subscribe('ble', renderBle);
+      PL.gestures.longPress(btnBle, {
+        ms: 500,
+        onTap: function () { store.toggle('ble.on'); },
+        onLong: function () { win.open(); }
+      });
+      renderBle();
+
+      /* Deshacer / rehacer: solo demostrativo */
+      document.getElementById('btnUndo').addEventListener('click', function () { PL.toast('Deshacer (demo)'); });
+      document.getElementById('btnMenu').addEventListener('click', function () { PL.toast('Menú principal: pendiente de diseño'); });
+    }
+  };
+})(window.PL);
+</script>
+<script>/* ==== js/components/bpc-alzado.js ==== */
+/* =====================================================================
+   components/bpc-alzado.js — BPC para la vista de alzado
+   ---------------------------------------------------------------------
+   Misma barra flotante, pero el contexto vacío muestra info del muro
+   activo en vez de "Lienzo". La herramienta y la selección funcionan
+   igual que en planta.
+   Depende de: core.js, config.js
+   ===================================================================== */
+(function (PL) {
+  'use strict';
+  PL.components = PL.components || {};
+  var PX_POR_PASO = 6;
+
+  PL.components.bpc = {
+    mount: function () {
+      var store = PL.store, bar = document.getElementById('bpc');
+      var arrastrando = false;
+
+      function dragProp(basePath, key, valor) {
+        var def = PL.config.PROPS[key];
+        var val = PL.el('b', { class: 'v', text: valor + ' ' + def.unidad });
+        var pill = PL.el('div', { class: 'bpc-drag', role: 'slider', 'aria-label': def.label,
+          'aria-valuenow': valor, 'aria-valuemin': def.min, 'aria-valuemax': def.max, tabindex: 0 },
+          [PL.el('span', { class: 'h', text: '↔' }), def.label + ' ', val]);
+        var x0 = 0, v0 = 0;
+        PL.gestures.drag(pill, {
+          onStart: function (e) { x0 = e.clientX || 0; v0 = store.get(basePath + '.' + key); arrastrando = true; pill.classList.add('is-dragging'); },
+          onMove: function (e) {
+            var pasos = Math.round(((e.clientX || 0) - x0) / PX_POR_PASO);
+            var nuevo = Math.max(def.min, Math.min(def.max, v0 + pasos * def.paso));
+            if (nuevo !== store.get(basePath + '.' + key)) {
+              store.set(basePath + '.' + key, nuevo);
+              val.textContent = nuevo + ' ' + def.unidad;
+              pill.setAttribute('aria-valuenow', nuevo);
+            }
+          },
+          onEnd: function () { arrastrando = false; pill.classList.remove('is-dragging'); store.emit(basePath); }
+        });
+        pill.addEventListener('keydown', function (e) {
+          var d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+          if (!d) return;
+          var cur = store.get(basePath + '.' + key);
+          store.set(basePath + '.' + key, Math.max(def.min, Math.min(def.max, cur + d * def.paso)));
+        });
+        return pill;
+      }
+
+      function propsPills(basePath, props) {
+        return Object.keys(props || {}).map(function (k) { return dragProp(basePath, k, props[k]); });
+      }
+
+      function render(s) {
+        if (arrastrando) return;
+        bar.innerHTML = '';
+        if (s.herramienta) {
+          var h = s.herramienta;
+          bar.append(PL.el('span', {}, ['Herramienta: ', PL.el('b', { text: h.label })]),
+                     PL.el('span', { text: h.categoria }));
+          var pills = propsPills('herramienta.props', h.props);
+          if (pills.length) pills.forEach(function (p) { bar.append(p); });
+          else bar.append(PL.el('span', { text: 'Opciones pendientes' }));
+        } else if (s.seleccion) {
+          bar.append(PL.el('span', { text: s.seleccion.tipo + ' seleccionado' }));
+          if (s.seleccion.props) propsPills('seleccion.props', s.seleccion.props).forEach(function (p) { bar.append(p); });
+        } else {
+          /* Contexto vacío: info del muro activo */
+          var m = s.muroActivo;
+          bar.append(PL.el('b', { text: 'Alzado' }),
+                     PL.el('span', {}, ['Muro: ', PL.el('b', { text: m.nombre })]),
+                     PL.el('span', { text: m.material + ' · Lado ' + s.lado }),
+                     PL.el('span', {}, ['Escala ', PL.el('b', { text: '1:' + (s.escala.valor || '—') })]));
+        }
+      }
+      store.subscribe(['herramienta', 'seleccion', 'muroActivo', 'escala', 'lado'], render);
+      render(store.get());
+    }
+  };
+})(window.PL);
+</script>
+<script>/* ==== js/components/range-selector.js ==== */
+/* =====================================================================
+   components/range-selector.js — Selectores de rango: NIVEL y FASE
+   ---------------------------------------------------------------------
+   Una sola FÁBRICA (PL.RangeSelector) genera ambos selectores; solo
+   cambian los datos (clave del store, textos, unidad, icono).
+     • Nivel → espacial (cota en metros).  Clave store: 'niveles'
+     • Fase  → temporal (orden, sin unidad). Clave store: 'fases'
+
+   Anatomía
+     FAB (34px) dentro del grupo lateral izquierdo #rsGroup (centrado).
+     Al abrir cualquiera, el GRUPO COMPLETO se oculta y aparece el panel:
+       [S][N][I]   toggles independientes: habilitan el arrastre de su
+                   deslizador (varios a la vez). N activo por defecto.
+         ∞         extremo superior (+∞)
+         │ ● S     deslizador superior (gris) — siempre por ENCIMA de N
+         │ ● N     deslizador central (siempre ámbar)
+         │ ● I     deslizador inferior (gris) — siempre por DEBAJO de N
+         ∞         extremo inferior (−∞)
+       [⚙]         abre la ventana de configuración (el panel sigue visible)
+       [←]         (ámbar) cierra el panel y vuelve a mostrar los FABs
+     Orientación: valores altos ARRIBA, negativos ABAJO.
+     Tooltip de cada deslizador: "Nombre (+valor unidad)".
+
+   Configuración (ventana flotante + sección del drawer, sincronizadas)
+     • Siempre existen −∞, base (valor 0) y +∞. Por defecto solo base.
+     • Agregar → valor único (máximo + 1); se reordena de mayor a menor.
+     • Editar valor → se reordena; si el valor ya existe, se avisa y
+       no se aplica. La base no cambia de valor ni se elimina.
+
+   Paneles registrados en PL.ui: 'rs:niveles', 'rs:fases',
+   ventanas 'fw:nivelescfg', 'fw:fasescfg'.
+   Depende de: core.js, config.js
+   ===================================================================== */
+(function (PL) {
+  'use strict';
+  PL.components = PL.components || {};
+  PL.selectors = PL.selectors || {};
+
+  const SLOTS = ['superior', 'nivel', 'inferior'];
+  const LETRA = { superior: 'S', nivel: 'N', inferior: 'I' };
+
+  /* opts: { key, titulo, item, unidad, valorLabel, icon(svg), chipId? } */
+  PL.RangeSelector = function (opts) {
+    const store = PL.store;
+    const K = opts.key;
+    const canvas = document.getElementById('canvas');
+    const group = document.getElementById('rsGroup');
+    const cfgContainers = [];
+
+    const st = function () { return store.get(K); };
+    const esFinito = function (it) { return isFinite(it.valor); };
+    const fmt = function (v) { return (v > 0 ? '+' : '') + v + opts.unidad; };
+
+    /* ---------- FAB ---------------------------------------------- */
+    const fab = PL.el('button', { class: 'rs-fab', id: 'rsFab-' + K, title: opts.titulo, 'aria-label': opts.titulo, html: opts.icon });
+    group.appendChild(fab);
+
+    /* ---------- Panel -------------------------------------------- */
+    const btns = {}, thumbs = {}, tips = {};
+    const track = PL.el('div', { class: 'rs-track' });
+    SLOTS.forEach(function (slot) {
+      btns[slot] = PL.el('button', { class: 'rs-btn', text: LETRA[slot], title: 'Mover ' + slot,
+        onclick: function () { store.toggle(K + '.activos.' + slot); } });
+      tips[slot] = PL.el('span', { class: 'tip' });
+      thumbs[slot] = PL.el('div', { class: 'rs-thumb', dataset: { slot: slot }, role: 'slider', 'aria-label': slot }, [tips[slot]]);
+      track.appendChild(thumbs[slot]);
+    });
+    const btnCfg = PL.el('button', { class: 'rs-act', title: 'Configurar', 'aria-label': 'Configurar ' + opts.titulo, text: '⚙' });
+    const btnBack = PL.el('button', { class: 'rs-act is-primary', title: 'Volver', 'aria-label': 'Cerrar selector', text: '←' });
+    const panel = PL.el('div', { class: 'rs-panel', id: 'rsPanel-' + K, hidden: true }, [
+      PL.el('div', { class: 'rs-btns' }, SLOTS.map(function (s) { return btns[s]; })),
+      PL.el('div', { class: 'rs-track-wrap' }, [PL.el('span', { class: 'rs-inf', text: '∞' }), track, PL.el('span', { class: 'rs-inf', text: '∞' })]),
+      PL.el('div', { class: 'rs-actions' }, [btnCfg, btnBack])
+    ]);
+    canvas.appendChild(panel);
+
+    /* ---------- Ventana de configuración -------------------------- */
+    // A la derecha, sobre el FAB de creación: nunca tapa la barra ni los tooltips.
+    const win = PL.FloatWindow({ id: K + 'cfg', title: opts.titulo, parent: canvas,
+      style: 'right:16px;bottom:96px;width:220px;', keep: ['rs:' + K] });
+    cfgContainers.push(win.body);
+
+    /* ---------- Apertura / cierre --------------------------------- */
+    const api = {
+      isOpen: function () { return !panel.hidden; },
+      open: function () { PL.ui.closeAll('rs:' + K); panel.hidden = false; group.hidden = true; },
+      close: function () {
+        if (panel.hidden) return;
+        panel.hidden = true; group.hidden = false; win.close();
+      }
+    };
+    PL.ui.register('rs:' + K, api);
+    fab.addEventListener('click', api.open);
+    btnBack.addEventListener('click', api.close);
+    btnCfg.addEventListener('click', win.toggle);
+
+    /* ---------- Deslizadores -------------------------------------- */
+    function renderThumbs() {
+      const s = st(), n = s.items.length;
+      SLOTS.forEach(function (slot) {
+        const idx = s.pos[slot], it = s.items[idx];
+        thumbs[slot].style.top = ((1 - idx / (n - 1)) * 100) + '%';  // valor alto → arriba
+        tips[slot].textContent = esFinito(it) ? it.name + ' (' + fmt(it.valor) + ')' : it.name;
+        thumbs[slot].classList.toggle('is-active', s.activos[slot]);
+        thumbs[slot].classList.toggle('is-dim', !s.activos[slot] && slot !== 'nivel');
+        thumbs[slot].setAttribute('aria-valuetext', it.name);
+        btns[slot].classList.toggle('is-on', s.activos[slot]);
+        btns[slot].setAttribute('aria-pressed', String(s.activos[slot]));
+      });
+    }
+
+    function pointerToIdx(clientY) {
+      const r = track.getBoundingClientRect(), n = st().items.length;
+      const pct = r.height ? Math.max(0, Math.min(1, (clientY - r.top) / r.height)) : 0;
+      return Math.round((1 - pct) * (n - 1));
+    }
+
+    /* Restricciones: inferior < nivel < superior (nunca se superponen).
+       El central tampoco puede ocupar los extremos ±∞. */
+    function tryMove(slot, idx) {
+      const s = st(), p = s.pos, last = s.items.length - 1;
+      idx = Math.max(0, Math.min(last, idx));
+      if (slot === 'superior') idx = Math.max(idx, p.nivel + 1);
+      else if (slot === 'inferior') idx = Math.min(idx, p.nivel - 1);
+      else idx = Math.max(p.inferior + 1, Math.min(p.superior - 1, idx));
+      if (idx !== p[slot]) store.set(K + '.pos.' + slot, idx);
+    }
+
+    SLOTS.forEach(function (slot) {
+      PL.gestures.drag(thumbs[slot], {
+        onStart: function () { return st().activos[slot]; },    // solo si su botón está activo
+        onMove: function (e) { tryMove(slot, pointerToIdx(e.clientY)); }
+      });
+    });
+
+    /* ---------- Modelo de configuración --------------------------- */
+    // Recalcula posiciones tras reordenar, conservando los elementos
+    // que cada deslizador tenía seleccionados cuando siguen siendo válidos.
+    function reordenar(prev) {
+      store.mutate(K, function (s) {
+        s.items.sort(function (a, b) { return a.valor - b.valor; });
+        const idxDe = function (id) { return s.items.findIndex(function (it) { return it.id === id; }); };
+        const last = s.items.length - 1;
+        let niv = idxDe(prev.nivel); if (niv < 0) niv = idxDe('base');
+        let sup = idxDe(prev.superior); if (sup <= niv) sup = last;
+        let inf = idxDe(prev.inferior); if (inf < 0 || inf >= niv) inf = 0;
+        s.pos = { superior: sup, nivel: niv, inferior: inf };
+      });
+    }
+    function snapshot() {
+      const s = st();
+      return { superior: s.items[s.pos.superior].id, nivel: s.items[s.pos.nivel].id, inferior: s.items[s.pos.inferior].id };
+    }
+    function buscar(id) { return st().items.filter(function (it) { return it.id === id; })[0]; }
+
+    const model = {
+      add: function () {
+        const prev = snapshot();
+        const finitos = st().items.filter(esFinito).map(function (it) { return it.valor; });
+        const v = Math.max.apply(null, finitos) + 1;
+        store.get(K).seq += 1;
+        st().items.push({ id: K + '-' + st().seq, name: opts.item + ' ' + v, valor: v });
+        reordenar(prev);
+      },
+      remove: function (id) {
+        const it = buscar(id);
+        if (!it || it.base || it.fijo) return;
+        const prev = snapshot();
+        st().items.splice(st().items.indexOf(it), 1);
+        reordenar(prev);
+      },
+      rename: function (id, name) {
+        const it = buscar(id);
+        if (!it || !name.trim()) { renderCfg(); return; }
+        it.name = name.trim(); store.emit(K + '.items');
+      },
+      setValor: function (id, raw) {
+        const it = buscar(id), v = parseFloat(raw);
+        if (!it || it.base || isNaN(v)) { renderCfg(); return; }
+        const repetido = st().items.some(function (o) { return o !== it && o.valor === v; });
+        if (repetido) { PL.toast('Ya existe un elemento con ' + opts.valorLabel.toLowerCase() + ' ' + v); renderCfg(); return; }
+        const prev = snapshot();
+        it.valor = v;
+        reordenar(prev);
+      }
+    };
+
+    /* ---------- Vista de configuración (lista editable) ----------- */
+    function renderCfg() {
+      cfgContainers.forEach(function (box) {
+        box.innerHTML = '';
+        box.appendChild(PL.el('div', { class: 'fw-row', style: 'color:var(--texto-sec);font-size:11px' },
+          [PL.el('span', { text: 'Nombre' }), PL.el('span', { text: opts.valorLabel })]));
+        st().items.filter(esFinito).slice().sort(function (a, b) { return b.valor - a.valor; }) // mayor arriba
+          .forEach(function (it) {
+            box.appendChild(PL.el('div', { class: 'rs-cfg-row', dataset: { id: it.id } }, [
+              PL.el('input', { type: 'text', value: it.name, 'aria-label': 'Nombre',
+                onchange: function (e) { model.rename(it.id, e.target.value); } }),
+              PL.el('input', { type: 'number', value: it.valor, step: 'any', disabled: !!it.base, 'aria-label': opts.valorLabel,
+                title: it.base ? 'La base siempre vale 0' : opts.valorLabel,
+                onchange: function (e) { model.setValor(it.id, e.target.value); } }),
+              it.base ? PL.el('span', { class: 'rs-cfg-del' })
+                      : PL.el('button', { class: 'rs-cfg-del', text: '✕', 'aria-label': 'Eliminar ' + it.name,
+                          onclick: function () { model.remove(it.id); } })
+            ]));
+          });
+        box.appendChild(PL.el('button', { class: 'fw-row rs-cfg-add', text: '+ Agregar ' + opts.item.toLowerCase(), onclick: model.add }));
+      });
+    }
+
+    /* ---------- Chip (opcional) ----------------------------------- */
+    const chip = opts.chipId ? document.getElementById(opts.chipId) : null;
+    function renderChip() {
+      if (!chip) return;
+      const s = st();
+      chip.innerHTML = '';
+      chip.append(PL.el('span', { text: opts.item + ':' }), PL.el('b', { text: s.items[s.pos.nivel].name }));
+    }
+
+    store.subscribe(K, function (state, path) {
+      renderThumbs(); renderChip();
+      if (path === K || path.indexOf(K + '.items') === 0) renderCfg();
+    });
+    renderThumbs(); renderChip(); renderCfg();
+
+    const pub = {
+      key: K, open: api.open, close: api.close, isOpen: api.isOpen, win: win,
+      tryMove: tryMove, add: model.add, remove: model.remove, rename: model.rename, setValor: model.setValor,
+      /** Permite que otro componente (drawer) muestre la misma lista editable. */
+      attachCfg: function (box) { cfgContainers.push(box); renderCfg(); }
+    };
+    PL.selectors[K] = pub;
+    return pub;
+  };
+
+  /* Montaje de los dos selectores */
+  PL.components.rangeSelectors = {
+    mount: function () {
+      PL.RangeSelector({
+        key: 'niveles', titulo: 'Niveles', item: 'Nivel', unidad: ' m', valorLabel: 'Cota', chipId: 'levelChip',
+        icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="9" width="20" height="6" rx="3"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/><line x1="7" y1="9" x2="7" y2="15"/><line x1="17" y1="9" x2="17" y2="15"/></svg>'
+      });
+      PL.RangeSelector({
+        key: 'fases', titulo: 'Fases', item: 'Fase', unidad: '', valorLabel: 'Orden',
+        icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>'
+      });
+    }
+  };
+})(window.PL);
+</script>
+<script>/* ==== js/components/fab-view.js ==== */
+/* =====================================================================
+   components/fab-view.js — FAB de vista + Filtros / Capas
+   ---------------------------------------------------------------------
+   FAB de vista (superior derecha, botón ▦ anclado):
+     toque → despliega hacia abajo Estructural · Arquitectura ·
+     Topografía · Coordinación. Selección tipo RADIO (store.vista).
+   Botones Filtros (▼) y Capas (▤): debajo del FAB; se OCULTAN mientras
+     el FAB de vista está desplegado. Cada uno abre su ventana flotante
+     con casillas independientes (store.filtros.* / store.capas.*).
+   Panel registrado en PL.ui con la clave 'fv'; ventanas 'fw:filtros'
+   y 'fw:capas'.
+   Depende de: core.js, config.js
+   ===================================================================== */
+(function (PL) {
+  'use strict';
+  PL.components = PL.components || {};
+
+  PL.components.fabView = {
+    mount: function () {
+      const store = PL.store;
+      const canvas = document.getElementById('canvas');
+
+      /* FAB de vista ------------------------------------------------ */
+      const minis = PL.el('div', { class: 'fv-minis', hidden: true });
+      const main = PL.el('button', { class: 'fv-main', id: 'fvMain', 'aria-label': 'Tipo de vista', text: '▦' });
+      canvas.appendChild(PL.el('div', { class: 'fv-wrap' }, [main, minis]));
+
+      const botones = {};
+      PL.config.VISTAS.forEach(function (v) {
+        botones[v.id] = PL.el('span', { class: 'btn', text: v.icon });
+        minis.appendChild(PL.el('button', { class: 'fv-mini', dataset: { id: v.id },
+          onclick: function () { store.set('vista', v.id); } },
+          [PL.el('span', { class: 'tip', text: v.label }), botones[v.id]]));
+      });
+      function renderVista(s) {
+        Object.keys(botones).forEach(function (id) { botones[id].classList.toggle('is-on', s.vista === id); });
+      }
+      store.subscribe('vista', renderVista);
+      renderVista(store.get());
+
+      /* Botones Filtros / Capas + ventanas -------------------------- */
+      const extra = PL.el('div', { class: 'fv-extra' });
+      canvas.appendChild(extra);
+
+      function ventanaChecks(id, titulo, icono, catalogo, ruta) {
+        const win = PL.FloatWindow({ id: id, title: titulo, parent: canvas,
+          style: 'top:64px;right:64px;', onOpen: renderBtn, onClose: renderBtn });
+        const btn = PL.el('button', { title: titulo, 'aria-label': titulo, text: icono, onclick: win.toggle });
+        extra.appendChild(btn);
+        function renderBtn() { btn.classList.toggle('is-on', win.isOpen()); }
+        function renderBody(s) {
+          win.body.innerHTML = '';
+          catalogo.forEach(function (it) {
+            win.body.appendChild(PL.el('button', { class: 'fw-row', role: 'checkbox',
+              'aria-checked': String(s[ruta][it.id]), onclick: function () { store.toggle(ruta + '.' + it.id); } },
+              [PL.el('span', { text: it.label }), PL.el('span', { class: 'check' + (s[ruta][it.id] ? ' is-on' : '') })]));
+          });
+        }
+        store.subscribe(ruta, renderBody);
+        renderBody(store.get());
+      }
+      ventanaChecks('filtros', 'Filtros', '▼', PL.config.FILTROS, 'filtros');
+      ventanaChecks('capas', 'Capas', '▤', PL.config.CAPAS, 'capas');
+
+      /* Apertura/cierre del FAB de vista ---------------------------- */
+      const api = {
+        isOpen: function () { return !minis.hidden; },
+        close: function () { minis.hidden = true; extra.hidden = false; main.setAttribute('aria-expanded', 'false'); }
+      };
+      PL.ui.register('fv', api);
+      main.addEventListener('click', function () {
+        if (api.isOpen()) { api.close(); return; }
+        PL.ui.closeAll('fv');
+        minis.hidden = false; extra.hidden = true; main.setAttribute('aria-expanded', 'true');
+      });
+    }
+  };
+})(window.PL);
+</script>
+<script>/* ==== js/components/corner-tools.js ==== */
+/* =====================================================================
+   components/corner-tools.js — Herramientas de lienzo (inferior izq.)
+   ---------------------------------------------------------------------
+   Botón madre 🛠 (anclado, 48px) → despliega hacia ARRIBA 5 filas:
+     Zoom · Snap · Tema · Cuadrícula · Escala   (catálogo CORNER_TOOLS)
+   Todos los iconos comparten el eje vertical del botón madre.
+   Al abrir, el madre muestra "−".
+   Cada fila, al tocarla, abre su menú HORIZONTAL hacia la derecha,
+   sin textos; solo un menú de fila abierto a la vez.
+   Tipos de opción (ver config.js): toggle · radio · action · input.
+   Panel registrado en PL.ui con la clave 'ct'.
+   Depende de: core.js, config.js, canvas.js (PL.actions)
+   ===================================================================== */
+(function (PL) {
+  'use strict';
+  PL.components = PL.components || {};
+
+  PL.components.cornerTools = {
+    mount: function () {
+      const store = PL.store;
+      const canvas = document.getElementById('canvas');
+      const rows = PL.el('div', { class: 'ct-rows', hidden: true });
+      const main = PL.el('button', { class: 'ct-main', id: 'ctMain', 'aria-label': 'Herramientas de lienzo', text: '🛠' });
+      canvas.appendChild(PL.el('div', { class: 'ct-wrap' }, [rows, main]));
+
+      let filaAbierta = null;          // id de la fila con menú visible
+      const menus = {}, fabs = {}, renderers = [];
+
+      /* Crea el control de una opción según su tipo */
+      function opcion(it) {
+        if (it.type === 'input') {
+          const inp = PL.el('input', { type: 'text', placeholder: it.placeholder, title: it.title, 'aria-label': it.title,
+            onchange: function () { store.set(it.path, inp.value.replace(/^1:/, '').trim()); } });
+          renderers.push(function (s) { if (document.activeElement !== inp) inp.value = store.get(it.path) ? '1:' + store.get(it.path) : ''; });
+          return inp;
+        }
+        const b = PL.el('button', { class: 'opt', text: it.txt, title: it.title, 'aria-label': it.title });
+        if (it.type === 'toggle') {
+          b.addEventListener('click', function () { store.toggle(it.path); });
+          renderers.push(function () { b.classList.toggle('is-on', !!store.get(it.path)); b.setAttribute('aria-pressed', String(!!store.get(it.path))); });
+        } else if (it.type === 'radio') {
+          b.addEventListener('click', function () { store.set(it.path, it.value); });
+          renderers.push(function () { b.classList.toggle('is-on', store.get(it.path) === it.value); });
+        } else if (it.type === 'action') {
+          b.addEventListener('click', function () { PL.actions[it.action](); }); // sin estado encendido
+        }
+        return b;
+      }
+
+      PL.config.CORNER_TOOLS.forEach(function (tool) {
+        const menu = PL.el('div', { class: 'ct-menu', hidden: true }, tool.items.map(opcion));
+        const fab = PL.el('button', { class: 'ct-fab', title: tool.label, 'aria-label': tool.label, text: tool.icon,
+          onclick: function () { filaAbierta = (filaAbierta === tool.id) ? null : tool.id; renderFilas(); } });
+        menus[tool.id] = menu; fabs[tool.id] = fab;
+        if (tool.indicator) renderers.push(function (s) { fab.classList.toggle('is-on', tool.indicator(s)); });
+        rows.appendChild(PL.el('div', { class: 'ct-row', dataset: { id: tool.id } }, [fab, menu]));
+      });
+
+      function renderFilas() {
+        Object.keys(menus).forEach(function (id) { menus[id].hidden = (id !== filaAbierta); });
+      }
+      function renderOpciones(s) { renderers.forEach(function (r) { r(s); }); }
+      store.subscribe(['escala', 'cuadricula', 'tema', 'snap'], renderOpciones);
+      renderOpciones(store.get());
+
+      const api = {
+        isOpen: function () { return !rows.hidden; },
+        close: function () { rows.hidden = true; filaAbierta = null; renderFilas(); main.textContent = '🛠'; main.setAttribute('aria-expanded', 'false'); }
+      };
+      PL.ui.register('ct', api);
+      main.addEventListener('click', function () {
+        if (api.isOpen()) { api.close(); return; }
+        PL.ui.closeAll('ct');
+        rows.hidden = false; main.textContent = '−'; main.setAttribute('aria-expanded', 'true');
+      });
+    }
+  };
+})(window.PL);
+</script>
+<script>/* ==== js/components/fab-create.js ==== */
+/* =====================================================================
+   components/fab-create.js — FAB de creación (inferior derecha)
+   ---------------------------------------------------------------------
+   Máquina de estados de navegación (drill-down):
+     cerrado  [＋] --toque--> nivel1 [−]  (5 categorías)
+     nivel1   [−]  --toque--> cerrado
+     nivel1   --categoría--> nivel2 [←]  (herramientas de la categoría)
+     nivel2   [←]  --toque--> nivel1     (retrocede UN nivel)
+     nivel2   --herramienta--> activa la herramienta (BPC la muestra)
+                               y el FAB se cierra.
+   El botón principal está anclado (position:absolute) y NO se mueve;
+   los mini-botones se apilan hacia arriba sin desplazarlo.
+   Nivel 3 (formas de creación por herramienta): PENDIENTE.
+   Panel registrado en PL.ui con la clave 'fc'.
+   Depende de: core.js, config.js
+   ===================================================================== */
+(function (PL) {
+  'use strict';
+  PL.components = PL.components || {};
+
+  PL.components.fabCreate = {
+    mount: function () {
+      const canvas = document.getElementById('canvas');
+      const minis = PL.el('div', { class: 'fc-minis', id: 'fcMinis' });
+      const main = PL.el('button', { class: 'fc-main', id: 'fcMain', 'aria-label': 'Crear' });
+      canvas.appendChild(PL.el('div', { class: 'fc-wrap' }, [minis, main]));
+
+      let estado = 'cerrado';   // 'cerrado' | 'nivel1' | 'nivel2'
+      let categoria = null;     // categoría activa en nivel2
+
+      function mini(item, onClick) {
+        return PL.el('button', { class: 'fc-mini', dataset: { id: item.id }, onclick: onClick }, [
+          PL.el('span', { class: 'tip', text: item.label }),
+          PL.el('span', { class: 'btn', text: item.icon })
+        ]);
+      }
+
+      function render() {
+        minis.innerHTML = '';
+        main.textContent = { cerrado: '＋', nivel1: '−', nivel2: '←' }[estado];
+        main.setAttribute('aria-expanded', String(estado !== 'cerrado'));
+        if (estado === 'nivel1') {
+          PL.config.CATEGORIAS.forEach(function (cat) {
+            minis.appendChild(mini(cat, function () { categoria = cat; estado = 'nivel2'; render(); }));
+          });
+        } else if (estado === 'nivel2') {
+          categoria.hijos.forEach(function (h) {
+            minis.appendChild(mini(h, function () { activarHerramienta(categoria, h); }));
+          });
+        }
+      }
+
+      function activarHerramienta(cat, h) {
+        PL.store.set('seleccion', null);
+        PL.store.set('herramienta', {
+          id: h.id, label: h.label, categoria: cat.label,
+          props: JSON.parse(JSON.stringify(h.props || {}))   // copia: no mutar el catálogo
+        });
+        api.close();
+        PL.toast(h.label + ' activo · formas de creación pendientes');
+      }
+
+      const api = {
+        isOpen: function () { return estado !== 'cerrado'; },
+        close: function () { estado = 'cerrado'; categoria = null; render(); }
+      };
+      PL.ui.register('fc', api);
+
+      main.addEventListener('click', function () {
+        if (estado === 'cerrado') { PL.ui.closeAll('fc'); estado = 'nivel1'; }
+        else if (estado === 'nivel1') { estado = 'cerrado'; }
+        else { estado = 'nivel1'; categoria = null; }
+        render();
+      });
+      render();
+    }
+  };
+})(window.PL);
+</script>
+<script>/* ==== js/components/config-drawer.js ==== */
+/* =====================================================================
+   components/config-drawer.js — Drawer de configuración (botón ⋮)
+   ---------------------------------------------------------------------
+   Panel lateral derecho (85% del ancho) con secciones en acordeón.
+   Es el ESPEJO editable de todo el estado del lienzo: cada control
+   lee y escribe el mismo store que usan los FABs, así que ambos
+   lugares siempre muestran lo mismo.
+     Datos del archivo · Información del proyecto · Vista y capas ·
+     Zoom · Snap · Tema · Cuadrícula · Escala · Selector de nivel ·
+     Selector de fase
+   El botón ⋮ de la status bar se convierte en ✕ (círculo ámbar)
+   mientras el drawer está abierto; no hay otra ✕ dentro del panel.
+   El overlay empieza bajo la status bar: el ✕ sigue visible.
+   Las opciones BLE NO están aquí (ventana propia en la status bar).
+   Panel registrado en PL.ui con la clave 'cd'.
+   Depende de: core.js, config.js, range-selector.js, canvas.js
+   ===================================================================== */
+(function (PL) {
+  'use strict';
+  PL.components = PL.components || {};
+
+  PL.components.configDrawer = {
+    mount: function () {
+      const store = PL.store, C = PL.config;
+      const phone = document.getElementById('phone');
+      const btn = document.getElementById('btnConfig');
+      const body = PL.el('div', { class: 'cd-body' });
+      const overlay = PL.el('div', { class: 'cd-overlay', id: 'cdOverlay', hidden: true }, [
+        PL.el('aside', { class: 'cd-drawer', 'aria-label': 'Configuración' }, [
+          PL.el('div', { class: 'cd-header', text: 'Configuración' }), body
+        ])
+      ]);
+      phone.appendChild(overlay);
+      const renderers = [];
+
+      /* ---------- Constructores de controles ---------------------- */
+      function seccion(titulo, hijos, abierta) {
+        const sec = PL.el('section', { class: 'cd-section' + (abierta ? ' is-open' : '') });
+        const head = PL.el('button', { class: 'cd-head', 'aria-expanded': String(!!abierta),
+          onclick: function () { const o = sec.classList.toggle('is-open'); head.setAttribute('aria-expanded', String(o)); } },
+          [PL.el('span', { text: titulo }), PL.el('span', { class: 'chev', text: '›' })]);
+        sec.append(head, PL.el('div', { class: 'cd-content' }, hijos));
+        body.appendChild(sec);
+        return sec;
+      }
+      function fila(label, control) { return PL.el('div', { class: 'cd-row' }, [PL.el('span', { text: label }), control]); }
+      function texto(v) { return PL.el('span', { text: String(v) }); }
+      function tags(lista) { return PL.el('div', { class: 'cd-tags' }, lista); }
+      function tagToggle(label, path) {
+        const t = PL.el('button', { class: 'tag', text: label, onclick: function () { store.toggle(path); } });
+        renderers.push(function () { t.classList.toggle('is-on', !!store.get(path)); });
+        return t;
+      }
+      function tagRadio(label, path, value) {
+        const t = PL.el('button', { class: 'tag', text: label, onclick: function () { store.set(path, value); } });
+        renderers.push(function () { t.classList.toggle('is-on', store.get(path) === value); });
+        return t;
+      }
+      function tagAccion(label, accion) { return PL.el('button', { class: 'tag', text: label, onclick: function () { PL.actions[accion](); } }); }
+      function inputTexto(path, prefijo) {
+        const inp = PL.el('input', { type: 'text', onchange: function () { store.set(path, inp.value.replace(prefijo || '', '').trim()); } });
+        renderers.push(function () { if (document.activeElement !== inp) inp.value = (prefijo || '') + (store.get(path) || ''); });
+        return inp;
+      }
+      function valorVivo(fn) { const s = PL.el('b'); renderers.push(function (st) { s.textContent = fn(st); }); return s; }
+
+      /* ---------- Secciones --------------------------------------- */
+      const A = C.ARCHIVO;
+      seccion('Datos del archivo', [
+        fila('Proyecto', texto(A.proyecto)), fila('Archivo', texto(A.archivo)), fila('Versión', texto(A.version)),
+        fila('Tamaño', texto(A.tamano)), fila('Última edición', texto(A.editado)), fila('Objetos totales', texto(A.objetos))
+      ]);
+      seccion('Información del proyecto', [
+        fila('Sede', inputTexto('proyecto.sede')),
+        fila('Recinto', inputTexto('proyecto.recinto')),
+        fila('Responsable', inputTexto('proyecto.responsable'))
+      ], true);
+      seccion('Vista y capas', [
+        fila('Vista', tags(C.VISTAS.map(function (v) { return tagRadio(v.label, 'vista', v.id); }))),
+        fila('Filtros', tags(C.FILTROS.map(function (f) { return tagToggle(f.label, 'filtros.' + f.id); }))),
+        fila('Capas', tags(C.CAPAS.map(function (c) { return tagToggle(c.label, 'capas.' + c.id); })))
+      ]);
+      seccion('Zoom', [
+        fila('Nivel de zoom', valorVivo(function (s) { return s.zoom + '%'; })),
+        fila('Acciones', tags([tagAccion('Encuadre', 'zoomFit'), tagAccion('−', 'zoomOut'), tagAccion('+', 'zoomIn')]))
+      ]);
+      seccion('Snap', [tags([
+        tagToggle('Nodo', 'snap.nodo'), tagToggle('Vértice', 'snap.vertice'),
+        tagToggle('Punto medio', 'snap.medio'), tagToggle('Ángulo', 'snap.angulo')])]);
+      seccion('Tema del lienzo', [tags(C.TEMAS.map(function (t) { return tagRadio(t.label, 'tema', t.id); }))]);
+      seccion('Cuadrícula', [tags([
+        tagToggle('Líneas', 'cuadricula.lineas'), tagToggle('Puntos', 'cuadricula.puntos'), tagToggle('Rotación', 'cuadricula.rotacion')])]);
+      seccion('Escala', [
+        fila('Tipo', tags([tagToggle('Acotado', 'escala.acotado'), tagToggle('Anotativa', 'escala.anotativa')])),
+        fila('Escala', inputTexto('escala.valor', '1:'))
+      ]);
+      const boxNiv = PL.el('div', { class: 'fw-body', style: 'padding:0' });
+      const boxFas = PL.el('div', { class: 'fw-body', style: 'padding:0' });
+      if (PL.selectors.niveles) { seccion('Selector de nivel', [boxNiv]); PL.selectors.niveles.attachCfg(boxNiv); }
+      if (PL.selectors.fases) { seccion('Selector de fase', [boxFas]); PL.selectors.fases.attachCfg(boxFas); }
+
+      function renderAll(s) { renderers.forEach(function (r) { r(s); }); }
+      store.subscribe('*', renderAll);
+      renderAll(store.get());
+
+      /* ---------- Apertura / cierre ------------------------------- */
+      const api = {
+        isOpen: function () { return !overlay.hidden; },
+        open: function () { PL.ui.closeAll('cd'); overlay.hidden = false; paintBtn(); },
+        close: function () { overlay.hidden = true; paintBtn(); }
+      };
+      function paintBtn() {
+        const o = api.isOpen();
+        btn.textContent = o ? '✕' : '⋮';
+        btn.classList.toggle('is-on', o);
+        btn.setAttribute('aria-expanded', String(o));
+        btn.setAttribute('aria-label', o ? 'Cerrar configuración' : 'Configuración');
+      }
+      PL.ui.register('cd', api);
+      btn.addEventListener('click', function () { api.isOpen() ? api.close() : api.open(); });
+      overlay.addEventListener('click', function (e) { if (e.target === overlay) api.close(); }); // tocar fuera cierra
+      paintBtn();
+    }
+  };
+})(window.PL);
+</script>
+<script>/* ==== js/components/minimap.js ==== */
+/* =====================================================================
+   components/minimap.js — Mini-mapa + selector de lado (alzado)
+   ---------------------------------------------------------------------
+   Ubicación: esquina superior izquierda, bajo el chip.
+   Expandido (por defecto): muestra la planta en miniatura (4 muros
+     demo) con el muro activo resaltado y un lado marcado con color.
+     Botón A↔B centrado abajo para cambiar de lado.
+     Tocar el mini-mapa (no el botón) lo colapsa.
+   Colapsado: botón sutil del tamaño del FAB de fase (34px), alineado
+     con el selector de fase. Tocarlo lo expande de nuevo.
+   Depende de: core.js, config-alzado.js
+   ===================================================================== */
+(function (PL) {
+  'use strict';
+  PL.components = PL.components || {};
+
+  PL.components.minimap = {
+    mount: function () {
+      var store = PL.store;
+      var canvas = document.getElementById('canvas');
+
+      /* --- Botón colapsado (misma posición y tamaño que FAB fase) --- */
+      var btnCollapsed = PL.el('button', {
+        class: 'minimap-btn', id: 'minimapBtn',
+        title: 'Mostrar mini-mapa',
+        'aria-label': 'Mostrar mini-mapa',
+        hidden: true,
+        onclick: function () { store.set('minimapa', true); }
+      }, [PL.el('span', { text: '⊞' })]);
+      canvas.appendChild(btnCollapsed);
+
+      /* --- Mini-mapa expandido --- */
+      var svgContainer = PL.el('div', { class: 'minimap-svg' });
+      var mapBox = PL.el('div', {
+        class: 'minimap-box', id: 'minimapBox',
+        onclick: function () { store.set('minimapa', false); }
+      }, [svgContainer]);
+      canvas.appendChild(mapBox);
+
+      /* --- Render del SVG de la planta en miniatura --- */
+      /* Rectángulo demo de 4 muros. El muro activo (índice 1 = derecho)
+         se resalta en ámbar. El lado A se marca con un color en el borde
+         correspondiente, el lado B con otro. */
+      function renderSVG(s) {
+        var lado = s.lado;
+        var colA = '#FF8F00';   // ámbar
+        var colB = '#42A5F5';   // azul
+        var colActivo = lado === 'A' ? colA : colB;
+        var colInactivo = lado === 'A' ? colB : colA;
+
+        // Planta miniatura: rectángulo de ~60×40
+        var svg = '<svg viewBox="0 0 80 56" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">'
+          // 4 muros: superior, derecho (activo), inferior, izquierdo
+          + '<rect x="10" y="8" width="60" height="2" fill="#999" rx="0.5"/>'    // sup
+          + '<rect x="10" y="46" width="60" height="2" fill="#999" rx="0.5"/>'   // inf
+          + '<rect x="10" y="8" width="2" height="40" fill="#999" rx="0.5"/>'    // izq
+          // Muro activo (derecho) con los 2 lados coloreados
+          + '<rect x="68" y="8" width="2" height="40" fill="' + colActivo + '" rx="0.5"/>'
+          // Indicador del lado: triángulo/flecha apuntando al lado visible
+          + (lado === 'A'
+            ? '<polygon points="71,28 78,23 78,33" fill="' + colA + '" opacity="0.8"/>'   // vértice toca el muro, base hacia afuera (lado A)
+            : '<polygon points="67,28 60,23 60,33" fill="' + colB + '" opacity="0.8"/>')  // vértice toca el muro, base hacia afuera (lado B)
+          // Etiquetas
+          + '<text x="78" y="48" font-size="8" fill="' + colA + '" font-weight="bold" text-anchor="end"' + (lado === 'A' ? '' : ' opacity="0.35"') + '>A</text>'
+          + '<text x="60" y="48" font-size="8" fill="' + colB + '" font-weight="bold"' + (lado === 'B' ? '' : ' opacity="0.35"') + '>B</text>'
+          + '</svg>';
+        svgContainer.innerHTML = svg;
+        
+      }
+
+      function renderVisibility(s) {
+        mapBox.hidden = !s.minimapa;
+        btnCollapsed.hidden = s.minimapa;
+      }
+
+      store.subscribe(['lado', 'minimapa'], function (s) { renderSVG(s); renderVisibility(s); });
+      renderSVG(store.get());
+      renderVisibility(store.get());
+    }
+  };
+})(window.PL);
+</script>
+<script>/* ==== js/components/alzado-actions.js ==== */
+/* =====================================================================
+   components/alzado-actions.js — Botones de acción del alzado
+   ---------------------------------------------------------------------
+   Botón "Cambiar lado" (A↔B): ARRIBA del FAB de creación.
+   Botón "Volver a planta": a la IZQUIERDA del FAB de creación.
+   Ambos son círculos del estilo de la app. Solo existen en alzado.
+   Depende de: core.js
+   ===================================================================== */
+(function (PL) {
+  'use strict';
+  PL.components = PL.components || {};
+
+  PL.components.alzadoActions = {
+    mount: function () {
+      var store = PL.store;
+      var canvas = document.getElementById('canvas');
+
+      /* Botón cambiar de lado (arriba del FAB +) */
+      var lblSide = document.createTextNode('A');
+      var btnSide = PL.el('button', { class: 'fc-action-top', title: 'Cambiar lado del muro',
+        'aria-label': 'Cambiar lado del muro',
+        onclick: function () { store.set('lado', store.get('lado') === 'A' ? 'B' : 'A'); }
+      }, [lblSide]);
+      canvas.appendChild(btnSide);
+
+      function renderSide(s) {
+        lblSide.textContent = s.lado;
+        btnSide.style.borderColor = s.lado === 'A' ? 'var(--ambar)' : '#42A5F5';
+        btnSide.style.color = s.lado === 'A' ? 'var(--ambar-d)' : '#1565C0';
+      }
+      store.subscribe('lado', renderSide);
+      renderSide(store.get());
+
+      /* Botón volver a planimetría (izquierda del FAB +) */
+      var btnBack = PL.el('button', { class: 'fc-action-left', title: 'Volver a planimetría',
+        'aria-label': 'Volver a vista de planta',
+        onclick: function () {
+          /* Intentar navegar al archivo de planta (reemplaza 'alzado' por 'planta' en la URL).
+             Si no cambia (artifact o nombre distinto), intenta con la ruta relativa. */
+          var url = window.location.href;
+          var newUrl = url.replace('alzado', 'planta');
+          if (newUrl !== url) {
+            window.location.href = newUrl;
+          } else {
+            /* Fallback: buscar el link de planta si existe, o avisar */
+            var base = url.substring(0, url.lastIndexOf('/') + 1);
+            var planta = base + 'polylive-planta.html';
+            window.location.href = planta;
+          }
+        }
+      }, [PL.el('span', { text: '↩' })]);
+      canvas.appendChild(btnBack);
+    }
+  };
+})(window.PL);
+</script>
+<script>/* ==== js/main-alzado.js ==== */
+/* =====================================================================
+   main-alzado.js — Arranque de la vista de alzado
+   ---------------------------------------------------------------------
+   Igual que main.js pero usa:
+   - initialStateAlzado() en vez de initialState()
+   - CATEGORIAS_ALZADO en vez de CATEGORIAS
+   - FILTROS_ALZADO en vez de FILTROS
+   - canvas-alzado y bpc-alzado en vez de canvas y bpc
+   - Sin selector de nivel (solo fase)
+   - Chip muestra el muro activo en vez del nivel
+   ===================================================================== */
+(function (PL) {
+  'use strict';
+
+  /* Sustituir catálogos para que los componentes reutilizados lean los correctos */
+  PL.config.CATEGORIAS = PL.config.CATEGORIAS_ALZADO;
+  PL.config.VISTAS = PL.config.VISTAS_ALZADO;
+  PL.config.FILTROS = PL.config.FILTROS_ALZADO;
+
+  PL.store.init(PL.config.initialStateAlzado());
+
+  /* canvas-alzado.js ya define PL.components.canvas (sobreescribe). */
+  /* bpc-alzado.js ya define PL.components.bpc (sobreescribe). */
+
+  /* Chip: muestra el muro activo en vez del nivel */
+  var chip = document.getElementById('levelChip');
+  function renderChip(s) {
+    chip.innerHTML = '';
+    chip.append(PL.el('span', { text: 'Muro:' }), PL.el('b', { text: s.muroActivo.nombre }));
+  }
+  PL.store.subscribe('muroActivo', renderChip);
+  renderChip(PL.store.get());
+
+
+
+  /* Montar componentes reutilizados (sin rangeSelectors de nivel) */
+  PL.components.canvas.mount();
+  PL.components.minimap.mount();
+  PL.components.statusbar.mount();
+
+  /* Sobreescribir el título de la status bar para incluir el muro.
+     Se suscribe DESPUÉS de montar statusbar, así gana sobre renderTitle. */
+  PL.store.subscribe(['proyecto', 'muroActivo'], function (s) {
+    var t = document.getElementById('sbTitle');
+    t.innerHTML = '';
+    t.append(PL.el('b', { text: s.proyecto.sede }), ' · ' + s.proyecto.recinto + ' · ' + s.muroActivo.nombre);
+  });
+  PL.store.emit('proyecto');
+  PL.components.bpc.mount();
+
+  /* Solo selector de fase (sin nivel) */
+  PL.RangeSelector({
+    key: 'fases', titulo: 'Fases', item: 'Fase', unidad: '', valorLabel: 'Orden',
+    icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>'
+  });
+
+  PL.components.fabView.mount();
+  PL.components.cornerTools.mount();
+  PL.components.fabCreate.mount();
+  PL.components.alzadoActions.mount();
+  PL.components.configDrawer.mount();
+})(window.PL);
+</script>
+</body>
+</html>

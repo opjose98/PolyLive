@@ -1,0 +1,11 @@
+{
+  "name": "polylive-mockup-planta",
+  "version": "2.0.0",
+  "description": "Mockup navegable del SurveyScreen de PolyLive (vista Planta · Arquitectura)",
+  "private": true,
+  "scripts": {
+    "build": "python3 build.py",
+    "test": "python3 build.py && node tests/smoke.test.js"
+  },
+  "devDependencies": { "jsdom": "^24.0.0" }
+}

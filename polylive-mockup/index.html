@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<!-- =====================================================================
+     PolyLive · Mockup · SurveyScreen · Vista Planta (Arquitectura)
+     index.html — estructura estática mínima. Todo lo desplegable
+     (FABs, menús, ventanas, drawer) lo construyen los componentes JS a
+     partir de los catálogos de js/config.js.
+     Abrir directamente en el navegador (no requiere servidor).
+     Versión de un solo archivo: dist/polylive-planta.html (build.py).
+     ===================================================================== -->
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PolyLive · SurveyScreen · Planta (mockup)</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<div class="phone" id="phone">
+
+  <!-- STATUS BAR · 2 filas (fila 1 título, fila 2 botones) -->
+  <header class="statusbar">
+    <div class="sb-row1"><div class="sb-title" id="sbTitle"></div></div>
+    <div class="sb-row2">
+      <button class="icon-btn is-muted" id="btnMenu" aria-label="Menú principal">☰</button>
+      <div class="sb-right">
+        <button class="icon-btn" id="btnUndo" aria-label="Deshacer">↺</button>
+        <button class="icon-btn is-disabled" id="btnRedo" aria-label="Rehacer" disabled>↻</button>
+        <button class="icon-btn" id="btnBle" aria-label="Bluetooth (mantener para opciones)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6.5 6.5 17.5 17.5 12 23V1l5.5 5.5L6.5 17.5"/></svg>
+        </button>
+        <button class="icon-btn" id="btnConfig" aria-label="Configuración">⋮</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- LIENZO -->
+  <main class="canvas" id="canvas" data-tema="claro">
+    <!-- Contenido dibujado (escala con el zoom). Rectángulo demo de 4 muros. -->
+    <div class="world" id="world">
+      <div class="wall" data-orient="h" style="left:100px;top:230px;width:180px"></div>
+      <div class="wall" data-orient="v" style="left:274px;top:230px;height:150px"></div>
+      <div class="wall" data-orient="h" style="left:100px;top:374px;width:180px"></div>
+      <div class="wall" data-orient="v" style="left:100px;top:230px;height:150px"></div>
+      <div class="miter-preview" style="left:274px;top:230px;width:60px;height:60px;border-radius:0 8px 0 0"></div>
+    </div>
+
+    <!-- BPC · Barra de Propiedades Contextual (contenido por bpc.js) -->
+    <div class="bpc" id="bpc" role="toolbar" aria-label="Propiedades"></div>
+
+    <!-- Indicador sutil del nivel actual (range-selector.js) -->
+    <div class="level-chip" id="levelChip" aria-live="polite"></div>
+
+    <!-- Grupo lateral izquierdo: FABs de Nivel y Fase (range-selector.js) -->
+    <div class="rs-group" id="rsGroup"></div>
+  </main>
+
+</div>
+
+<p class="note">PolyLive · mockup Planta · toca el fondo del lienzo para deseleccionar</p>
+
+<!-- Orden de carga = orden de dependencias -->
+<script src="js/core.js"></script>
+<script src="js/config.js"></script>
+<script src="js/components/canvas.js"></script>
+<script src="js/components/statusbar.js"></script>
+<script src="js/components/bpc.js"></script>
+<script src="js/components/range-selector.js"></script>
+<script src="js/components/fab-view.js"></script>
+<script src="js/components/corner-tools.js"></script>
+<script src="js/components/fab-create.js"></script>
+<script src="js/components/config-drawer.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
