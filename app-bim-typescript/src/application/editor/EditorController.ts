@@ -37,6 +37,7 @@ import { Column } from '../../domain/objects/column';
 import { Door } from '../../domain/objects/door';
 import { Window } from '../../domain/objects/window';
 import { distanceToSegment } from '../../domain/geometry/polygon-utils';
+import { lineShape } from '../../domain/geometry/shapes';
 import { projectPointToWall, isVanoWithinWall } from '../../domain/geometry/projections';
 import { AppError } from '../../shared/errors/AppError';
 import { CanvasManager } from '../canvas/CanvasManager';
@@ -131,11 +132,32 @@ export interface EditorState {
   readonly roomSuggestions: readonly RoomSuggestion[];
   /** Handle en curso de arrastre, si lo hay. */
   readonly draggingHandle: Handle | null;
+  /**
+   * Copia del objeto arrastrado en su posición actual (no persistida). La
+   * vista la dibuja en lugar del original mientras dura el arrastre, para que
+   * el objeto siga al dedo; al soltar se persiste exactamente esta posición.
+   */
+  readonly dragPreview: RevitObjectBase | null;
+  /** El extremo arrastrado está enganchado a un nodo de otro muro. */
+  readonly dragSnappedToNode: boolean;
   /** Último mensaje para la UI (éxito o error). La vista lo muestra y lo limpia. */
   readonly notice: { kind: 'info' | 'error' | 'success'; message: string } | null;
 }
 
 export type EditorListener = (state: EditorState) => void;
+
+type DragTarget =
+  | { kind: 'center'; dx: number; dy: number; preview: RevitObjectBase | null; snappedToNode: false }
+  | { kind: 'start' | 'end'; point: Point2D; dx: number; dy: number; preview: RevitObjectBase | null; snappedToNode: boolean };
+
+/**
+ * Copia de un objeto de dominio con algunos campos cambiados, conservando su
+ * clase (los getters como `length` o `isStraight` siguen funcionando). Solo
+ * para vistas previas: nunca se persiste.
+ */
+function cloneWith<T extends object>(obj: T, changes: Partial<T>): T {
+  return Object.assign(Object.create(Object.getPrototypeOf(obj)), obj, changes);
+}
 
 // ---------------------------------------------------------------------------
 // Controller
@@ -166,6 +188,7 @@ export class EditorController {
 
   /** Punto mundo donde empezó el arrastre en curso, para calcular el delta. */
   private dragOrigin: Point2D | null = null;
+  private dragTolerancePx = 22;
 
   constructor(params: {
     services: AppServices;
@@ -199,6 +222,8 @@ export class EditorController {
       busy: false,
       roomSuggestions: [],
       draggingHandle: null,
+      dragPreview: null,
+      dragSnappedToNode: false,
       notice: null,
     };
   }
@@ -254,10 +279,17 @@ export class EditorController {
     return this.state.objects.find((o) => o.id === this.state.selectedId) ?? null;
   }
 
-  /** Handles del objeto seleccionado, en coordenadas mundo. */
+  /** Handles del objeto seleccionado, en coordenadas mundo (siguen al arrastre). */
   get selectedHandles(): Handle[] {
-    const sel = this.selected;
+    const sel = this.state.dragPreview ?? this.selected;
     return sel ? this.selection.handlesFor(sel) : [];
+  }
+
+  /** Objetos a dibujar: los persistidos, con el arrastrado en su posición en vivo. */
+  get displayObjects(): readonly RevitObjectBase[] {
+    const preview = this.state.dragPreview;
+    if (!preview) return this.state.objects;
+    return this.state.objects.map((o) => (o.id === preview.id ? preview : o));
   }
 
   worldToScreen(point: Point2D): CanvasPoint {
@@ -359,7 +391,10 @@ export class EditorController {
       measureTargetId: tool === 'measure' ? this.state.measureTargetId : null,
       pendingPhotoPoint: tool === 'photo' ? this.state.pendingPhotoPoint : null,
       draggingHandle: null,
+      dragPreview: null,
+      dragSnappedToNode: false,
     });
+    this.dragOrigin = null;
   }
 
   setSnapEnabled(enabled: boolean): void {
@@ -379,9 +414,34 @@ export class EditorController {
     this.patch({ selectedId: id });
   }
 
+  /**
+   * Selecciona el objeto bajo el dedo con CUALQUIER herramienta activa (el
+   * long-press abre propiedades sin obligar a cambiar a Seleccionar). Devuelve
+   * el objeto, o `null` si no había nada y la selección no cambió.
+   */
+  selectAt(screenX: number, screenY: number, touchTolerancePx: number): RevitObjectBase | null {
+    const world = this.screenToWorld(screenX, screenY);
+    const tol = touchToleranceMeters(touchTolerancePx, this.state.transform.scale);
+    const hit = this.selection.hitTest({ worldPoint: world, objects: this.state.objects, thresholdMeters: tol });
+    if (hit) this.patch({ selectedId: hit.id });
+    return hit ?? null;
+  }
+
   // -------------------------------------------------------------------------
   // Viewport: pan, zoom, encuadre
   // -------------------------------------------------------------------------
+
+  /**
+   * Fija la cámara entera. La usa el lienzo al terminar (o durante) un gesto
+   * que animó la cámara en el hilo UI, para que el modelo quede en sincronía.
+   */
+  setTransform(transform: CanvasTransform): void {
+    this.canvas.setTransform({
+      ...transform,
+      scale: Math.max(MIN_SCALE, Math.min(MAX_SCALE, transform.scale)),
+    });
+    this.patch({ transform: this.canvas.getTransform() });
+  }
 
   pan(dxPixels: number, dyPixels: number): void {
     const t = this.canvas.getTransform();
@@ -493,8 +553,28 @@ export class EditorController {
     if (!handle) return false;
 
     this.dragOrigin = world;
-    this.patch({ draggingHandle: handle });
+    this.dragTolerancePx = touchTolerancePx;
+    this.patch({ draggingHandle: handle, dragPreview: null, dragSnappedToNode: false });
     return true;
+  }
+
+  /**
+   * El dedo se movió con un handle agarrado: actualiza la vista previa sin
+   * persistir nada (como `updateManipulation` de LevON). Solo `endDrag` crea
+   * el comando, así un arrastre entero es UN paso de deshacer.
+   */
+  updateDrag(screenX: number, screenY: number): void {
+    const target = this.dragTargetAt(screenX, screenY);
+    if (!target) return;
+    this.patch({ dragPreview: target.preview, dragSnappedToNode: target.snappedToNode });
+  }
+
+  /** Abandona el arrastre sin persistir (el gesto fue cancelado por el sistema). */
+  cancelDrag(): void {
+    this.dragOrigin = null;
+    if (this.state.draggingHandle || this.state.dragPreview) {
+      this.patch({ draggingHandle: null, dragPreview: null, dragSnappedToNode: false });
+    }
   }
 
   /**
@@ -503,25 +583,29 @@ export class EditorController {
    * él); arrastrar `start`/`end` reescribe ese extremo del muro.
    */
   async endDrag(screenX: number, screenY: number): Promise<void> {
-    const handle = this.state.draggingHandle;
-    const origin = this.dragOrigin;
+    const target = this.dragTargetAt(screenX, screenY);
     this.dragOrigin = null;
-    this.patch({ draggingHandle: null });
+    // La vista previa se conserva hasta que termine la recarga: si se borrara
+    // ya, el objeto volvería un instante a su sitio viejo antes de saltar al nuevo.
+    this.patch({ draggingHandle: null, dragSnappedToNode: false });
 
-    if (!handle || !origin) return;
     const sel = this.selected;
-    if (!sel) return;
+    if (!target || !sel) {
+      this.patch({ dragPreview: null });
+      return;
+    }
 
-    const world = this.screenToWorld(screenX, screenY);
-    const dx = world.x - origin.x;
-    const dy = world.y - origin.y;
+    const { dx, dy } = target;
     // Un micro-arrastre por temblor de pulso no debe contar como una edición:
     // generaría un comando en la pila que el usuario no pidió.
-    if (Math.hypot(dx, dy) < 1e-4) return;
+    if (Math.hypot(dx, dy) < 1e-4) {
+      this.patch({ dragPreview: null });
+      return;
+    }
 
     this.patch({ busy: true });
     try {
-      if (handle.kind === 'center') {
+      if (target.kind === 'center') {
         // MoveObjectUseCase toma posiciones ABSOLUTAS, no deltas: para un muro
         // basta mandar el nuevo inicio (el use case traslada el final y el eje
         // con el mismo delta); para una columna, la nueva posición.
@@ -538,12 +622,10 @@ export class EditorController {
         }
         if (sel instanceof Wall) await this.syncVerticesToWalls();
       } else if (sel instanceof Wall) {
-        const isStart = handle.kind === 'start';
-        const moved = this.snapEndpoint(world, isStart ? sel.endPoint : sel.startPoint);
         await this.services.useCases.updateObjectProperty.execute({
           objectId: sel.id,
-          property: isStart ? 'startPoint' : 'endPoint',
-          newValue: moved,
+          property: target.kind === 'start' ? 'startPoint' : 'endPoint',
+          newValue: target.point,
         });
         await this.syncVerticesToWalls();
       }
@@ -551,8 +633,71 @@ export class EditorController {
     } catch (err) {
       this.fail(err, 'No se pudo mover el objeto.');
     } finally {
-      this.patch({ busy: false });
+      this.patch({ busy: false, dragPreview: null });
     }
+  }
+
+  /**
+   * Dónde quedaría el objeto si el dedo se soltara en (screenX, screenY).
+   * Lo usan tanto la vista previa como el commit: lo que se ve es lo que se guarda.
+   */
+  private dragTargetAt(screenX: number, screenY: number): DragTarget | null {
+    const handle = this.state.draggingHandle;
+    const origin = this.dragOrigin;
+    const sel = this.selected;
+    if (!handle || !origin || !sel) return null;
+
+    const world = this.screenToWorld(screenX, screenY);
+
+    if (handle.kind === 'center') {
+      const dx = world.x - origin.x;
+      const dy = world.y - origin.y;
+      let preview: RevitObjectBase | null = null;
+      if (sel instanceof Column) {
+        preview = cloneWith(sel, { position: { x: sel.position.x + dx, y: sel.position.y + dy } });
+      } else if (sel instanceof Wall && sel.isStraight) {
+        const start = { x: sel.startPoint.x + dx, y: sel.startPoint.y + dy };
+        const end = { x: sel.endPoint.x + dx, y: sel.endPoint.y + dy };
+        preview = cloneWith(sel, { startPoint: start, endPoint: end, shape: lineShape(start, end) });
+      }
+      return { kind: 'center', dx, dy, preview, snappedToNode: false };
+    }
+
+    if (!(sel instanceof Wall)) return null;
+    const isStart = handle.kind === 'start';
+    const fixed = isStart ? sel.endPoint : sel.startPoint;
+    const current = isStart ? sel.startPoint : sel.endPoint;
+
+    // Nodo de OTRO muro primero (cierra la topología, como en el trazo); si no
+    // hay, el snap angular respecto al extremo fijo.
+    let point = world;
+    let snappedToNode = false;
+    if (this.state.nodeSnapEnabled) {
+      const tol = touchToleranceMeters(this.dragTolerancePx, this.state.transform.scale);
+      const others = this.walls.filter((w) => w.id !== sel.id);
+      const node = this.selection.findNearestNode({ worldPoint: world, walls: others, thresholdMeters: tol });
+      if (node) {
+        point = node;
+        snappedToNode = true;
+      }
+    }
+    if (!snappedToNode) point = this.snapEndpoint(world, fixed);
+
+    const preview = sel.isStraight
+      ? cloneWith(sel, {
+          startPoint: isStart ? point : fixed,
+          endPoint: isStart ? fixed : point,
+          shape: lineShape(isStart ? point : fixed, isStart ? fixed : point),
+        })
+      : null;
+    return {
+      kind: isStart ? 'start' : 'end',
+      point,
+      dx: point.x - current.x,
+      dy: point.y - current.y,
+      preview,
+      snappedToNode,
+    };
   }
 
   // -------------------------------------------------------------------------

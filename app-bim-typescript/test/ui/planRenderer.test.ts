@@ -18,9 +18,9 @@ import { Door } from '../../src/domain/objects/door';
 import { Window } from '../../src/domain/objects/window';
 import { revitObjectId, roomId, levelId, wallId } from '../../src/domain/objects/base';
 import { meters, squareMeters } from '../../src/domain/geometry/types';
-import { colors } from '../../src/ui/theme/tokens';
+import { CANVAS_PALETTES } from '../../src/ui/design/canvasThemes';
 
-const GRID_COLOR = colors.grid;
+const GRID_COLOR = CANVAS_PALETTES.claro.grid;
 
 const ROOM_ID = roomId('room-1');
 
@@ -63,6 +63,9 @@ class RecordingRenderer implements ICanvasRenderer {
   }
   strokeCircle(...a: number[]): void {
     this.record('strokeCircle', a);
+  }
+  drawPoints(points: { x: number; y: number }[], radius: number): void {
+    this.record('drawPoints', [points, radius]);
   }
   drawText(text: string, x: number, y: number, size?: number, align?: string): void {
     this.record('drawText', [text, x, y, size, align]);
@@ -503,5 +506,55 @@ describe('drawPlan — etiquetas', () => {
     drawPlan(r, scene({ objects: [open], showLabels: true }));
 
     expect(r.texts()).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Temas, estilos de rejilla y margen para la cámara del hilo UI
+// ---------------------------------------------------------------------------
+
+describe('drawPlan — temas y rejilla', () => {
+  it('el tema cambia los colores del muro y de la rejilla', () => {
+    const claro = new RecordingRenderer();
+    const oscuro = new RecordingRenderer();
+    const objects = [makeWall('w1', 0, 0, 4, 0)];
+    drawPlan(claro, scene({ objects, showGrid: true }));
+    drawPlan(oscuro, scene({ objects, showGrid: true, palette: CANVAS_PALETTES.oscuro }));
+
+    const strokes = (rec: RecordingRenderer) => new Set(rec.ops('drawLine').map((c) => (c.args[4] as { stroke: string }).stroke));
+    expect(strokes(oscuro).has(CANVAS_PALETTES.oscuro.ink)).toBe(true);
+    expect(strokes(oscuro).has(CANVAS_PALETTES.claro.ink)).toBe(false);
+    expect(strokes(claro).has(CANVAS_PALETTES.claro.grid)).toBe(true);
+  });
+
+  it('alto contraste engrosa la rejilla', () => {
+    const r = new RecordingRenderer();
+    drawPlan(r, scene({ showGrid: true, palette: CANVAS_PALETTES.contraste }));
+    const gridLine = r.ops('drawLine').find((c) => (c.args[4] as { stroke: string }).stroke === CANVAS_PALETTES.contraste.grid)!;
+    expect((gridLine.args[4] as { width: number }).width).toBe(0.5 * CANVAS_PALETTES.contraste.lineScale);
+  });
+
+  it('la rejilla de puntos se dibuja en una sola llamada', () => {
+    const r = new RecordingRenderer();
+    drawPlan(r, scene({ showGrid: true, gridStyle: { lines: false, dots: true } }));
+    expect(r.ops('drawPoints')).toHaveLength(1);
+    expect((r.ops('drawPoints')[0].args[0] as unknown[]).length).toBeGreaterThan(4);
+    // Sin líneas de rejilla: solo los ejes del mundo.
+    expect(r.ops('drawLine').length).toBeLessThanOrEqual(2);
+  });
+
+  it('con overscan la rejilla cubre más allá del viewport', () => {
+    const r = new RecordingRenderer();
+    drawPlan(r, scene({ showGrid: true, gridOverscanPx: 200, transform: { scale: 100, offsetX: 50, offsetY: 50 } }));
+    const xs = r.ops('drawLine').map((c) => c.args[0] as number);
+    expect(Math.min(...xs)).toBeLessThan(0);
+    expect(Math.max(...xs)).toBeGreaterThan(400);
+  });
+
+  it('marca con un anillo el nodo al que se engancha un arrastre', () => {
+    const r = new RecordingRenderer();
+    drawPlan(r, scene({ snapIndicator: { x: 1, y: 1 } }));
+    const ring = r.ops('strokeCircle').find((c) => c.args[0] === 100 && c.args[1] === 100);
+    expect(ring).toBeDefined();
   });
 });

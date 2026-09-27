@@ -14,7 +14,7 @@
 // =============================================================================
 
 import type { SkCanvas, SkPaint } from '@shopify/react-native-skia';
-import { Skia, PaintStyle, StrokeCap, StrokeJoin, matchFont } from '@shopify/react-native-skia';
+import { Skia, PaintStyle, PointMode, StrokeCap, StrokeJoin, matchFont } from '@shopify/react-native-skia';
 
 // ---------------------------------------------------------------------------
 // Interfaz genérica que el dominio/aplicación consume
@@ -30,6 +30,11 @@ export interface ICanvasRenderer {
   fillCircle(x: number, y: number, r: number): void;
   /** Circunferencia sin relleno — para nodos y radios de snap. */
   strokeCircle(x: number, y: number, r: number): void;
+  /**
+   * Muchos puntos redondos del color de relleno en UNA llamada nativa (rejilla
+   * de puntos): miles de `fillCircle` sueltos se comen el presupuesto del frame.
+   */
+  drawPoints(points: { x: number; y: number }[], radius: number): void;
   /**
    * Texto con el color de relleno actual. `align` posiciona respecto a (x, y):
    * 'left' hace de (x,y) el extremo izquierdo de la línea base; 'center', su
@@ -139,6 +144,16 @@ export class SkiaCanvasAdapter implements ICanvasRenderer {
   strokeCircle(x: number, y: number, r: number): void {
     this.syncStrokePaint();
     this.canvas.drawCircle(x, y, r, this.strokePaint);
+  }
+
+  drawPoints(points: { x: number; y: number }[], radius: number): void {
+    if (points.length === 0) return;
+    const paint = Skia.Paint();
+    paint.setStyle(PaintStyle.Stroke);
+    paint.setStrokeCap(StrokeCap.Round);
+    paint.setStrokeWidth(radius * 2);
+    paint.setColor(Skia.Color(this.fillColor));
+    this.canvas.drawPoints(PointMode.Points, points.map((p) => Skia.Point(p.x, p.y)), paint);
   }
 
   drawText(

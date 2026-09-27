@@ -24,6 +24,7 @@ import { Column } from '../../src/domain/objects/column';
 import { Door } from '../../src/domain/objects/door';
 import { Room } from '../../src/domain/objects/room';
 import { meters } from '../../src/domain/geometry/types';
+import { MIN_SCALE } from '../../src/application/canvas/types';
 
 const ROOM_ID: RoomId = roomId('editor-room');
 const ROOM_OBJECT_ID: RevitObjectId = revitObjectId('editor-room');
@@ -462,6 +463,98 @@ describe('EditorController', () => {
     });
   });
 
+  describe('arrastre en vivo', () => {
+    async function selectedColumn(): Promise<void> {
+      editor.setTool('column');
+      await editor.handleTap(px(2), px(1.5), TOL_PX);
+      editor.setTool('select');
+      await editor.handleTap(px(2), px(1.5), TOL_PX);
+    }
+
+    it('updateDrag mueve una vista previa sin persistir ni apilar comandos', async () => {
+      await selectedColumn();
+      const canUndoBefore = services.commandStack.canUndo();
+      editor.beginDrag(px(2), px(1.5), TOL_PX);
+      editor.updateDrag(px(3), px(2));
+
+      const preview = editor.getState().dragPreview as Column;
+      expect(preview).toBeInstanceOf(Column);
+      expect(preview.position.x).toBeCloseTo(3);
+      const shown = editor.displayObjects.find((o) => o.id === preview.id) as Column;
+      expect(shown.position.x).toBeCloseTo(3);
+      expect(editor.selectedHandles[0].position.x).toBeCloseTo(3);
+
+      const stored = editor.getState().objects.find((o): o is Column => o instanceof Column)!;
+      expect(stored.position.x).toBeCloseTo(2);
+      expect(services.commandStack.canUndo()).toBe(canUndoBefore);
+    });
+
+    it('lo que se ve al arrastrar es lo que se guarda al soltar, y el arrastre es un solo undo', async () => {
+      await selectedColumn();
+      editor.beginDrag(px(2), px(1.5), TOL_PX);
+      editor.updateDrag(px(2.5), px(1.5));
+      editor.updateDrag(px(3), px(1.5));
+      await editor.endDrag(px(3), px(1.5));
+
+      expect(editor.getState().dragPreview).toBeNull();
+      const col = editor.getState().objects.find((o): o is Column => o instanceof Column)!;
+      expect(col.position.x).toBeCloseTo(3);
+
+      await editor.undo();
+      const back = editor.getState().objects.find((o): o is Column => o instanceof Column)!;
+      expect(back.position.x).toBeCloseTo(2);
+    });
+
+    it('cancelDrag descarta la vista previa sin tocar la base', async () => {
+      await selectedColumn();
+      editor.beginDrag(px(2), px(1.5), TOL_PX);
+      editor.updateDrag(px(4), px(1.5));
+      editor.cancelDrag();
+      expect(editor.getState().dragPreview).toBeNull();
+      expect(editor.getState().draggingHandle).toBeNull();
+      const col = editor.getState().objects.find((o): o is Column => o instanceof Column)!;
+      expect(col.position.x).toBeCloseTo(2);
+    });
+
+    it('el extremo arrastrado se engancha al nodo de otro muro', async () => {
+      editor.setTool('wall');
+      editor.setSnapEnabled(false);
+      editor.setNodeSnapEnabled(false);
+      await editor.handleTap(px(0), px(0), TOL_PX);
+      await editor.handleTap(px(4), px(0), TOL_PX);
+      await editor.handleTap(px(4), px(3), TOL_PX);
+      editor.setNodeSnapEnabled(true);
+
+      editor.setTool('select');
+      await editor.handleTap(px(4), px(1.5), TOL_PX); // segundo muro (4,0)→(4,3)
+      const id = editor.getState().selectedId;
+      expect(editor.beginDrag(px(4), px(3), TOL_PX)).toBe(true);
+      editor.updateDrag(px(0.1), px(0.1));
+      expect(editor.getState().dragSnappedToNode).toBe(true);
+      await editor.endDrag(px(0.1), px(0.1));
+
+      const moved = editor.walls.find((w) => w.id === id)!;
+      expect(moved.endPoint.x).toBeCloseTo(0);
+      expect(moved.endPoint.y).toBeCloseTo(0);
+    });
+
+    it('selectAt selecciona con cualquier herramienta y no borra la selección en el vacío', async () => {
+      await selectedColumn();
+      editor.setTool('wall');
+      const hit = editor.selectAt(px(2), px(1.5), TOL_PX);
+      expect(hit).toBeInstanceOf(Column);
+      expect(editor.getState().selectedId).toBe(hit!.id);
+      expect(editor.selectAt(px(9), px(9), TOL_PX)).toBeNull();
+      expect(editor.getState().selectedId).toBe(hit!.id);
+    });
+
+    it('setTransform limita la escala al rango permitido', () => {
+      editor.setTransform({ scale: 1e9, offsetX: 5, offsetY: 6 });
+      expect(editor.getState().transform.scale).toBeLessThan(1e9);
+      expect(editor.getState().transform.offsetX).toBe(5);
+    });
+  });
+
   // -------------------------------------------------------------------------
   // Undo / Redo
   // -------------------------------------------------------------------------
@@ -755,7 +848,7 @@ describe('EditorController', () => {
       expect(editor.getState().transform.scale).toBeLessThanOrEqual(500);
 
       editor.zoomAround(100, 100, 0.00001);
-      expect(editor.getState().transform.scale).toBeGreaterThanOrEqual(5);
+      expect(editor.getState().transform.scale).toBeGreaterThanOrEqual(MIN_SCALE);
     });
 
     it('zoomToFit encuadra el dibujo dentro del viewport', async () => {

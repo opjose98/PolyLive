@@ -62,8 +62,8 @@ describe('appStore (Zustand)', () => {
   });
 
   test('updateCanvasTransform clamps scale to [MIN, MAX]', () => {
-    store.getState().updateCanvasTransform({ scale: 1 }); // below MIN_SCALE (5)
-    expect(store.getState().canvasTransform.scale).toBe(5);
+    store.getState().updateCanvasTransform({ scale: 0.2 }); // below MIN_SCALE (1)
+    expect(store.getState().canvasTransform.scale).toBe(1);
 
     store.getState().updateCanvasTransform({ scale: 9999 }); // above MAX_SCALE (500)
     expect(store.getState().canvasTransform.scale).toBe(500);

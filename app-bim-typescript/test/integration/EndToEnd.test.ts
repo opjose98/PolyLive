@@ -176,7 +176,7 @@ describe('Flujo 2 — MoveObject', () => {
     //
     // La versión anterior de este test pasaba por `GestureHandler`, una capa de
     // eventos que ninguna pantalla llegó a usar: el canvas real traduce los
-    // toques con `PanResponder` dentro de PlanCanvasView y se los entrega
+    // toques dentro de PlanCanvas (gesture-handler) y se los entrega
     // directamente a EditorController. El test verificaba una tubería paralela
     // que no existía en la app, así que se eliminó junto con esa clase.
     const canvasManager = new CanvasManager({ scale: 100, offsetX: 0, offsetY: 0 });

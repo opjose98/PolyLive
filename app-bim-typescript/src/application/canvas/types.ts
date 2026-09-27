@@ -31,8 +31,8 @@ export function canvasPoint(x: number, y: number): CanvasPoint {
 // AQUÍ VIVÍA una jerarquía de tipos de gesto (TapGesture, LongPressGesture,
 // DragGesture, PinchGesture, CanvasEvent...) junto con un `GestureHandler` que
 // los emitía a unos listeners. Se eliminó porque ninguna pantalla la usó nunca:
-// el canvas real traduce los toques con `PanResponder` dentro de
-// `ui/components/PlanCanvasView.tsx` y llama directamente a EditorController.
+// el canvas real traduce los toques con gesture-handler dentro de
+// `ui/canvas/PlanCanvas.tsx` y llama directamente a EditorController.
 //
 // Mantener las dos cosas significaba tener una tubería de eventos con sus
 // propios tests verificando un camino que la app no recorre, mientras el camino
@@ -42,8 +42,12 @@ export function canvasPoint(x: number, y: number): CanvasPoint {
 // Constantes de Canvas
 // ---------------------------------------------------------------------------
 
-/** Escala mínima (zoom out máximo). */
-export const MIN_SCALE = 5;  // 5 px/m
+/**
+ * Escala mínima (zoom out máximo): 1 px/m deja ver ~400 m en un teléfono, lo
+ * suficiente para un conjunto o una sede entera. Con 5 px/m (el valor
+ * anterior) un levantamiento de más de ~80 m no cabía en pantalla.
+ */
+export const MIN_SCALE = 1;  // 1 px/m
 
 /** Escala máxima (zoom in máximo). */
 export const MAX_SCALE = 500; // 500 px/m
