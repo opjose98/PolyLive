@@ -24,6 +24,7 @@ import { Column } from '../../src/domain/objects/column';
 import { Door } from '../../src/domain/objects/door';
 import { Room } from '../../src/domain/objects/room';
 import { meters } from '../../src/domain/geometry/types';
+import { MIN_SCALE } from '../../src/application/canvas/types';
 
 const ROOM_ID: RoomId = roomId('editor-room');
 const ROOM_OBJECT_ID: RevitObjectId = revitObjectId('editor-room');
@@ -60,14 +61,22 @@ describe('EditorController', () => {
     fs.rmSync(dbPath, { force: true });
   });
 
-  /** Traza un rectángulo de 4×3 m con la herramienta de muro. */
-  async function drawRectangle(): Promise<void> {
+  /** Traza un muro independiente con un arrastre de un dedo (método por defecto). */
+  async function drawWall(ax: number, ay: number, bx: number, by: number): Promise<void> {
     editor.setTool('wall');
+    editor.drawBegin(px(ax), px(ay));
+    editor.drawMove(px(bx), px(by));
+    await editor.drawEnd(px(bx), px(by));
+  }
+
+  /** Traza un rectángulo cerrado de 4×3 m: cuatro muros sueltos que comparten nudos. */
+  async function drawRectangle(): Promise<void> {
     editor.setSnapEnabled(false);
     editor.setNodeSnapEnabled(false);
-    for (const [x, y] of [[0, 0], [4, 0], [4, 3], [0, 3], [0, 0]]) {
-      await editor.handleTap(px(x), px(y), TOL_PX);
-    }
+    await drawWall(0, 0, 4, 0);
+    await drawWall(4, 0, 4, 3);
+    await drawWall(4, 3, 0, 3);
+    await drawWall(0, 3, 0, 0);
   }
 
   // -------------------------------------------------------------------------
@@ -75,41 +84,11 @@ describe('EditorController', () => {
   // -------------------------------------------------------------------------
 
   describe('init', () => {
-    it('crea el Recinto si no existe y arranca con el trazo vacío', async () => {
+    it('crea el Recinto si no existe y arranca sin muros ni recintos', async () => {
       const room = await services.store.readObject(ROOM_OBJECT_ID);
       expect(room).toBeInstanceOf(Room);
-      expect(editor.getState().vertices).toEqual([]);
-    });
-
-    it('devuelve el borrador pendiente en vez de aplicarlo por su cuenta', async () => {
-      // Recuperar o descartar un trazo es una decisión del operador: el
-      // controlador la ofrece, no la toma.
-      await services.useCases.saveRoomDraft.execute({
-        roomId: ROOM_ID,
-        vertices: [{ x: 0, y: 0 }, { x: 2, y: 0 }],
-        isClosed: false,
-      });
-
-      const fresh = new EditorController({ services, roomId: ROOM_ID, roomObjectId: ROOM_OBJECT_ID });
-      const draft = await fresh.init();
-
-      expect(draft?.hasDraft).toBe(true);
-      expect(draft?.vertices).toHaveLength(2);
-      expect(fresh.getState().vertices).toEqual([]); // todavía NO aplicado
-    });
-
-    it('acceptDraft aplica los vértices del borrador al trazo activo', async () => {
-      await services.useCases.saveRoomDraft.execute({
-        roomId: ROOM_ID,
-        vertices: [{ x: 0, y: 0 }, { x: 2, y: 0 }],
-        isClosed: false,
-      });
-
-      const fresh = new EditorController({ services, roomId: ROOM_ID, roomObjectId: ROOM_OBJECT_ID });
-      const draft = await fresh.init();
-      await fresh.acceptDraft(draft!.draftId, draft!.vertices);
-
-      expect(fresh.getState().vertices).toHaveLength(2);
+      expect(editor.walls).toHaveLength(0);
+      expect(editor.getState().rooms).toEqual([]);
     });
   });
 
@@ -118,65 +97,106 @@ describe('EditorController', () => {
   // -------------------------------------------------------------------------
 
   describe('herramienta muro', () => {
-    it('el primer tap solo añade un vértice; el segundo crea el muro', async () => {
+    it('arrastre libre: un gesto crea un muro de inicio a fin, con vista previa mientras dura', async () => {
       editor.setTool('wall');
+      editor.setSnapEnabled(false);
+      editor.drawBegin(px(0), px(0));
+      editor.drawMove(px(2), px(0));
+      expect(editor.getState().wallDraft?.start).toEqual({ x: 0, y: 0 });
+      expect(editor.getState().wallDraft?.end?.x).toBeCloseTo(2);
+      expect(editor.walls).toHaveLength(0);
+
+      await editor.drawEnd(px(4), px(0));
+      expect(editor.walls).toHaveLength(1);
+      expect(editor.walls[0].endPoint.x).toBeCloseTo(4);
+      expect(editor.getState().wallDraft).toBeNull();
+    });
+
+    it('dos trazos seguidos se guardan los dos aunque el primero no haya terminado', async () => {
+      editor.setTool('wall');
+      editor.setSnapEnabled(false);
+      editor.setNodeSnapEnabled(false);
+      editor.drawBegin(px(0), px(0));
+      const first = editor.drawEnd(px(3), px(0));
+      editor.drawBegin(px(0), px(2));
+      const second = editor.drawEnd(px(3), px(2));
+      await Promise.all([first, second]);
+      expect(editor.walls).toHaveLength(2);
+      expect(editor.getState().notice?.kind).not.toBe('error');
+    });
+
+    it('dos muros paralelos que no se tocan no avisan de un encuentro agudo', async () => {
+      editor.setSnapEnabled(false);
+      editor.setNodeSnapEnabled(false);
+      await drawWall(0, 0, 3, 0);
+      await drawWall(0, 2, 3, 2);
+      expect(editor.getState().notice).toBeNull();
+    });
+
+    it('los muros son independientes: el siguiente no arranca donde terminó el anterior', async () => {
+      editor.setSnapEnabled(false);
+      editor.setNodeSnapEnabled(false);
+      await drawWall(0, 0, 4, 0);
+      await drawWall(0, 2, 4, 2);
+      expect(editor.walls).toHaveLength(2);
+      expect(editor.walls[1].startPoint).toEqual({ x: 0, y: 2 });
+    });
+
+    it('punto a punto: el primer toque fija el inicio y el segundo crea el muro', async () => {
+      editor.setTool('wall');
+      editor.setCreationMethod('wall', 'points');
+      editor.setSnapEnabled(false);
+      editor.setNodeSnapEnabled(false);
+
       await editor.handleTap(px(0), px(0), TOL_PX);
       expect(editor.walls).toHaveLength(0);
-      expect(editor.getState().vertices).toHaveLength(1);
+      expect(editor.getState().wallDraft?.start).toEqual({ x: 0, y: 0 });
 
-      await editor.handleTap(px(4), px(0), TOL_PX);
+      await editor.handleTap(px(3), px(0), TOL_PX);
       expect(editor.walls).toHaveLength(1);
-      expect(editor.getState().vertices).toHaveLength(2);
-    });
-
-    it('traza un rectángulo cerrado de 4 muros', async () => {
-      await drawRectangle();
-      expect(editor.walls).toHaveLength(4);
-      expect(editor.getState().vertices).toHaveLength(5);
-    });
-
-    it('mantiene Room.geometry y el borrador sincronizados con el trazo', async () => {
-      // CloseRoomUseCase triangula Room.geometry, NO los muros: si las dos
-      // cosas divergen, el área calculada no corresponde a lo dibujado.
-      await drawRectangle();
-
-      const room = (await services.store.readObject(ROOM_OBJECT_ID)) as Room;
-      expect(room.geometry).toHaveLength(5);
-
-      const draft = await services.useCases.recoverRoomDraft.execute({ roomId: ROOM_ID });
-      expect(draft.hasDraft).toBe(true);
-      if (draft.hasDraft) expect(draft.vertices).toHaveLength(5);
-    });
-
-    it('el snap a nodo pega un vértice nuevo al extremo existente más cercano', async () => {
-      editor.setTool('wall');
-      editor.setNodeSnapEnabled(true);
-      editor.setSnapEnabled(false);
-
-      await editor.handleTap(px(0), px(0), TOL_PX);
-      await editor.handleTap(px(4), px(0), TOL_PX);
-      await editor.handleTap(px(4), px(3), TOL_PX);
-      // Cerrar el trazo tocando a 5 cm del nodo inicial (0,0): dentro de la
-      // tolerancia de 22px/100 = 22cm. Es el gesto que cierra la topología y
-      // evita la "fuga de recinto" por dos nodos casi coincidentes.
-      await editor.handleTap(px(0.05), px(0.05), TOL_PX);
-
-      expect(editor.getState().vertices[3]).toEqual({ x: 0, y: 0 });
-    });
-
-    it('un doble toque sobre el último vértice no intenta crear un muro degenerado', async () => {
-      editor.setTool('wall');
-      editor.setNodeSnapEnabled(true);
-
-      await editor.handleTap(px(0), px(0), TOL_PX);
-      await editor.handleTap(px(4), px(0), TOL_PX);
-      // Segundo toque sobre el mismo nodo: el snap lo pega a (4,0), que ya es
-      // el último vértice. Debe ignorarse, no fallar con un error rojo.
-      await editor.handleTap(px(4.02), px(0.02), TOL_PX);
-
+      // El tercer toque empieza un muro NUEVO, no encadena.
+      await editor.handleTap(px(3), px(2), TOL_PX);
       expect(editor.walls).toHaveLength(1);
-      expect(editor.getState().vertices).toHaveLength(2);
+      expect(editor.getState().wallDraft?.start).toEqual({ x: 3, y: 2 });
+    });
+
+    it('en arrastre libre un toque no crea nada y explica cómo trazar', async () => {
+      editor.setTool('wall');
+      await editor.handleTap(px(1), px(1), TOL_PX);
+      expect(editor.walls).toHaveLength(0);
       expect(editor.getState().notice?.kind).toBe('info');
+    });
+
+    it('un trazo más corto que 10 cm se descarta sin error', async () => {
+      editor.setTool('wall');
+      editor.drawBegin(px(0), px(0));
+      await editor.drawEnd(px(0.05), px(0));
+      expect(editor.walls).toHaveLength(0);
+      expect(editor.getState().notice?.kind).toBe('info');
+    });
+
+    it('el snap a nodo pega el extremo al nudo existente más cercano', async () => {
+      editor.setSnapEnabled(false);
+      editor.setNodeSnapEnabled(true);
+      await drawWall(0, 0, 4, 0);
+      editor.drawBegin(px(4.05), px(0.05));
+      expect(editor.getState().wallDraft?.snappedToNode).toBe(true);
+      await editor.drawEnd(px(4), px(3));
+      expect(editor.walls[1].startPoint).toEqual({ x: 4, y: 0 });
+    });
+
+    it('cancelar el gesto conserva el inicio fijado en punto a punto, y lo descarta en arrastre', async () => {
+      editor.setTool('wall');
+      editor.setCreationMethod('wall', 'points');
+      await editor.handleTap(px(0), px(0), TOL_PX);
+      editor.drawBegin(px(2), px(2));
+      editor.drawCancel();
+      expect(editor.getState().wallDraft?.start).not.toBeNull();
+
+      editor.setCreationMethod('wall', 'drag');
+      editor.drawBegin(px(0), px(0));
+      editor.drawCancel();
+      expect(editor.getState().wallDraft).toBeNull();
     });
   });
 
@@ -278,6 +298,31 @@ describe('EditorController', () => {
       expect(columns[0].position.x).toBeCloseTo(2);
       expect(columns[0].position.y).toBeCloseTo(1.5);
     });
+
+    it('la forma de creación decide la sección: rectangular por defecto, circular a pedido', async () => {
+      editor.setTool('column');
+      await editor.handleTap(px(1), px(1), TOL_PX);
+      editor.setCreationMethod('column', 'circular');
+      editor.setTool('column');
+      await editor.handleTap(px(3), px(1), TOL_PX);
+
+      const columns = editor.getState().objects.filter((o): o is Column => o instanceof Column);
+      expect(columns.map((c) => c.sectionShape).sort()).toEqual(['circular', 'rectangular']);
+      const rect = columns.find((c) => c.sectionShape === 'rectangular')!;
+      expect(Number(rect.dimensionY)).toBeGreaterThan(0);
+    });
+
+    it('cambiar una columna circular a rectangular la deja visible (cuadrada), no de canto cero', async () => {
+      editor.setCreationMethod('column', 'circular');
+      editor.setTool('column');
+      await editor.handleTap(px(2), px(2), TOL_PX);
+      await editor.updateSelectedProperty('sectionShape', 'rectangular');
+
+      const col = editor.getState().objects.find((o): o is Column => o instanceof Column)!;
+      expect(col.sectionShape).toBe('rectangular');
+      expect(Number(col.dimensionY)).toBeCloseTo(Number(col.dimensionX));
+      expect(col.footprint()).not.toBeNull();
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -295,19 +340,19 @@ describe('EditorController', () => {
       expect(editor.getState().selectedId).toBeNull();
     });
 
-    it('borrar un muro recorta el trazo para que no quede describiendo un polígono fantasma', async () => {
+    it('borrar un muro de un recinto cerrado lo vuelve a abrir', async () => {
       await drawRectangle();
+      expect(editor.getState().rooms).toHaveLength(1);
       editor.setTool('select');
       await editor.handleTap(px(2), px(0), TOL_PX);
 
       await editor.deleteSelected();
 
       expect(editor.walls).toHaveLength(3);
-      // El trazo ya no puede seguir teniendo los 5 vértices del rectángulo:
-      // se deriva de los muros que quedan vivos.
+      expect(editor.getState().rooms).toHaveLength(0);
       const room = (await services.store.readObject(ROOM_OBJECT_ID)) as Room;
-      expect(room.geometry.length).toBe(editor.getState().vertices.length);
-      expect(editor.getState().vertices.length).toBeLessThan(5);
+      expect(room.geometry).toHaveLength(0);
+      expect(room.isOpen).toBe(true);
     });
 
     it('se niega a borrar el propio Recinto desde el editor', async () => {
@@ -446,11 +491,9 @@ describe('EditorController', () => {
     });
 
     it('arrastrar el extremo de un muro reescribe ese extremo', async () => {
-      editor.setTool('wall');
       editor.setSnapEnabled(false);
       editor.setNodeSnapEnabled(false);
-      await editor.handleTap(px(0), px(0), TOL_PX);
-      await editor.handleTap(px(4), px(0), TOL_PX);
+      await drawWall(0, 0, 4, 0);
 
       editor.setTool('select');
       await editor.handleTap(px(2), px(0), TOL_PX);
@@ -462,96 +505,146 @@ describe('EditorController', () => {
     });
   });
 
+  describe('arrastre en vivo', () => {
+    async function selectedColumn(): Promise<void> {
+      editor.setTool('column');
+      await editor.handleTap(px(2), px(1.5), TOL_PX);
+      editor.setTool('select');
+      await editor.handleTap(px(2), px(1.5), TOL_PX);
+    }
+
+    it('updateDrag mueve una vista previa sin persistir ni apilar comandos', async () => {
+      await selectedColumn();
+      const canUndoBefore = services.commandStack.canUndo();
+      editor.beginDrag(px(2), px(1.5), TOL_PX);
+      editor.updateDrag(px(3), px(2));
+
+      const preview = editor.getState().dragPreview as Column;
+      expect(preview).toBeInstanceOf(Column);
+      expect(preview.position.x).toBeCloseTo(3);
+      const shown = editor.displayObjects.find((o) => o.id === preview.id) as Column;
+      expect(shown.position.x).toBeCloseTo(3);
+      expect(editor.selectedHandles[0].position.x).toBeCloseTo(3);
+
+      const stored = editor.getState().objects.find((o): o is Column => o instanceof Column)!;
+      expect(stored.position.x).toBeCloseTo(2);
+      expect(services.commandStack.canUndo()).toBe(canUndoBefore);
+    });
+
+    it('lo que se ve al arrastrar es lo que se guarda al soltar, y el arrastre es un solo undo', async () => {
+      await selectedColumn();
+      editor.beginDrag(px(2), px(1.5), TOL_PX);
+      editor.updateDrag(px(2.5), px(1.5));
+      editor.updateDrag(px(3), px(1.5));
+      await editor.endDrag(px(3), px(1.5));
+
+      expect(editor.getState().dragPreview).toBeNull();
+      const col = editor.getState().objects.find((o): o is Column => o instanceof Column)!;
+      expect(col.position.x).toBeCloseTo(3);
+
+      await editor.undo();
+      const back = editor.getState().objects.find((o): o is Column => o instanceof Column)!;
+      expect(back.position.x).toBeCloseTo(2);
+    });
+
+    it('cancelDrag descarta la vista previa sin tocar la base', async () => {
+      await selectedColumn();
+      editor.beginDrag(px(2), px(1.5), TOL_PX);
+      editor.updateDrag(px(4), px(1.5));
+      editor.cancelDrag();
+      expect(editor.getState().dragPreview).toBeNull();
+      expect(editor.getState().draggingHandle).toBeNull();
+      const col = editor.getState().objects.find((o): o is Column => o instanceof Column)!;
+      expect(col.position.x).toBeCloseTo(2);
+    });
+
+    it('el extremo arrastrado se engancha al nodo de otro muro', async () => {
+      editor.setSnapEnabled(false);
+      editor.setNodeSnapEnabled(false);
+      await drawWall(0, 0, 4, 0);
+      await drawWall(4, 0, 4, 3);
+      editor.setNodeSnapEnabled(true);
+
+      editor.setTool('select');
+      await editor.handleTap(px(4), px(1.5), TOL_PX); // segundo muro (4,0)→(4,3)
+      const id = editor.getState().selectedId;
+      expect(editor.beginDrag(px(4), px(3), TOL_PX)).toBe(true);
+      editor.updateDrag(px(0.1), px(0.1));
+      expect(editor.getState().dragSnappedToNode).toBe(true);
+      await editor.endDrag(px(0.1), px(0.1));
+
+      const moved = editor.walls.find((w) => w.id === id)!;
+      expect(moved.endPoint.x).toBeCloseTo(0);
+      expect(moved.endPoint.y).toBeCloseTo(0);
+    });
+
+    it('selectAt selecciona con cualquier herramienta y no borra la selección en el vacío', async () => {
+      await selectedColumn();
+      editor.setTool('wall');
+      const hit = editor.selectAt(px(2), px(1.5), TOL_PX);
+      expect(hit).toBeInstanceOf(Column);
+      expect(editor.getState().selectedId).toBe(hit!.id);
+      expect(editor.selectAt(px(9), px(9), TOL_PX)).toBeNull();
+      expect(editor.getState().selectedId).toBe(hit!.id);
+    });
+
+    it('setTransform limita la escala al rango permitido', () => {
+      editor.setTransform({ scale: 1e9, offsetX: 5, offsetY: 6 });
+      expect(editor.getState().transform.scale).toBeLessThan(1e9);
+      expect(editor.getState().transform.offsetX).toBe(5);
+    });
+  });
+
   // -------------------------------------------------------------------------
   // Undo / Redo
   // -------------------------------------------------------------------------
 
   describe('undo / redo', () => {
-    it('deshacer quita el último muro y su vértice a la vez', async () => {
+    it('deshacer quita el último muro', async () => {
       await drawRectangle();
-      expect(editor.getState().vertices).toHaveLength(5);
-
       await editor.undo();
-
       expect(editor.walls).toHaveLength(3);
-      expect(editor.getState().vertices).toHaveLength(4);
     });
 
-    it('rehacer restaura muro y vértice, dejando ambos de nuevo alineados', async () => {
+    it('rehacer lo restaura y el recinto vuelve a cerrarse', async () => {
       await drawRectangle();
       await editor.undo();
+      expect(editor.getState().rooms).toHaveLength(0);
       await editor.redo();
-
       expect(editor.walls).toHaveLength(4);
-      expect(editor.getState().vertices).toHaveLength(5);
-    });
-
-    it('un trazo nuevo después de deshacer descarta el futuro', async () => {
-      await drawRectangle();
-      await editor.undo();
-
-      editor.setTool('wall');
-      await editor.handleTap(px(1), px(1), TOL_PX);
-      await editor.redo(); // no debe resucitar el vértice descartado
-
-      const room = (await services.store.readObject(ROOM_OBJECT_ID)) as Room;
-      expect(room.geometry.length).toBe(editor.getState().vertices.length);
+      expect(editor.getState().rooms).toHaveLength(1);
     });
   });
 
   // -------------------------------------------------------------------------
-  // Recintos
+  // Recintos (detección automática)
   // -------------------------------------------------------------------------
 
   describe('recintos', () => {
-    it('cierra el Recinto y calcula su área', async () => {
+    it('cuatro muros que cierran un rectángulo forman un recinto con su área', async () => {
       await drawRectangle();
-
-      await editor.closeRoom();
-
-      expect(editor.getState().notice?.kind).toBe('success');
-      expect(editor.getState().notice?.message).toContain('12.00');
+      const rooms = editor.getState().rooms;
+      expect(rooms).toHaveLength(1);
+      expect(rooms[0].area).toBeCloseTo(12, 1);
     });
 
-    it('se niega a cerrar con menos de 3 vértices', async () => {
-      editor.setTool('wall');
-      await editor.handleTap(px(0), px(0), TOL_PX);
-
-      await editor.closeRoom();
-
-      expect(editor.getState().notice?.message).toContain('al menos 3 vértices');
-    });
-
-    it('detectRooms encuentra el rectángulo trazado', async () => {
+    it('el Recinto persiste la geometría y el área del contorno cerrado', async () => {
       await drawRectangle();
-
-      const suggestions = editor.detectRooms();
-
-      expect(suggestions.length).toBeGreaterThan(0);
-      expect(Number(suggestions[0].area)).toBeCloseTo(12, 1);
-    });
-
-    it('detectRooms sobre un trazo abierto no inventa recintos y lo dice', async () => {
-      editor.setTool('wall');
-      editor.setSnapEnabled(false);
-      await editor.handleTap(px(0), px(0), TOL_PX);
-      await editor.handleTap(px(4), px(0), TOL_PX);
-
-      const suggestions = editor.detectRooms();
-
-      expect(suggestions).toHaveLength(0);
-      expect(editor.getState().notice?.kind).toBe('info');
-    });
-
-    it('adoptar una sugerencia la convierte en el trazo activo y en Room.geometry', async () => {
-      await drawRectangle();
-      const [suggestion] = editor.detectRooms();
-
-      await editor.adoptSuggestion(suggestion);
-
       const room = (await services.store.readObject(ROOM_OBJECT_ID)) as Room;
-      expect(room.geometry).toHaveLength(suggestion.polygon.length);
-      expect(editor.getState().roomSuggestions).toHaveLength(0);
+      expect(room.geometry.length).toBeGreaterThanOrEqual(4);
+      expect(Number(room.area)).toBeCloseTo(12, 1);
+      expect(room.isOpen).toBe(false);
+    });
+
+    it('muros abiertos no forman recinto ni se rellenan', async () => {
+      editor.setSnapEnabled(false);
+      editor.setNodeSnapEnabled(false);
+      await drawWall(0, 0, 4, 0);
+      await drawWall(4, 0, 4, 3);
+      await drawWall(4, 3, 0, 3);
+      expect(editor.getState().rooms).toHaveLength(0);
+      const room = (await services.store.readObject(ROOM_OBJECT_ID)) as Room;
+      expect(room.geometry).toHaveLength(0);
     });
   });
 
@@ -602,11 +695,9 @@ describe('EditorController', () => {
     });
 
     it('aplicar la medición corrige la longitud del muro conservando su dirección', async () => {
-      editor.setTool('wall');
       editor.setSnapEnabled(false);
       editor.setNodeSnapEnabled(false);
-      await editor.handleTap(px(0), px(0), TOL_PX);
-      await editor.handleTap(px(4), px(0), TOL_PX);
+      await drawWall(0, 0, 4, 0);
 
       editor.setTool('measure');
       await editor.handleTap(px(2), px(0), TOL_PX);
@@ -638,6 +729,24 @@ describe('EditorController', () => {
 
       editor.clearPendingPhotoPoint();
       expect(editor.getState().pendingPhotoPoint).toBeNull();
+    });
+
+    it('deshacer la captura quita el marcador y rehacer lo devuelve', async () => {
+      editor.setTool('photo');
+      await editor.handleTap(px(2), px(1.5), TOL_PX);
+      const captured = await services.useCases.capturePhoto.execute({
+        roomId: ROOM_ID,
+        photoData: new Uint8Array([1, 2, 3]),
+        filename: 'foto-undo.jpg',
+      });
+      await editor.attachPhotoMarker(captured.photoId);
+      expect(editor.getState().canUndo).toBe(true);
+
+      await editor.undo();
+      expect(editor.getState().photoMarkers).toHaveLength(0);
+
+      await editor.redo();
+      expect(editor.getState().photoMarkers).toHaveLength(1);
     });
 
     it('anclar una foto la coloca como marcador en la planta', async () => {
@@ -755,7 +864,7 @@ describe('EditorController', () => {
       expect(editor.getState().transform.scale).toBeLessThanOrEqual(500);
 
       editor.zoomAround(100, 100, 0.00001);
-      expect(editor.getState().transform.scale).toBeGreaterThanOrEqual(5);
+      expect(editor.getState().transform.scale).toBeGreaterThanOrEqual(MIN_SCALE);
     });
 
     it('zoomToFit encuadra el dibujo dentro del viewport', async () => {

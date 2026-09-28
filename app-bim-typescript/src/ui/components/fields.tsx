@@ -161,7 +161,7 @@ export function TextField({
     <View style={styles.fieldRow}>
       <Text style={styles.fieldLabel}>{label}</Text>
       <TextInput
-        style={[styles.fieldInput, multiline && styles.fieldInputMultiline, disabled && styles.fieldInputDisabled]}
+        style={[styles.fieldInput, styles.fieldInputBlock, multiline && styles.fieldInputMultiline, disabled && styles.fieldInputDisabled]}
         value={controlled ? value : draft}
         onChangeText={controlled ? onCommit : setDraft}
         onBlur={controlled ? undefined : () => {
@@ -282,6 +282,15 @@ const styles = StyleSheet.create({
     ...typography.label,
     color: colors.textSecondary,
     marginBottom: spacing.xs,
+  },
+  /**
+   * Un TextInput suelto dentro de una columna NO debe llevar `flex: 1`: con el
+   * teclado abierto la columna se achica, el campo se encoge hasta su mínimo y
+   * lo que viene debajo se le monta encima.
+   */
+  fieldInputBlock: {
+    flex: 0,
+    alignSelf: 'stretch',
   },
   fieldInputWrap: {
     flexDirection: 'row',

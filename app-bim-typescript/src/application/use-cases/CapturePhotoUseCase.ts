@@ -12,7 +12,7 @@ import {
 } from '../../domain/objects';
 import type { PhotoMetadata } from '../../domain/objects/audit-photo';
 import { CommandStack } from '../state/CommandStack';
-import { CapturePhotoCommand } from '../commands/CapturePhotoCommand';
+import { CapturePhotoCommand, PhotoLifecycle } from '../commands/CapturePhotoCommand';
 import { CommandId } from '../commands/Command';
 
 export interface CapturePhotoInput {
@@ -72,7 +72,7 @@ export class CapturePhotoUseCase {
 
     await (this.store as any).createAuditPhoto(photo);
 
-    const command = new CapturePhotoCommand(photoId);
+    const command = new CapturePhotoCommand(photoId, this.store as unknown as PhotoLifecycle);
     await this.commandStack.execute(command);
 
     return { photoId, commandId: command.id };

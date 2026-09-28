@@ -333,10 +333,10 @@ describe('Crítico: Zoom > 500x → Scale clamped (State)', () => {
     expect(canvasManager.getTransform().scale).toBe(500);
   });
 
-  it('CanvasManager.setTransform clamps scale a MIN_SCALE (5) del otro extremo', () => {
+  it('CanvasManager.setTransform clamps scale a MIN_SCALE (1) del otro extremo', () => {
     const canvasManager = new CanvasManager();
     canvasManager.setTransform({ scale: 0.001, offsetX: 0, offsetY: 0 });
-    expect(canvasManager.getTransform().scale).toBe(5);
+    expect(canvasManager.getTransform().scale).toBe(1);
   });
 
   it('appStore.updateCanvasTransform clamps scale a MAX_SCALE (500)', () => {

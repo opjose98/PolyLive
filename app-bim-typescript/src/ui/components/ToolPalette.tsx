@@ -105,7 +105,8 @@ export function QuickBar({
   onUndo,
   onRedo,
   onZoomToFit,
-}: QuickBarProps) {
+  children,
+}: QuickBarProps & { children?: React.ReactNode }) {
   return (
     <View style={styles.quickBar}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
@@ -113,6 +114,7 @@ export function QuickBar({
         <Chip label="Nodos" active={nodeSnapEnabled} onPress={() => onToggleNodeSnap(!nodeSnapEnabled)} hint="Pega el trazo a extremos de muro existentes" />
         <Chip label="Rejilla" active={gridEnabled} onPress={() => onToggleGrid(!gridEnabled)} hint="Muestra la rejilla métrica" />
         <Chip label="Cotas" active={labelsEnabled} onPress={() => onToggleLabels(!labelsEnabled)} hint="Muestra longitudes y áreas sobre el plano" />
+        {children}
       </ScrollView>
 
       <View style={styles.quickActions}>

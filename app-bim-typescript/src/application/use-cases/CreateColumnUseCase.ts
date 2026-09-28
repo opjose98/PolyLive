@@ -21,6 +21,10 @@ export interface CreateColumnInput {
   position: Point2D;
   diameter: Meters;
   height: Meters;
+  /** Por defecto circular (`diameter` es el diámetro). Rectangular: `diameter` es el ancho. */
+  sectionShape?: 'circular' | 'rectangular';
+  /** Canto de una rectangular; si falta, cuadrada. */
+  dimensionY?: Meters;
   embeddedInWallId?: WallId;
   material?: string;
 }
@@ -44,6 +48,8 @@ export class CreateColumnUseCase {
       roomId: input.roomId,
       position: input.position,
       diameter: input.diameter,
+      sectionShape: input.sectionShape,
+      dimensionY: input.dimensionY,
       height: input.height,
       embeddedInWallId: input.embeddedInWallId,
       material: input.material,

@@ -21,7 +21,9 @@
 //
 // MÁQUINA DE HERRAMIENTAS (SurveyInteractionMode.md):
 //   select  → tocar selecciona; arrastrar un handle mueve
-//   wall    → cada tap encadena un muro desde el vértice anterior
+//   wall    → cada muro es independiente (como en LevON): "arrastre" traza
+//             inicio→fin con un gesto; "punto a punto" usa un toque para el
+//             inicio y otro para el fin. Se unen entre sí por snap a nodo.
 //   door    → tap sobre un muro inserta una puerta en ese punto
 //   window  → ídem con una ventana
 //   column  → tap coloca una columna libre
@@ -29,7 +31,7 @@
 //   photo   → tap fija el punto de captura y la vista abre la cámara
 // =============================================================================
 
-import { Point2D, Meters, meters, CanvasTransform } from '../../domain/geometry/types';
+import { Point2D, Meters, meters, squareMeters, CanvasTransform } from '../../domain/geometry/types';
 import { RevitObjectBase, RevitObjectId, RoomId, WallId, wallId } from '../../domain/objects/base';
 import { Wall } from '../../domain/objects/wall';
 import { Room } from '../../domain/objects/room';
@@ -37,6 +39,7 @@ import { Column } from '../../domain/objects/column';
 import { Door } from '../../domain/objects/door';
 import { Window } from '../../domain/objects/window';
 import { distanceToSegment } from '../../domain/geometry/polygon-utils';
+import { lineShape } from '../../domain/geometry/shapes';
 import { projectPointToWall, isVanoWithinWall } from '../../domain/geometry/projections';
 import { AppError } from '../../shared/errors/AppError';
 import { CanvasManager } from '../canvas/CanvasManager';
@@ -45,7 +48,6 @@ import { SnapHandler } from '../canvas/SnapHandler';
 import { MiterHandler } from '../canvas/MiterHandler';
 import { SelectionService, Handle, touchToleranceMeters } from '../canvas/SelectionService';
 import type { AppServices } from '../AppServices';
-import type { RoomSuggestion } from '../use-cases/DetectRoomsUseCase';
 import type { AuditPhotoId } from '../../domain/objects/base';
 
 /** Marcador de foto listo para dibujar: lo que el renderer necesita y nada más. */
@@ -73,7 +75,7 @@ export interface ToolDescriptor {
 
 export const TOOLS: readonly ToolDescriptor[] = [
   { tool: 'select', label: 'Seleccionar', icon: '⬚', hint: 'Toca un objeto para seleccionarlo; arrastra sus puntos para moverlo.' },
-  { tool: 'wall', label: 'Muro', icon: '╱', hint: 'Cada toque encadena un muro desde el punto anterior.' },
+  { tool: 'wall', label: 'Muro', icon: '╱', hint: 'Arrastra un dedo de extremo a extremo (o dos toques en Punto a punto). Dos dedos mueven la vista.' },
   { tool: 'door', label: 'Puerta', icon: '⌷', hint: 'Toca sobre un muro para insertar una puerta en ese punto.' },
   { tool: 'window', label: 'Ventana', icon: '⊞', hint: 'Toca sobre un muro para insertar una ventana en ese punto.' },
   { tool: 'column', label: 'Columna', icon: '◉', hint: 'Toca para colocar una columna en esa posición.' },
@@ -104,10 +106,41 @@ export const DEFAULT_EDITOR_DEFAULTS: EditorDefaults = {
   columnHeight: meters(2.8),
 };
 
+/** Formas de creación (nivel 3 del FAB): cómo se dibuja cada herramienta. */
+export type WallCreationMethod = 'drag' | 'points';
+export type ColumnCreationMethod = 'rectangular' | 'circular';
+export interface CreationMethods {
+  readonly wall: WallCreationMethod;
+  readonly column: ColumnCreationMethod;
+}
+
+/** Muro en curso de trazado (no persistido). */
+export interface WallDraft {
+  /** Punto fijado. En "punto a punto", `null` hasta el primer toque. */
+  readonly start: Point2D | null;
+  /** Donde está el dedo ahora, ya con snaps aplicados. */
+  readonly end: Point2D | null;
+  /** `end` está enganchado a un nodo existente. */
+  readonly snappedToNode: boolean;
+}
+
+/** Recinto cerrado detectado automáticamente a partir de los muros. */
+export interface DetectedRoom {
+  readonly polygon: readonly Point2D[];
+  readonly area: number;
+  readonly centroid: Point2D;
+}
+
+/** Longitud mínima de un muro: por debajo es un toque accidental, no un muro (LevON). */
+export const MIN_WALL_LENGTH = 0.1;
+
 export interface EditorState {
   readonly tool: EditorTool;
   readonly objects: readonly RevitObjectBase[];
-  readonly vertices: readonly Point2D[];
+  readonly creation: CreationMethods;
+  readonly wallDraft: WallDraft | null;
+  /** Recintos cerrados que forman los muros, recalculados en cada cambio. */
+  readonly rooms: readonly DetectedRoom[];
   readonly selectedId: RevitObjectId | null;
   /** Muro elegido como destino de la próxima medición (herramienta `measure`). */
   readonly measureTargetId: WallId | null;
@@ -128,14 +161,34 @@ export interface EditorState {
   readonly canUndo: boolean;
   readonly canRedo: boolean;
   readonly busy: boolean;
-  readonly roomSuggestions: readonly RoomSuggestion[];
   /** Handle en curso de arrastre, si lo hay. */
   readonly draggingHandle: Handle | null;
+  /**
+   * Copia del objeto arrastrado en su posición actual (no persistida). La
+   * vista la dibuja en lugar del original mientras dura el arrastre, para que
+   * el objeto siga al dedo; al soltar se persiste exactamente esta posición.
+   */
+  readonly dragPreview: RevitObjectBase | null;
+  /** El extremo arrastrado está enganchado a un nodo de otro muro. */
+  readonly dragSnappedToNode: boolean;
   /** Último mensaje para la UI (éxito o error). La vista lo muestra y lo limpia. */
   readonly notice: { kind: 'info' | 'error' | 'success'; message: string } | null;
 }
 
 export type EditorListener = (state: EditorState) => void;
+
+type DragTarget =
+  | { kind: 'center'; dx: number; dy: number; preview: RevitObjectBase | null; snappedToNode: false }
+  | { kind: 'start' | 'end'; point: Point2D; dx: number; dy: number; preview: RevitObjectBase | null; snappedToNode: boolean };
+
+/**
+ * Copia de un objeto de dominio con algunos campos cambiados, conservando su
+ * clase (los getters como `length` o `isStraight` siguen funcionando). Solo
+ * para vistas previas: nunca se persiste.
+ */
+function cloneWith<T extends object>(obj: T, changes: Partial<T>): T {
+  return Object.assign(Object.create(Object.getPrototypeOf(obj)), obj, changes);
+}
 
 // ---------------------------------------------------------------------------
 // Controller
@@ -155,17 +208,10 @@ export class EditorController {
   private listeners: EditorListener[] = [];
   private state: EditorState;
 
-  /**
-   * Vértices deshechos, espejo del redo del CommandStack: `undo` la llena,
-   * `redo` la vacía, y cualquier trazo nuevo la descarta (igual que cualquier
-   * editor descarta el futuro al escribir sobre él). Sin esto, un Redo
-   * restauraba el muro pero no el vértice, y `vertices` quedaba corto frente a
-   * los muros realmente persistidos.
-   */
-  private undoneVertices: Point2D[] = [];
-
   /** Punto mundo donde empezó el arrastre en curso, para calcular el delta. */
   private dragOrigin: Point2D | null = null;
+  private dragTolerancePx = 22;
+  private wallCommits: Promise<void> = Promise.resolve();
 
   constructor(params: {
     services: AppServices;
@@ -185,7 +231,9 @@ export class EditorController {
     this.state = {
       tool: 'wall',
       objects: [],
-      vertices: [],
+      creation: { wall: 'drag', column: 'rectangular' },
+      wallDraft: null,
+      rooms: [],
       selectedId: null,
       measureTargetId: null,
       pendingPhotoPoint: null,
@@ -197,8 +245,9 @@ export class EditorController {
       canUndo: false,
       canRedo: false,
       busy: false,
-      roomSuggestions: [],
       draggingHandle: null,
+      dragPreview: null,
+      dragSnappedToNode: false,
       notice: null,
     };
   }
@@ -254,10 +303,17 @@ export class EditorController {
     return this.state.objects.find((o) => o.id === this.state.selectedId) ?? null;
   }
 
-  /** Handles del objeto seleccionado, en coordenadas mundo. */
+  /** Handles del objeto seleccionado, en coordenadas mundo (siguen al arrastre). */
   get selectedHandles(): Handle[] {
-    const sel = this.selected;
+    const sel = this.state.dragPreview ?? this.selected;
     return sel ? this.selection.handlesFor(sel) : [];
+  }
+
+  /** Objetos a dibujar: los persistidos, con el arrastrado en su posición en vivo. */
+  get displayObjects(): readonly RevitObjectBase[] {
+    const preview = this.state.dragPreview;
+    if (!preview) return this.state.objects;
+    return this.state.objects.map((o) => (o.id === preview.id ? preview : o));
   }
 
   worldToScreen(point: Point2D): CanvasPoint {
@@ -284,58 +340,40 @@ export class EditorController {
   // -------------------------------------------------------------------------
 
   /**
-   * Asegura que el Room exista, recarga los objetos y devuelve el borrador
-   * pendiente (si lo hay) para que la vista pregunte al usuario qué hacer.
-   * No decide por él: recuperar o descartar un trazo es una decisión suya.
+   * Asegura que el Room exista y carga sus objetos. Los muros se persisten uno
+   * a uno al crearse, así que ya no hay un trazo a medias que recuperar.
    */
-  async init(): Promise<{ hasDraft: boolean; draftId: string; vertices: Point2D[]; savedAt: Date } | null> {
-    let room = (await this.services.store.readObject(this.roomObjectId)) as Room | null;
-    if (!room) {
-      room = new Room({
-        id: this.roomObjectId,
-        roomId: this.roomId,
-        levelId: this.services.defaultLevelId,
-        geometry: [],
-        isOpen: true,
-      });
-      await this.services.store.createObject(room);
-    }
-
-    await this.reload();
-
-    const recovered = await this.services.useCases.recoverRoomDraft.execute({ roomId: this.roomId });
-    if (!recovered.hasDraft) {
-      // Sin borrador: los vértices en memoria son los de la geometría del Room
-      // ya persistida, para que el trazo continúe donde se dejó.
-      this.patch({ vertices: room.geometry ?? [] });
-      return null;
-    }
-
-    return {
-      hasDraft: true,
-      draftId: recovered.draftId,
-      vertices: recovered.vertices,
-      savedAt: recovered.savedAt,
-    };
-  }
-
-  async acceptDraft(draftId: string, vertices: Point2D[]): Promise<void> {
-    await this.services.useCases.recoverRoomDraft.confirmContinue(draftId);
-    this.patch({ vertices });
-  }
-
-  async discardDraft(draftId: string): Promise<void> {
-    await this.services.useCases.recoverRoomDraft.discard(draftId);
+  async init(): Promise<void> {
     const room = (await this.services.store.readObject(this.roomObjectId)) as Room | null;
-    this.patch({ vertices: room?.geometry ?? [] });
+    if (!room) {
+      await this.services.store.createObject(
+        new Room({
+          id: this.roomObjectId,
+          roomId: this.roomId,
+          levelId: this.services.defaultLevelId,
+          geometry: [],
+          isOpen: true,
+        }),
+      );
+    }
+    await this.reload();
   }
 
   /** Relee los objetos del Recinto, los marcadores de foto y el CommandStack. */
   async reload(): Promise<void> {
-    const objects = await this.services.store.listObjects(this.roomId);
+    let objects = await this.services.store.listObjects(this.roomId);
+    const walls = objects.filter((o): o is Wall => o instanceof Wall);
+    const rooms = this.services.useCases.detectRooms
+      .execute({ walls })
+      .suggestions.map((r) => ({ polygon: r.polygon, area: r.area as number, centroid: r.centroid }))
+      .sort((a, b) => b.area - a.area);
+    if (await this.syncRoomGeometry(objects, rooms)) {
+      objects = await this.services.store.listObjects(this.roomId);
+    }
     await this.reloadPhotoMarkers();
     this.patch({
       objects,
+      rooms,
       canUndo: this.services.commandStack.canUndo(),
       canRedo: this.services.commandStack.canRedo(),
       // Una selección apuntando a un objeto que ya no está (borrado, o
@@ -359,7 +397,15 @@ export class EditorController {
       measureTargetId: tool === 'measure' ? this.state.measureTargetId : null,
       pendingPhotoPoint: tool === 'photo' ? this.state.pendingPhotoPoint : null,
       draggingHandle: null,
+      dragPreview: null,
+      dragSnappedToNode: false,
+      wallDraft: null,
     });
+    this.dragOrigin = null;
+  }
+
+  setCreationMethod<K extends keyof CreationMethods>(tool: K, method: CreationMethods[K]): void {
+    this.patch({ creation: { ...this.state.creation, [tool]: method }, wallDraft: null });
   }
 
   setSnapEnabled(enabled: boolean): void {
@@ -379,9 +425,34 @@ export class EditorController {
     this.patch({ selectedId: id });
   }
 
+  /**
+   * Selecciona el objeto bajo el dedo con CUALQUIER herramienta activa (el
+   * long-press abre propiedades sin obligar a cambiar a Seleccionar). Devuelve
+   * el objeto, o `null` si no había nada y la selección no cambió.
+   */
+  selectAt(screenX: number, screenY: number, touchTolerancePx: number): RevitObjectBase | null {
+    const world = this.screenToWorld(screenX, screenY);
+    const tol = touchToleranceMeters(touchTolerancePx, this.state.transform.scale);
+    const hit = this.selection.hitTest({ worldPoint: world, objects: this.state.objects, thresholdMeters: tol });
+    if (hit) this.patch({ selectedId: hit.id });
+    return hit ?? null;
+  }
+
   // -------------------------------------------------------------------------
   // Viewport: pan, zoom, encuadre
   // -------------------------------------------------------------------------
+
+  /**
+   * Fija la cámara entera. La usa el lienzo al terminar (o durante) un gesto
+   * que animó la cámara en el hilo UI, para que el modelo quede en sincronía.
+   */
+  setTransform(transform: CanvasTransform): void {
+    this.canvas.setTransform({
+      ...transform,
+      scale: Math.max(MIN_SCALE, Math.min(MAX_SCALE, transform.scale)),
+    });
+    this.patch({ transform: this.canvas.getTransform() });
+  }
 
   pan(dxPixels: number, dyPixels: number): void {
     const t = this.canvas.getTransform();
@@ -411,7 +482,7 @@ export class EditorController {
 
   /** Encuadra todo lo dibujado en el viewport dado, con un margen. */
   zoomToFit(viewportWidth: number, viewportHeight: number, paddingPx = 32): void {
-    const pts: Point2D[] = [...this.state.vertices];
+    const pts: Point2D[] = [];
     for (const w of this.walls) pts.push(w.startPoint, w.endPoint);
     for (const o of this.state.objects) if (o instanceof Column) pts.push(o.position);
 
@@ -462,7 +533,7 @@ export class EditorController {
         });
         return;
       case 'wall':
-        return this.addVertex(world, tol);
+        return this.wallTap(screenX, screenY);
       case 'door':
         return this.addVano('door', world, tol);
       case 'window':
@@ -493,8 +564,28 @@ export class EditorController {
     if (!handle) return false;
 
     this.dragOrigin = world;
-    this.patch({ draggingHandle: handle });
+    this.dragTolerancePx = touchTolerancePx;
+    this.patch({ draggingHandle: handle, dragPreview: null, dragSnappedToNode: false });
     return true;
+  }
+
+  /**
+   * El dedo se movió con un handle agarrado: actualiza la vista previa sin
+   * persistir nada (como `updateManipulation` de LevON). Solo `endDrag` crea
+   * el comando, así un arrastre entero es UN paso de deshacer.
+   */
+  updateDrag(screenX: number, screenY: number): void {
+    const target = this.dragTargetAt(screenX, screenY);
+    if (!target) return;
+    this.patch({ dragPreview: target.preview, dragSnappedToNode: target.snappedToNode });
+  }
+
+  /** Abandona el arrastre sin persistir (el gesto fue cancelado por el sistema). */
+  cancelDrag(): void {
+    this.dragOrigin = null;
+    if (this.state.draggingHandle || this.state.dragPreview) {
+      this.patch({ draggingHandle: null, dragPreview: null, dragSnappedToNode: false });
+    }
   }
 
   /**
@@ -503,25 +594,29 @@ export class EditorController {
    * él); arrastrar `start`/`end` reescribe ese extremo del muro.
    */
   async endDrag(screenX: number, screenY: number): Promise<void> {
-    const handle = this.state.draggingHandle;
-    const origin = this.dragOrigin;
+    const target = this.dragTargetAt(screenX, screenY);
     this.dragOrigin = null;
-    this.patch({ draggingHandle: null });
+    // La vista previa se conserva hasta que termine la recarga: si se borrara
+    // ya, el objeto volvería un instante a su sitio viejo antes de saltar al nuevo.
+    this.patch({ draggingHandle: null, dragSnappedToNode: false });
 
-    if (!handle || !origin) return;
     const sel = this.selected;
-    if (!sel) return;
+    if (!target || !sel) {
+      this.patch({ dragPreview: null });
+      return;
+    }
 
-    const world = this.screenToWorld(screenX, screenY);
-    const dx = world.x - origin.x;
-    const dy = world.y - origin.y;
+    const { dx, dy } = target;
     // Un micro-arrastre por temblor de pulso no debe contar como una edición:
     // generaría un comando en la pila que el usuario no pidió.
-    if (Math.hypot(dx, dy) < 1e-4) return;
+    if (Math.hypot(dx, dy) < 1e-4) {
+      this.patch({ dragPreview: null });
+      return;
+    }
 
     this.patch({ busy: true });
     try {
-      if (handle.kind === 'center') {
+      if (target.kind === 'center') {
         // MoveObjectUseCase toma posiciones ABSOLUTAS, no deltas: para un muro
         // basta mandar el nuevo inicio (el use case traslada el final y el eje
         // con el mismo delta); para una columna, la nueva posición.
@@ -536,64 +631,194 @@ export class EditorController {
             newPosition: { x: sel.position.x + dx, y: sel.position.y + dy },
           });
         }
-        if (sel instanceof Wall) await this.syncVerticesToWalls();
       } else if (sel instanceof Wall) {
-        const isStart = handle.kind === 'start';
-        const moved = this.snapEndpoint(world, isStart ? sel.endPoint : sel.startPoint);
         await this.services.useCases.updateObjectProperty.execute({
           objectId: sel.id,
-          property: isStart ? 'startPoint' : 'endPoint',
-          newValue: moved,
+          property: target.kind === 'start' ? 'startPoint' : 'endPoint',
+          newValue: target.point,
         });
-        await this.syncVerticesToWalls();
       }
       await this.reload();
     } catch (err) {
       this.fail(err, 'No se pudo mover el objeto.');
     } finally {
-      this.patch({ busy: false });
+      this.patch({ busy: false, dragPreview: null });
     }
+  }
+
+  /**
+   * Dónde quedaría el objeto si el dedo se soltara en (screenX, screenY).
+   * Lo usan tanto la vista previa como el commit: lo que se ve es lo que se guarda.
+   */
+  private dragTargetAt(screenX: number, screenY: number): DragTarget | null {
+    const handle = this.state.draggingHandle;
+    const origin = this.dragOrigin;
+    const sel = this.selected;
+    if (!handle || !origin || !sel) return null;
+
+    const world = this.screenToWorld(screenX, screenY);
+
+    if (handle.kind === 'center') {
+      const dx = world.x - origin.x;
+      const dy = world.y - origin.y;
+      let preview: RevitObjectBase | null = null;
+      if (sel instanceof Column) {
+        preview = cloneWith(sel, { position: { x: sel.position.x + dx, y: sel.position.y + dy } });
+      } else if (sel instanceof Wall && sel.isStraight) {
+        const start = { x: sel.startPoint.x + dx, y: sel.startPoint.y + dy };
+        const end = { x: sel.endPoint.x + dx, y: sel.endPoint.y + dy };
+        preview = cloneWith(sel, { startPoint: start, endPoint: end, shape: lineShape(start, end) });
+      }
+      return { kind: 'center', dx, dy, preview, snappedToNode: false };
+    }
+
+    if (!(sel instanceof Wall)) return null;
+    const isStart = handle.kind === 'start';
+    const fixed = isStart ? sel.endPoint : sel.startPoint;
+    const current = isStart ? sel.startPoint : sel.endPoint;
+
+    // Nodo de OTRO muro primero (cierra la topología, como en el trazo); si no
+    // hay, el snap angular respecto al extremo fijo.
+    let point = world;
+    let snappedToNode = false;
+    if (this.state.nodeSnapEnabled) {
+      const tol = touchToleranceMeters(this.dragTolerancePx, this.state.transform.scale);
+      const others = this.walls.filter((w) => w.id !== sel.id);
+      const node = this.selection.findNearestNode({ worldPoint: world, walls: others, thresholdMeters: tol });
+      if (node) {
+        point = node;
+        snappedToNode = true;
+      }
+    }
+    if (!snappedToNode) point = this.snapEndpoint(world, fixed);
+
+    const preview = sel.isStraight
+      ? cloneWith(sel, {
+          startPoint: isStart ? point : fixed,
+          endPoint: isStart ? fixed : point,
+          shape: lineShape(isStart ? point : fixed, isStart ? fixed : point),
+        })
+      : null;
+    return {
+      kind: isStart ? 'start' : 'end',
+      point,
+      dx: point.x - current.x,
+      dy: point.y - current.y,
+      preview,
+      snappedToNode,
+    };
   }
 
   // -------------------------------------------------------------------------
   // Creación de objetos
   // -------------------------------------------------------------------------
 
-  private async addVertex(rawWorld: Point2D, tol: Meters): Promise<void> {
-    const previous = this.state.vertices[this.state.vertices.length - 1];
-    const world = this.applySnaps(rawWorld, previous, tol);
+  // --- Trazado de muros --------------------------------------------------
+  //
+  // Un gesto de un dedo con la herramienta Muro es un TRAZO, no un paneo:
+  //   drag   → drawBegin fija el inicio; drawEnd crea el muro inicio→fin.
+  //   points → cada gesto (o toque) fija un punto; el segundo crea el muro.
+  // El muro se crea con snap a nodo (primero) o angular respecto al inicio.
 
-    // Tocar dos veces sobre el mismo punto — o tocar junto al último vértice
-    // con el snap a nodo activo, que arrastra el toque exactamente encima de
-    // él — pediría un muro de longitud cero. CreateWallUseCase lo rechaza con
-    // razón, pero el operador vería un error rojo por un doble toque
-    // accidental, que es de las cosas más fáciles de hacer con guantes en obra.
-    // Se ignora en silencio (con un aviso informativo, no un error).
-    if (previous !== undefined && Math.hypot(world.x - previous.x, world.y - previous.y) < 1e-6) {
-      this.notify('info', 'Ese punto ya es el último vértice del trazo.');
+  drawBegin(screenX: number, screenY: number): void {
+    // No se bloquea con `busy`: trazar el muro siguiente mientras se guarda el
+    // anterior es el ritmo normal de campo; perder ese trazo sería peor.
+    if (this.state.tool !== 'wall') return;
+    const { point, snappedToNode } = this.snapDrawPoint(screenX, screenY, this.state.wallDraft?.start ?? undefined);
+    if (this.state.creation.wall === 'drag') {
+      this.patch({ wallDraft: { start: point, end: point, snappedToNode } });
+    } else {
+      this.patch({ wallDraft: { start: this.state.wallDraft?.start ?? null, end: point, snappedToNode } });
+    }
+  }
+
+  drawMove(screenX: number, screenY: number): void {
+    const draft = this.state.wallDraft;
+    if (!draft || this.state.tool !== 'wall') return;
+    const { point, snappedToNode } = this.snapDrawPoint(screenX, screenY, draft.start ?? undefined);
+    this.patch({ wallDraft: { ...draft, end: point, snappedToNode } });
+  }
+
+  async drawEnd(screenX: number, screenY: number): Promise<void> {
+    if (this.state.tool !== 'wall') return;
+    this.drawMove(screenX, screenY);
+    const draft = this.state.wallDraft;
+    if (!draft?.end) return;
+
+    if (this.state.creation.wall === 'points' && !draft.start) {
+      // Primer punto: queda fijado esperando el segundo.
+      this.patch({ wallDraft: { start: draft.end, end: null, snappedToNode: false } });
+      return;
+    }
+    if (!draft.start) return;
+    await this.commitWall(draft.start, draft.end);
+  }
+
+  /** El gesto se abandonó (entró un segundo dedo, o el sistema lo canceló). */
+  drawCancel(): void {
+    const draft = this.state.wallDraft;
+    if (!draft) return;
+    // En punto a punto se conserva el inicio ya fijado: cancelar un gesto no
+    // debe perder el primer toque (p. ej. al hacer zoom entre los dos puntos).
+    const keep = this.state.creation.wall === 'points' && draft.start;
+    this.patch({ wallDraft: keep ? { start: draft.start, end: null, snappedToNode: false } : null });
+  }
+
+  /** Suelta el inicio fijado en "punto a punto" sin crear nada. */
+  clearWallDraft(): void {
+    if (this.state.wallDraft) this.patch({ wallDraft: null });
+  }
+
+  private async wallTap(screenX: number, screenY: number): Promise<void> {
+    if (this.state.creation.wall === 'drag') {
+      this.notify('info', 'Arrastra el dedo de un extremo al otro para trazar el muro.');
+      return;
+    }
+    this.drawBegin(screenX, screenY);
+    await this.drawEnd(screenX, screenY);
+  }
+
+  private snapDrawPoint(screenX: number, screenY: number, from: Point2D | undefined): { point: Point2D; snappedToNode: boolean } {
+    const world = this.screenToWorld(screenX, screenY);
+    const tol = touchToleranceMeters(this.dragTolerancePx, this.state.transform.scale);
+    if (this.state.nodeSnapEnabled) {
+      const node = this.selection.findNearestNode({ worldPoint: world, walls: this.walls, thresholdMeters: tol });
+      if (node) return { point: node, snappedToNode: true };
+    }
+    if (from !== undefined && this.state.snapEnabled) return { point: this.snap.snapPoint(world, from), snappedToNode: false };
+    return { point: world, snappedToNode: false };
+  }
+
+  private async commitWall(start: Point2D, end: Point2D): Promise<void> {
+    this.patch({ wallDraft: null });
+    if (Math.hypot(end.x - start.x, end.y - start.y) < MIN_WALL_LENGTH) {
+      if (this.state.creation.wall === 'drag') {
+        this.notify('info', 'Muro demasiado corto: arrastra al menos 10 cm.');
+      }
       return;
     }
 
+    // Los guardados van en cola: trazar el muro siguiente mientras se guarda el
+    // anterior es lo normal, y dos escrituras simultáneas chocan en SQLite.
+    const run = () => this.persistWall(start, end);
+    this.wallCommits = this.wallCommits.then(run, run);
+    return this.wallCommits;
+  }
+
+  private async persistWall(start: Point2D, end: Point2D): Promise<void> {
     this.patch({ busy: true });
     try {
-      this.undoneVertices = [];
-      const nextVertices = [...this.state.vertices, world];
-
-      if (previous !== undefined) {
-        const created = await this.services.useCases.createWall.execute({
-          roomId: this.roomId,
-          startPoint: previous,
-          endPoint: world,
-          thickness: this.defaults.wallThickness,
-          height: this.defaults.wallHeight,
-        });
-        this.warnOnAcuteMeeting(created.wall);
-      }
-
-      await this.persistVertices(nextVertices);
+      const created = await this.services.useCases.createWall.execute({
+        roomId: this.roomId,
+        startPoint: start,
+        endPoint: end,
+        thickness: this.defaults.wallThickness,
+        height: this.defaults.wallHeight,
+      });
+      this.warnOnAcuteMeeting(created.wall);
       await this.reload();
     } catch (err) {
-      this.fail(err, 'No se pudo agregar el punto. Verifica que el muro sea válido.');
+      this.fail(err, 'No se pudo crear el muro. Verifica que sea válido.');
     } finally {
       this.patch({ busy: false });
     }
@@ -645,6 +870,7 @@ export class EditorController {
         roomId: this.roomId,
         position: world,
         diameter: this.defaults.columnDiameter,
+        sectionShape: this.state.creation.column,
         height: this.defaults.columnHeight,
       });
       await this.reload();
@@ -686,11 +912,6 @@ export class EditorController {
     this.patch({ busy: true });
     try {
       const result = await this.services.useCases.deleteObject.execute({ objectId: sel.id });
-
-      // Borrar un muro del trazo invalida los vértices que lo definían: si no
-      // se recortan, "Cerrar Recinto" triangularía un polígono que ya no
-      // corresponde a lo que se ve en pantalla.
-      if (sel instanceof Wall) await this.syncVerticesToWalls();
 
       this.patch({ selectedId: null });
       await this.reload();
@@ -735,7 +956,6 @@ export class EditorController {
     this.patch({ busy: true });
     try {
       await this.services.commandStack.undo();
-      await this.syncVerticesAfterUndo();
       await this.reload();
     } catch (err) {
       this.fail(err, 'No se pudo deshacer la última acción.');
@@ -749,8 +969,6 @@ export class EditorController {
     this.patch({ busy: true });
     try {
       await this.services.commandStack.redo();
-      const restored = this.undoneVertices.pop();
-      if (restored !== undefined) await this.persistVertices([...this.state.vertices, restored]);
       await this.reload();
     } catch (err) {
       this.fail(err, 'No se pudo rehacer la acción.');
@@ -763,61 +981,29 @@ export class EditorController {
   // Recintos
   // -------------------------------------------------------------------------
 
-  async closeRoom(): Promise<void> {
-    if (this.state.vertices.length < 3) {
-      this.notify('info', 'Se necesitan al menos 3 vértices para cerrar el Recinto.');
-      return;
-    }
-    this.patch({ busy: true });
-    try {
-      const result = await this.services.useCases.closeRoom.execute({ roomId: this.roomId });
-      await this.reload();
-      this.notify('success', `Recinto cerrado. Área: ${Number(result.room.area).toFixed(2)} m².`);
-    } catch (err) {
-      this.fail(err, 'No se pudo cerrar el Recinto. Revisa que el trazo no se cruce a sí mismo.');
-    } finally {
-      this.patch({ busy: false });
-    }
-  }
-
   /**
-   * Detecta recintos cerrados por la topología de los muros. Es una AYUDA:
-   * devuelve sugerencias que la vista lista, y cerrar de verdad sigue siendo
-   * CloseRoomUseCase. Por eso el resultado va al estado en vez de escribirse.
+   * Mantiene `Room.geometry` y `Room.area` iguales al MAYOR recinto cerrado que
+   * forman los muros (es lo que exportan IFC y DXF). Mientras los muros no
+   * cierren, el Recinto queda abierto y sin geometría: nunca se rellena un
+   * contorno abierto. Devuelve `true` si escribió algo.
    */
-  detectRooms(): readonly RoomSuggestion[] {
-    const output = this.services.useCases.detectRooms.execute({ walls: this.walls });
-    this.patch({ roomSuggestions: output.suggestions });
-    if (output.suggestions.length === 0) {
-      this.notify(
-        'info',
-        output.rejected.length > 0
-          ? `Sin recintos cerrados. ${output.rejected[0].reason}`
-          : 'No se detectó ningún recinto cerrado con los muros actuales.',
-      );
-    }
-    return output.suggestions;
-  }
+  private async syncRoomGeometry(objects: readonly RevitObjectBase[], rooms: readonly DetectedRoom[]): Promise<boolean> {
+    const room = objects.find((o): o is Room => o instanceof Room && o.id === this.roomObjectId);
+    if (!room) return false;
 
-  clearRoomSuggestions(): void {
-    this.patch({ roomSuggestions: [] });
-  }
+    const target = rooms[0];
+    const geometry = target ? [...target.polygon] : [];
+    const same =
+      room.geometry.length === geometry.length &&
+      room.geometry.every((p, i) => Math.hypot(p.x - geometry[i].x, p.y - geometry[i].y) < 1e-9);
+    if (same && room.isOpen === !target) return false;
 
-  /**
-   * Adopta una sugerencia como el trazo activo del Recinto. Tras esto,
-   * "Cerrar Recinto" triangula ese polígono.
-   */
-  async adoptSuggestion(suggestion: RoomSuggestion): Promise<void> {
-    this.patch({ busy: true });
-    try {
-      await this.persistVertices([...suggestion.polygon]);
-      this.patch({ roomSuggestions: [] });
-      this.notify('success', `Trazo adoptado (${Number(suggestion.area).toFixed(2)} m²). Pulsa "Cerrar Recinto" para confirmarlo.`);
-    } catch (err) {
-      this.fail(err, 'No se pudo adoptar el recinto detectado.');
-    } finally {
-      this.patch({ busy: false });
-    }
+    await this.services.store.updateObject(this.roomObjectId, {
+      geometry,
+      area: target ? squareMeters(target.area) : undefined,
+      isOpen: !target,
+    } as Partial<Room>);
+    return true;
   }
 
   // -------------------------------------------------------------------------
@@ -901,7 +1087,6 @@ export class EditorController {
         property: 'endPoint',
         newValue: newEnd,
       });
-      await this.syncVerticesToWalls();
       await this.reload();
       this.notify('success', `Muro ajustado a ${Number(distance).toFixed(3)} m.`);
     } catch (err) {
@@ -991,29 +1176,6 @@ export class EditorController {
   }
 
   /**
-   * Única ruta de escritura del trazo: deja el estado del editor, el borrador
-   * de recuperación y `Room.geometry` siempre en el mismo valor. Los tres
-   * tienen que coincidir porque CloseRoomUseCase triangula `Room.geometry`,
-   * no los muros.
-   */
-  private async persistVertices(vertices: Point2D[]): Promise<void> {
-    this.patch({ vertices });
-    await this.services.useCases.saveRoomDraft.execute({ roomId: this.roomId, vertices, isClosed: false });
-    await this.services.store.updateObject(this.roomObjectId, { geometry: vertices } as Partial<Room>);
-  }
-
-  private async syncVerticesAfterUndo(): Promise<void> {
-    const removed = this.state.vertices[this.state.vertices.length - 1];
-    if (removed !== undefined) this.undoneVertices.push(removed);
-    await this.persistVertices(this.state.vertices.slice(0, -1));
-  }
-
-  /**
-   * Reconstruye la polilínea del trazo a partir de los muros que siguen vivos.
-   * Se usa tras borrar un muro o tras reescribir un extremo: el trazo deja de
-   * ser una lista independiente y pasa a derivarse de lo persistido.
-   */
-  /**
    * Avisa si el muro recién trazado forma un encuentro demasiado agudo con
    * alguno de los que ya tocaba.
    *
@@ -1027,8 +1189,14 @@ export class EditorController {
    * está para levantar lo que existe.
    */
   private warnOnAcuteMeeting(created: Wall): void {
+    const near = (a: Point2D, b: Point2D) => Math.hypot(a.x - b.x, a.y - b.y) < 1e-3;
     for (const other of this.walls) {
       if ((other.id as string) === (created.id as string)) continue;
+      // Solo cuenta un encuentro de verdad: muros que comparten un extremo.
+      const touches = [created.startPoint, created.endPoint].some(
+        (p) => near(p, other.startPoint) || near(p, other.endPoint),
+      );
+      if (!touches) continue;
 
       const result = this.miter.calculateMiter(created, other);
       if (!result.isValid && result.warning) {
@@ -1092,7 +1260,8 @@ export class EditorController {
       await this.services.store.updateAuditPhoto(photoId, { metadata_json: photo.metadata_json });
 
       this.patch({ pendingPhotoPoint: null });
-      await this.reloadPhotoMarkers();
+      // Recarga completa: la captura apiló un comando y Deshacer debe habilitarse.
+      await this.reload();
       this.notify('success', 'Foto anclada a la planta.');
     } catch (err) {
       this.fail(err, 'No se pudo anclar la foto a la planta.');
@@ -1116,22 +1285,5 @@ export class EditorController {
     return best;
   }
 
-  private async syncVerticesToWalls(): Promise<void> {
-    const objects = await this.services.store.listObjects(this.roomId);
-    const walls = objects.filter((o): o is Wall => o instanceof Wall);
-    if (walls.length === 0) {
-      await this.persistVertices([]);
-      return;
-    }
 
-    // Encadenar por proximidad de extremos, en el orden de creación.
-    const vertices: Point2D[] = [walls[0].startPoint];
-    for (const wall of walls) {
-      const last = vertices[vertices.length - 1];
-      const startsHere = Math.hypot(wall.startPoint.x - last.x, wall.startPoint.y - last.y) < 1e-6;
-      if (!startsHere) vertices.push(wall.startPoint);
-      vertices.push(wall.endPoint);
-    }
-    await this.persistVertices(vertices);
-  }
 }

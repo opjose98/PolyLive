@@ -22,6 +22,9 @@ import {
   Alert,
   RefreshControl,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from 'react-native';
 
 import { AppServices } from '../../application/AppServices';
@@ -239,8 +242,11 @@ export function ProjectWorkspaceScreen({
         transparent
         onRequestClose={() => setRenaming(null)}
       >
-        <View style={styles.dialogScrim}>
-          <View style={styles.dialog}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.dialogScrim}
+        >
+          <ScrollView contentContainerStyle={styles.dialog} keyboardShouldPersistTaps="handled" style={styles.dialogCard}>
             <Text style={styles.dialogTitle}>Renombrar espacio</Text>
             <Text style={styles.muted}>
               El código BIM del espacio ({renaming?.space.bimCode}) no cambia: identifica el espacio
@@ -255,13 +261,16 @@ export function ProjectWorkspaceScreen({
                 disabled={renameValue.trim().length === 0}
               />
             </View>
-          </View>
-        </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
 
       <Modal visible={creating} animationType="fade" transparent onRequestClose={() => setCreating(false)}>
-        <View style={styles.dialogScrim}>
-          <View style={styles.dialog}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.dialogScrim}
+        >
+          <ScrollView contentContainerStyle={styles.dialog} keyboardShouldPersistTaps="handled" style={styles.dialogCard}>
             <Text style={styles.dialogTitle}>Nuevo espacio</Text>
             <Text style={styles.muted}>
               Se creará un Recinto nuevo dentro de "{project.name}" y se le asignará el siguiente código
@@ -288,8 +297,8 @@ export function ProjectWorkspaceScreen({
                 disabled={newName.trim().length === 0}
               />
             </View>
-          </View>
-        </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
@@ -539,9 +548,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: spacing.lg,
   },
-  dialog: {
+  dialogCard: {
+    flexGrow: 0,
     backgroundColor: colors.surface,
     borderRadius: radius.md,
+  },
+  dialog: {
     padding: spacing.lg,
     gap: spacing.sm,
   },

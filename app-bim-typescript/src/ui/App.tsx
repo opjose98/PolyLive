@@ -301,7 +301,7 @@ export default function App() {
   return (
     <>
       <StatusBar barStyle="dark-content" backgroundColor={colors.surface} />
-      <AppStatusBar appStore={appStore} />
+      {/* Barra de estado BLE oculta: el medidor láser queda para una versión posterior. */}
 
       <View style={styles.breadcrumb}>
         <TouchableOpacity

@@ -446,6 +446,12 @@ export class ObjectStore implements IObjectStore {
     await this.db.run(`UPDATE audit_photos SET is_deleted = 1, updated_at = ? WHERE id = ?`, [now, id as string]);
   }
 
+  /** Revierte el soft-delete de una AuditPhoto (redo de su captura). Idempotente. */
+  async restoreAuditPhoto(id: AuditPhotoId): Promise<void> {
+    const now = new Date().toISOString();
+    await this.db.run(`UPDATE audit_photos SET is_deleted = 0, updated_at = ? WHERE id = ?`, [now, id as string]);
+  }
+
   private auditPhotoRowToObject(row: AuditPhotoRow): AuditPhoto {
     return new AuditPhoto({
       id: auditPhotoId(row.id),

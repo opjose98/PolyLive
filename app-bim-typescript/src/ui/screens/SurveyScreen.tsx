@@ -37,7 +37,14 @@ import {
   ScrollView,
 } from 'react-native';
 
-import { PlanCanvasView, CANVAS_TOUCH_TOLERANCE_PX } from '../components/PlanCanvasView';
+import { PlanCanvas } from '../canvas/PlanCanvas';
+import { BottomSheet, toast } from '../primitives';
+import { sizes } from '../design/tokens';
+import { CANVAS_PALETTES } from '../design/canvasThemes';
+import { haptic } from '../design/haptics';
+import { workspaceStore } from '../../state/workspaceStore';
+import { CANVAS_THEMES } from '../../application/workspace/catalog';
+import { useStore } from 'zustand';
 import { CameraCaptureView } from '../components/CameraCaptureView';
 import { ExpoPhotoCapture } from '../../native/camera/ExpoPhotoCapture';
 import { ExpoFileSystem } from '../../native/filesystem/ExpoFileSystem';
@@ -45,7 +52,7 @@ import { ExpoGpsProvider } from '../../native/location/ExpoGpsProvider';
 import { base64ToUint8Array } from '../../shared/encoding/base64';
 import { PHOTO_BIM_CODE_PREFIX } from '../../domain/objects/audit-photo';
 import { generateBimCode } from '../../domain/objects/project';
-import { ToolPalette, QuickBar, ActionButton } from '../components/ToolPalette';
+import { ToolPalette, QuickBar, ActionButton, Chip } from '../components/ToolPalette';
 import { PropertiesPanel } from '../components/PropertiesPanel';
 import { BLEStatus } from '../components/BLEStatus';
 import { NumberField } from '../components/fields';
@@ -66,6 +73,11 @@ import { AppError } from '../../shared/errors/AppError';
 import { meters } from '../../domain/geometry/types';
 import type { AppStore } from '../../state/appStore';
 import { colors, spacing, radius, typography, layout } from '../theme/tokens';
+
+const CANVAS_TOUCH_TOLERANCE_PX = sizes.canvasTouchTolerance;
+
+/** El medidor láser queda para una versión posterior; la lógica BLE se conserva. */
+const BLE_ENABLED = false;
 
 // ---------------------------------------------------------------------------
 // Props
@@ -114,6 +126,11 @@ export function SurveyScreen({
   const [manualValue, setManualValue] = useState(3);
   const [measurements, setMeasurements] = useState<readonly Measurement[]>([]);
 
+  // --- Tema y rejilla del lienzo (cromo del espacio de trabajo) ---
+  const canvasTheme = useStore(workspaceStore, (s) => s.canvasTheme);
+  const gridLines = useStore(workspaceStore, (s) => s.grid.lines);
+  const gridDots = useStore(workspaceStore, (s) => s.grid.dots);
+
   // --- Captura de foto anclada a la planta (SPDS) ---
   const [photoCapture] = useState(() => new ExpoPhotoCapture());
   const [photoFs] = useState(() => new ExpoFileSystem());
@@ -132,37 +149,7 @@ export function SurveyScreen({
   useEffect(() => editor.subscribe(setState), [editor]);
 
   useEffect(() => {
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const draft = await editor.init();
-        if (cancelled || !draft) return;
-
-        Alert.alert(
-          'Recuperar levantamiento',
-          `Se encontró un trazo sin terminar de ${draft.vertices.length} punto(s), ` +
-            `guardado el ${draft.savedAt.toLocaleString()}. ¿Deseas continuarlo?`,
-          [
-            {
-              text: 'Descartar',
-              style: 'destructive',
-              onPress: () => void editor.discardDraft(draft.draftId),
-            },
-            {
-              text: 'Continuar',
-              onPress: () => void editor.acceptDraft(draft.draftId, draft.vertices),
-            },
-          ],
-        );
-      } catch {
-        Alert.alert('Error', 'No se pudo inicializar el levantamiento.');
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
+    editor.init().catch(() => toast('No se pudo abrir el levantamiento.', { kind: 'error' }));
   }, [editor]);
 
   // Los avisos del controlador se muestran una vez y se limpian, para que un
@@ -171,8 +158,7 @@ export function SurveyScreen({
     if (!state.notice) return;
     const { kind, message } = state.notice;
     editor.clearNotice();
-    if (kind === 'error') Alert.alert('Error', message);
-    else Alert.alert(kind === 'success' ? 'Hecho' : 'Aviso', message);
+    toast(message, { kind: kind === 'error' ? 'error' : kind === 'success' ? 'success' : 'info' });
   }, [state.notice, editor]);
 
   // Reflejar la selección y la vista en el store global. GAP CERRADO: el
@@ -266,28 +252,50 @@ export function SurveyScreen({
     [photoFs, gps, services, roomId, editor],
   );
 
+  // Tocar solo selecciona (o dibuja); las propiedades se abren con long-press,
+  // así seleccionar para arrastrar no tapa el plano con un panel.
   const handleTap = useCallback(
     (x: number, y: number) => {
+      const before = editor.getState().selectedId;
       void editor.handleTap(x, y, CANVAS_TOUCH_TOLERANCE_PX).then(() => {
-        // Tocar un objeto con la herramienta de selección abre el panel: es lo
-        // que el usuario quiere el 100% de las veces que selecciona algo.
-        if (editor.getState().tool === 'select' && editor.getState().selectedId) setPanelOpen(true);
+        const after = editor.getState().selectedId;
+        if (editor.getState().tool === 'select' && after && after !== before) haptic.select();
       });
     },
     [editor],
+  );
+
+  const handleLongPress = useCallback(
+    (x: number, y: number) => {
+      if (editor.selectAt(x, y, CANVAS_TOUCH_TOLERANCE_PX)) setPanelOpen(true);
+    },
+    [editor],
+  );
+
+  const handleDoubleTap = useCallback(
+    (x: number, y: number) => {
+      const hit = editor.selectAt(x, y, CANVAS_TOUCH_TOLERANCE_PX);
+      if (hit instanceof Wall && onOpenElevation) onOpenElevation(hit.id as string);
+    },
+    [editor, onOpenElevation],
   );
 
   const handleDragStart = useCallback(
     (x: number, y: number) => editor.beginDrag(x, y, CANVAS_TOUCH_TOLERANCE_PX),
     [editor],
   );
-
+  const handleDragMove = useCallback((x: number, y: number) => editor.updateDrag(x, y), [editor]);
   const handleDragEnd = useCallback((x: number, y: number) => void editor.endDrag(x, y), [editor]);
-  const handlePan = useCallback((dx: number, dy: number) => editor.pan(dx, dy), [editor]);
-  const handleZoom = useCallback(
-    (fx: number, fy: number, factor: number) => editor.zoomAround(fx, fy, factor),
-    [editor],
-  );
+  const handleDragCancel = useCallback(() => editor.cancelDrag(), [editor]);
+
+  const handleDelete = useCallback(() => {
+    const label = editor.selected?.type ?? 'Objeto';
+    setPanelOpen(false);
+    haptic.destroy();
+    void editor.deleteSelected().then(() =>
+      toast(`${label} eliminado`, { action: { label: 'Deshacer', onPress: () => void editor.undo() } }),
+    );
+  }, [editor]);
 
   // -----------------------------------------------------------------------
   // BLE
@@ -370,31 +378,49 @@ export function SurveyScreen({
   }, [huepa, appStore, editor, state.measureTargetId]);
 
   // -----------------------------------------------------------------------
-  // Detección de recintos
-  // -----------------------------------------------------------------------
-
-  const handleDetectRooms = useCallback(() => {
-    const suggestions = editor.detectRooms();
-    if (suggestions.length === 0) return;
-
-    Alert.alert(
-      'Recintos detectados',
-      `Se detectaron ${suggestions.length} recinto(s) cerrado(s). ` +
-        `El mayor mide ${Number(suggestions[0].area).toFixed(2)} m². ` +
-        `Se dibujan en azul sobre el plano; elige uno para adoptarlo como trazo.`,
-    );
-  }, [editor]);
-
-  const adoptSuggestion = useCallback(
-    (suggestion: RoomSuggestion) => void editor.adoptSuggestion(suggestion),
-    [editor],
-  );
-
-  // -----------------------------------------------------------------------
   // Panel de propiedades
   // -----------------------------------------------------------------------
 
   const selected = editor.selected;
+  const displayObjects = useMemo(() => editor.displayObjects, [editor, state.objects, state.dragPreview]);
+  const handles = useMemo(
+    () => editor.selectedHandles,
+    [editor, state.objects, state.selectedId, state.dragPreview],
+  );
+  const roomName = useMemo(() => {
+    const room = state.objects.find((o) => o.type === 'Room');
+    return (room?.properties.name as string | undefined) || undefined;
+  }, [state.objects]);
+  const snapIndicator = useMemo(() => {
+    const p = state.dragPreview;
+    if (!state.dragSnappedToNode || !(p instanceof Wall) || !state.draggingHandle) return null;
+    return state.draggingHandle.kind === 'start' ? p.startPoint : p.endPoint;
+  }, [state.dragPreview, state.dragSnappedToNode, state.draggingHandle]);
+  const canvasScene = useMemo(
+    () => ({
+      objects: displayObjects,
+      selectedId: state.selectedId,
+      handles,
+      showLabels,
+      rooms: state.rooms,
+      roomName,
+      wallDraft: state.wallDraft,
+      draftThickness: 0.15,
+      showNodes: state.tool === 'wall',
+      measureTargetId: state.measureTargetId as unknown as string | null,
+      photoMarkers: state.photoMarkers,
+      snapIndicator,
+    }),
+    [
+      displayObjects, state.selectedId, handles, showLabels, state.rooms, roomName, state.wallDraft,
+      state.tool, state.measureTargetId, state.photoMarkers, snapIndicator,
+    ],
+  );
+  const themeLabel = CANVAS_THEMES.find((t) => t.id === canvasTheme)?.label ?? '';
+  const cycleTheme = () => {
+    const i = CANVAS_THEMES.findIndex((t) => t.id === canvasTheme);
+    workspaceStore.getState().setCanvasTheme(CANVAS_THEMES[(i + 1) % CANVAS_THEMES.length].id);
+  };
   const parentWallLength = useMemo(() => {
     if (!(selected instanceof Door) && !(selected instanceof Window)) return undefined;
     const wall = editor.parentWallOf(selected);
@@ -408,6 +434,30 @@ export function SurveyScreen({
   return (
     <SafeAreaView style={styles.container}>
       <ToolPalette tool={state.tool} disabled={state.busy} onSelect={(t) => editor.setTool(t)} />
+      {/* Formas de creación (nivel 3 del FAB de creación, provisional hasta F2). */}
+      {state.tool === 'wall' || state.tool === 'column' ? (
+        <View style={styles.methodRow}>
+          {(state.tool === 'wall'
+            ? ([['drag', 'Arrastre libre'], ['points', 'Punto a punto']] as const)
+            : ([['rectangular', 'Rectangular'], ['circular', 'Circular']] as const)
+          ).map(([id, label]) => (
+            <Chip
+              key={id}
+              label={label}
+              active={(state.tool === 'wall' ? state.creation.wall : state.creation.column) === id}
+              onPress={() =>
+                state.tool === 'wall'
+                  ? editor.setCreationMethod('wall', id as 'drag' | 'points')
+                  : editor.setCreationMethod('column', id as 'rectangular' | 'circular')
+              }
+              hint={label}
+            />
+          ))}
+          {state.tool === 'wall' && state.wallDraft?.start ? (
+            <Chip label="Soltar inicio" active={false} onPress={() => editor.clearWallDraft()} hint="Descarta el primer punto" />
+          ) : null}
+        </View>
+      ) : null}
 
       <QuickBar
         snapEnabled={state.snapEnabled}
@@ -424,63 +474,50 @@ export function SurveyScreen({
         onUndo={() => void editor.undo()}
         onRedo={() => void editor.redo()}
         onZoomToFit={() => editor.zoomToFit(screenWidth, canvasHeight)}
-      />
+      >
+        <Chip label={`Tema: ${themeLabel}`} active={canvasTheme !== 'claro'} onPress={cycleTheme} hint="Claro, oscuro o alto contraste" />
+        <Chip label="Líneas" active={gridLines} onPress={() => workspaceStore.getState().toggleGrid('lines')} hint="Rejilla de líneas" />
+        <Chip label="Puntos" active={gridDots} onPress={() => workspaceStore.getState().toggleGrid('dots')} hint="Rejilla de puntos" />
+      </QuickBar>
 
-      <PlanCanvasView
+      <PlanCanvas
         width={screenWidth}
         height={canvasHeight}
-        scene={{
-          objects: state.objects,
-          vertices: state.vertices,
-          transform: state.transform,
-          selectedId: state.selectedId,
-          handles: editor.selectedHandles,
-          showGrid: state.gridEnabled,
-          showLabels,
-          measureTargetId: state.measureTargetId as unknown as string | null,
-          suggestions: state.roomSuggestions,
-          photoMarkers: state.photoMarkers,
-        }}
+        scene={canvasScene}
+        transform={state.transform}
+        palette={CANVAS_PALETTES[canvasTheme]}
+        grid={{ show: state.gridEnabled, lines: gridLines, dots: gridDots }}
+        dragEnabled={state.tool === 'select' && !state.busy}
+        drawEnabled={state.tool === 'wall'}
+        doubleTapEnabled={state.tool === 'select'}
+        longPressEnabled
+        snapped={state.dragSnappedToNode || !!state.wallDraft?.snappedToNode}
         onTap={handleTap}
+        onDoubleTap={onOpenElevation ? handleDoubleTap : undefined}
+        onLongPress={handleLongPress}
         onDragStart={handleDragStart}
+        onDragMove={handleDragMove}
         onDragEnd={handleDragEnd}
-        onPan={handlePan}
-        onZoom={handleZoom}
+        onDragCancel={handleDragCancel}
+        onDrawBegin={(x, y) => editor.drawBegin(x, y)}
+        onDrawMove={(x, y) => editor.drawMove(x, y)}
+        onDrawEnd={(x, y) => {
+          haptic.commit();
+          void editor.drawEnd(x, y);
+        }}
+        onDrawCancel={() => editor.drawCancel()}
+        onCameraChange={(t) => editor.setTransform(t)}
       />
 
       <ScrollView style={styles.lowerPane} contentContainerStyle={styles.lowerPaneContent}>
-        {/* Resumen del estado del trazo — el operador necesita saber cuántos
-            puntos lleva sin tener que contarlos en el plano. */}
         <View style={styles.statsRow}>
-          <Stat label="Puntos" value={String(state.vertices.length)} />
           <Stat label="Muros" value={String(editor.walls.length)} />
+          <Stat
+            label="Área"
+            value={state.rooms.length > 0 ? `${state.rooms[0].area.toFixed(2)} m²` : 'Abierto'}
+          />
           <Stat label="Escala" value={`${Math.round(state.transform.scale)} px/m`} />
         </View>
-
-        {state.roomSuggestions.length > 0 ? (
-          <View style={styles.suggestions}>
-            <Text style={styles.sectionTitle}>Recintos detectados</Text>
-            {state.roomSuggestions.map((s, i) => (
-              <TouchableOpacity
-                key={i}
-                style={styles.suggestionRow}
-                onPress={() => adoptSuggestion(s)}
-                accessibilityRole="button"
-                accessibilityLabel={`Adoptar recinto de ${Number(s.area).toFixed(2)} metros cuadrados`}
-              >
-                <Text style={styles.suggestionText}>
-                  {Number(s.area).toFixed(2)} m² · {s.polygon.length} vértices
-                </Text>
-                <Text style={styles.suggestionAction}>Adoptar</Text>
-              </TouchableOpacity>
-            ))}
-            <ActionButton
-              label="Descartar sugerencias"
-              variant="secondary"
-              onPress={() => editor.clearRoomSuggestions()}
-            />
-          </View>
-        ) : null}
 
         {selected ? (
           <TouchableOpacity
@@ -497,28 +534,17 @@ export function SurveyScreen({
           </TouchableOpacity>
         ) : null}
 
-        <BLEStatus
-          state={bleState}
-          device={bleDevice}
-          lastDistance={lastDistance}
-          onConnect={handleConnect}
-          onDisconnect={handleDisconnect}
-          onMeasure={() => void handleMeasure()}
-        />
+        {BLE_ENABLED ? (
+          <BLEStatus
+            state={bleState}
+            device={bleDevice}
+            lastDistance={lastDistance}
+            onConnect={handleConnect}
+            onDisconnect={handleDisconnect}
+            onMeasure={() => void handleMeasure()}
+          />
+        ) : null}
 
-        <View style={styles.actionsGrid}>
-          <ActionButton
-            label="Cerrar Recinto"
-            onPress={() => void editor.closeRoom()}
-            disabled={state.vertices.length < 3 || state.busy}
-          />
-          <ActionButton
-            label="Detectar recintos"
-            variant="secondary"
-            onPress={handleDetectRooms}
-            disabled={editor.walls.length < 3 || state.busy}
-          />
-        </View>
         <View style={styles.actionsGrid}>
           <ActionButton
             label="Medida manual"
@@ -536,27 +562,14 @@ export function SurveyScreen({
       </ScrollView>
 
       {/* --- Panel de propiedades --- */}
-      <Modal visible={panelOpen} animationType="slide" onRequestClose={() => setPanelOpen(false)}>
-        <SafeAreaView style={styles.modalRoot}>
+      <BottomSheet open={panelOpen} onClose={() => setPanelOpen(false)} heightRatio={0.68}>
           <PropertiesPanel
             object={selected}
             parentWallLength={parentWallLength}
             measurements={measurements}
             busy={state.busy}
             onCommitProperty={(property, value) => void editor.updateSelectedProperty(property, value)}
-            onDelete={() => {
-              Alert.alert('Eliminar', '¿Eliminar el objeto seleccionado? Podrás deshacerlo.', [
-                { text: 'Cancelar', style: 'cancel' },
-                {
-                  text: 'Eliminar',
-                  style: 'destructive',
-                  onPress: () => {
-                    setPanelOpen(false);
-                    void editor.deleteSelected();
-                  },
-                },
-              ]);
-            }}
+            onDelete={handleDelete}
             onClose={() => setPanelOpen(false)}
             onOpenElevation={
               onOpenElevation && selected instanceof Wall
@@ -583,8 +596,7 @@ export function SurveyScreen({
                 : undefined
             }
           />
-        </SafeAreaView>
-      </Modal>
+      </BottomSheet>
 
       {/* --- Cámara anclada a la planta --- */}
       <Modal
@@ -662,6 +674,14 @@ function Stat({ label, value }: { label: string; value: string }) {
 // ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
+  methodRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.surface,
+  },
   container: {
     flex: 1,
     backgroundColor: colors.surface,
