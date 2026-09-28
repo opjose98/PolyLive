@@ -101,8 +101,16 @@ export class Column extends RevitObjectBase {
     // Una columna rectangular sin canto explícito es cuadrada; una circular
     // no usa dimensionY en absoluto y se normaliza a 0 para que nunca se lea
     // por accidente un valor heredado de otra columna.
+    //
+    // Un canto de 0 en una rectangular se trata como "sin canto": es lo que
+    // queda guardado cuando una columna circular se cambia a rectangular, y
+    // tomarlo literal daba una sección de área cero que desaparecía del plano.
     this.dimensionY =
-      this.sectionShape === 'rectangular' ? params.dimensionY ?? primary : meters(0);
+      this.sectionShape === 'rectangular'
+        ? params.dimensionY !== undefined && params.dimensionY > 0
+          ? params.dimensionY
+          : primary
+        : meters(0);
 
     this.rotation = params.rotation ?? 0;
 

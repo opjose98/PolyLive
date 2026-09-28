@@ -76,6 +76,9 @@ import { colors, spacing, radius, typography, layout } from '../theme/tokens';
 
 const CANVAS_TOUCH_TOLERANCE_PX = sizes.canvasTouchTolerance;
 
+/** El medidor láser queda para una versión posterior; la lógica BLE se conserva. */
+const BLE_ENABLED = false;
+
 // ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
@@ -146,37 +149,7 @@ export function SurveyScreen({
   useEffect(() => editor.subscribe(setState), [editor]);
 
   useEffect(() => {
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const draft = await editor.init();
-        if (cancelled || !draft) return;
-
-        Alert.alert(
-          'Recuperar levantamiento',
-          `Se encontró un trazo sin terminar de ${draft.vertices.length} punto(s), ` +
-            `guardado el ${draft.savedAt.toLocaleString()}. ¿Deseas continuarlo?`,
-          [
-            {
-              text: 'Descartar',
-              style: 'destructive',
-              onPress: () => void editor.discardDraft(draft.draftId),
-            },
-            {
-              text: 'Continuar',
-              onPress: () => void editor.acceptDraft(draft.draftId, draft.vertices),
-            },
-          ],
-        );
-      } catch {
-        Alert.alert('Error', 'No se pudo inicializar el levantamiento.');
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
+    editor.init().catch(() => toast('No se pudo abrir el levantamiento.', { kind: 'error' }));
   }, [editor]);
 
   // Los avisos del controlador se muestran una vez y se limpian, para que un
@@ -405,27 +378,6 @@ export function SurveyScreen({
   }, [huepa, appStore, editor, state.measureTargetId]);
 
   // -----------------------------------------------------------------------
-  // Detección de recintos
-  // -----------------------------------------------------------------------
-
-  const handleDetectRooms = useCallback(() => {
-    const suggestions = editor.detectRooms();
-    if (suggestions.length === 0) return;
-
-    Alert.alert(
-      'Recintos detectados',
-      `Se detectaron ${suggestions.length} recinto(s) cerrado(s). ` +
-        `El mayor mide ${Number(suggestions[0].area).toFixed(2)} m². ` +
-        `Se dibujan en azul sobre el plano; elige uno para adoptarlo como trazo.`,
-    );
-  }, [editor]);
-
-  const adoptSuggestion = useCallback(
-    (suggestion: RoomSuggestion) => void editor.adoptSuggestion(suggestion),
-    [editor],
-  );
-
-  // -----------------------------------------------------------------------
   // Panel de propiedades
   // -----------------------------------------------------------------------
 
@@ -435,6 +387,10 @@ export function SurveyScreen({
     () => editor.selectedHandles,
     [editor, state.objects, state.selectedId, state.dragPreview],
   );
+  const roomName = useMemo(() => {
+    const room = state.objects.find((o) => o.type === 'Room');
+    return (room?.properties.name as string | undefined) || undefined;
+  }, [state.objects]);
   const snapIndicator = useMemo(() => {
     const p = state.dragPreview;
     if (!state.dragSnappedToNode || !(p instanceof Wall) || !state.draggingHandle) return null;
@@ -443,20 +399,21 @@ export function SurveyScreen({
   const canvasScene = useMemo(
     () => ({
       objects: displayObjects,
-      vertices: state.vertices,
       selectedId: state.selectedId,
       handles,
-      showGrid: state.gridEnabled,
-      gridStyle: { lines: gridLines, dots: gridDots },
       showLabels,
+      rooms: state.rooms,
+      roomName,
+      wallDraft: state.wallDraft,
+      draftThickness: 0.15,
+      showNodes: state.tool === 'wall',
       measureTargetId: state.measureTargetId as unknown as string | null,
-      suggestions: state.roomSuggestions,
       photoMarkers: state.photoMarkers,
       snapIndicator,
     }),
     [
-      displayObjects, state.vertices, state.selectedId, handles, state.gridEnabled, gridLines, gridDots,
-      showLabels, state.measureTargetId, state.roomSuggestions, state.photoMarkers, snapIndicator,
+      displayObjects, state.selectedId, handles, showLabels, state.rooms, roomName, state.wallDraft,
+      state.tool, state.measureTargetId, state.photoMarkers, snapIndicator,
     ],
   );
   const themeLabel = CANVAS_THEMES.find((t) => t.id === canvasTheme)?.label ?? '';
@@ -477,6 +434,30 @@ export function SurveyScreen({
   return (
     <SafeAreaView style={styles.container}>
       <ToolPalette tool={state.tool} disabled={state.busy} onSelect={(t) => editor.setTool(t)} />
+      {/* Formas de creación (nivel 3 del FAB de creación, provisional hasta F2). */}
+      {state.tool === 'wall' || state.tool === 'column' ? (
+        <View style={styles.methodRow}>
+          {(state.tool === 'wall'
+            ? ([['drag', 'Arrastre libre'], ['points', 'Punto a punto']] as const)
+            : ([['rectangular', 'Rectangular'], ['circular', 'Circular']] as const)
+          ).map(([id, label]) => (
+            <Chip
+              key={id}
+              label={label}
+              active={(state.tool === 'wall' ? state.creation.wall : state.creation.column) === id}
+              onPress={() =>
+                state.tool === 'wall'
+                  ? editor.setCreationMethod('wall', id as 'drag' | 'points')
+                  : editor.setCreationMethod('column', id as 'rectangular' | 'circular')
+              }
+              hint={label}
+            />
+          ))}
+          {state.tool === 'wall' && state.wallDraft?.start ? (
+            <Chip label="Soltar inicio" active={false} onPress={() => editor.clearWallDraft()} hint="Descarta el primer punto" />
+          ) : null}
+        </View>
+      ) : null}
 
       <QuickBar
         snapEnabled={state.snapEnabled}
@@ -505,10 +486,12 @@ export function SurveyScreen({
         scene={canvasScene}
         transform={state.transform}
         palette={CANVAS_PALETTES[canvasTheme]}
+        grid={{ show: state.gridEnabled, lines: gridLines, dots: gridDots }}
         dragEnabled={state.tool === 'select' && !state.busy}
+        drawEnabled={state.tool === 'wall'}
         doubleTapEnabled={state.tool === 'select'}
         longPressEnabled
-        dragSnapped={state.dragSnappedToNode}
+        snapped={state.dragSnappedToNode || !!state.wallDraft?.snappedToNode}
         onTap={handleTap}
         onDoubleTap={onOpenElevation ? handleDoubleTap : undefined}
         onLongPress={handleLongPress}
@@ -516,42 +499,25 @@ export function SurveyScreen({
         onDragMove={handleDragMove}
         onDragEnd={handleDragEnd}
         onDragCancel={handleDragCancel}
+        onDrawBegin={(x, y) => editor.drawBegin(x, y)}
+        onDrawMove={(x, y) => editor.drawMove(x, y)}
+        onDrawEnd={(x, y) => {
+          haptic.commit();
+          void editor.drawEnd(x, y);
+        }}
+        onDrawCancel={() => editor.drawCancel()}
         onCameraChange={(t) => editor.setTransform(t)}
       />
 
       <ScrollView style={styles.lowerPane} contentContainerStyle={styles.lowerPaneContent}>
-        {/* Resumen del estado del trazo — el operador necesita saber cuántos
-            puntos lleva sin tener que contarlos en el plano. */}
         <View style={styles.statsRow}>
-          <Stat label="Puntos" value={String(state.vertices.length)} />
           <Stat label="Muros" value={String(editor.walls.length)} />
+          <Stat
+            label="Área"
+            value={state.rooms.length > 0 ? `${state.rooms[0].area.toFixed(2)} m²` : 'Abierto'}
+          />
           <Stat label="Escala" value={`${Math.round(state.transform.scale)} px/m`} />
         </View>
-
-        {state.roomSuggestions.length > 0 ? (
-          <View style={styles.suggestions}>
-            <Text style={styles.sectionTitle}>Recintos detectados</Text>
-            {state.roomSuggestions.map((s, i) => (
-              <TouchableOpacity
-                key={i}
-                style={styles.suggestionRow}
-                onPress={() => adoptSuggestion(s)}
-                accessibilityRole="button"
-                accessibilityLabel={`Adoptar recinto de ${Number(s.area).toFixed(2)} metros cuadrados`}
-              >
-                <Text style={styles.suggestionText}>
-                  {Number(s.area).toFixed(2)} m² · {s.polygon.length} vértices
-                </Text>
-                <Text style={styles.suggestionAction}>Adoptar</Text>
-              </TouchableOpacity>
-            ))}
-            <ActionButton
-              label="Descartar sugerencias"
-              variant="secondary"
-              onPress={() => editor.clearRoomSuggestions()}
-            />
-          </View>
-        ) : null}
 
         {selected ? (
           <TouchableOpacity
@@ -568,28 +534,17 @@ export function SurveyScreen({
           </TouchableOpacity>
         ) : null}
 
-        <BLEStatus
-          state={bleState}
-          device={bleDevice}
-          lastDistance={lastDistance}
-          onConnect={handleConnect}
-          onDisconnect={handleDisconnect}
-          onMeasure={() => void handleMeasure()}
-        />
+        {BLE_ENABLED ? (
+          <BLEStatus
+            state={bleState}
+            device={bleDevice}
+            lastDistance={lastDistance}
+            onConnect={handleConnect}
+            onDisconnect={handleDisconnect}
+            onMeasure={() => void handleMeasure()}
+          />
+        ) : null}
 
-        <View style={styles.actionsGrid}>
-          <ActionButton
-            label="Cerrar Recinto"
-            onPress={() => void editor.closeRoom()}
-            disabled={state.vertices.length < 3 || state.busy}
-          />
-          <ActionButton
-            label="Detectar recintos"
-            variant="secondary"
-            onPress={handleDetectRooms}
-            disabled={editor.walls.length < 3 || state.busy}
-          />
-        </View>
         <View style={styles.actionsGrid}>
           <ActionButton
             label="Medida manual"
@@ -719,6 +674,14 @@ function Stat({ label, value }: { label: string; value: string }) {
 // ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
+  methodRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.surface,
+  },
   container: {
     flex: 1,
     backgroundColor: colors.surface,

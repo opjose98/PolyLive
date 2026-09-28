@@ -28,6 +28,9 @@ import {
   Alert,
   RefreshControl,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from 'react-native';
 
 import { AppServices } from '../../application/AppServices';
@@ -403,9 +406,13 @@ function ProjectDialog({
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onCancel}>
-      <View style={styles.dialogScrim}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.dialogScrim}
+      >
         <View style={styles.dialog}>
           <Text style={styles.dialogTitle}>{title}</Text>
+          <ScrollView style={styles.dialogBody} keyboardShouldPersistTaps="handled">
 
           <TextField
             label="Nombre"
@@ -438,6 +445,7 @@ function ProjectDialog({
             placeholder="Responsable del levantamiento"
             onCommit={(author) => setValues((v) => ({ ...v, author }))}
           />
+          </ScrollView>
 
           <View style={styles.dialogActions}>
             <ActionButton label="Cancelar" variant="secondary" onPress={onCancel} />
@@ -448,7 +456,7 @@ function ProjectDialog({
             />
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -607,6 +615,7 @@ const styles = StyleSheet.create({
     color: colors.error,
   },
   footer: {
+    flexDirection: 'row',
     padding: spacing.md,
     borderTopWidth: 1,
     borderTopColor: colors.divider,
@@ -628,6 +637,10 @@ const styles = StyleSheet.create({
     ...typography.title,
     color: colors.textPrimary,
     marginBottom: spacing.lg,
+  },
+  dialogBody: {
+    flexGrow: 0,
+    flexShrink: 1,
   },
   dialogActions: {
     flexDirection: 'row',

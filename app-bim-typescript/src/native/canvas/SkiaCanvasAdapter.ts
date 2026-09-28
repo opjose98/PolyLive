@@ -27,6 +27,8 @@ export interface ICanvasRenderer {
   /** Contorno de un polígono (cerrado). Complemento de `fillPolygon`. */
   strokePolygon(points: { x: number; y: number }[]): void;
   drawLine(x1: number, y1: number, x2: number, y2: number): void;
+  /** Trazo abierto por varios puntos (arcos de puerta, curvas). */
+  strokePolyline(points: { x: number; y: number }[]): void;
   fillCircle(x: number, y: number, r: number): void;
   /** Circunferencia sin relleno — para nodos y radios de snap. */
   strokeCircle(x: number, y: number, r: number): void;
@@ -128,6 +130,15 @@ export class SkiaCanvasAdapter implements ICanvasRenderer {
       path.lineTo(points[i].x, points[i].y);
     }
     path.close();
+    this.canvas.drawPath(path, this.strokePaint);
+  }
+
+  strokePolyline(points: { x: number; y: number }[]): void {
+    if (points.length < 2) return;
+    this.syncStrokePaint();
+    const path = Skia.Path.Make();
+    path.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length; i++) path.lineTo(points[i].x, points[i].y);
     this.canvas.drawPath(path, this.strokePaint);
   }
 

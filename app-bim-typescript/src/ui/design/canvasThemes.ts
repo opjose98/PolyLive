@@ -17,6 +17,10 @@ export interface CanvasPalette {
   readonly gridDot: string;
   readonly ink: string;
   readonly partition: string;
+  /** Relleno (poché) de muros portantes cortados por el plano. */
+  readonly wallFill: string;
+  /** Relleno de tabiques / particiones: más claro, la jerarquía se lee de un vistazo. */
+  readonly partitionFill: string;
   readonly preview: string;
   readonly opening: string;
   readonly columnFill: string;
@@ -44,6 +48,8 @@ export const CANVAS_PALETTES: Readonly<Record<CanvasThemeId, CanvasPalette>> = {
     gridDot: '#BDBDBD',
     ink: '#212121',
     partition: '#757575',
+    wallFill: '#616161',
+    partitionFill: '#BDBDBD',
     preview: '#FF8F00',
     opening: '#1E88E5',
     columnFill: '#424242',
@@ -66,6 +72,8 @@ export const CANVAS_PALETTES: Readonly<Record<CanvasThemeId, CanvasPalette>> = {
     gridDot: '#4A4A4A',
     ink: '#EDEDED',
     partition: '#9E9E9E',
+    wallFill: '#9E9E9E',
+    partitionFill: '#5A5A5A',
     preview: '#FFB74D',
     opening: '#64B5F6',
     columnFill: '#BDBDBD',
@@ -88,6 +96,8 @@ export const CANVAS_PALETTES: Readonly<Record<CanvasThemeId, CanvasPalette>> = {
     gridDot: '#0B5ED7',
     ink: '#000000',
     partition: '#000000',
+    wallFill: '#000000',
+    partitionFill: '#6E6E6E',
     preview: '#D500F9',
     opening: '#0B5ED7',
     columnFill: '#000000',

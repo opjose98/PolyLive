@@ -2,26 +2,35 @@
 // PlanCanvas.tsx — Lienzo de planta: gestos (gesture-handler) + cámara en hilo UI
 // =============================================================================
 //
-// Reemplaza a PlanCanvasView (PanResponder). Dos ideas centrales:
+// CÁMARA SIN SALTOS. El contenido se graba UNA vez en un Picture en
+// coordenadas MUNDO (metros): se dibuja a la escala vigente y se reescala por
+// 1/escala al grabar. La cámara (traslación + escala) es una matriz animada en
+// el hilo UI que se aplica a ese Picture. Así:
+//   · panear no regraba nada: solo cambia la matriz;
+//   · cuando llega un Picture nuevo (cambió el contenido o la escala), su
+//     geometría cae exactamente en el mismo lugar, porque su posición no
+//     depende de con qué cámara se grabó. No hay fotograma "viejo desplazado".
+// La rejilla la dibuja la GPU con un shader que lee la misma cámara.
 //
-// 1. CÁMARA EN EL HILO UI. Pan, pinch y la inercia mueven shared values; el
-//    dibujo ya grabado (Picture) se desplaza/escala con una matriz que
-//    compensa la diferencia entre la cámara viva y la cámara con la que se
-//    grabó. Mientras tanto se va entregando la cámara al controlador (JS) a
-//    ~30 Hz para que repinte nítido. Así el dedo nunca espera al hilo JS.
+// GESTOS EN EL HILO JS (`runOnJS(true)`). Con los callbacks como worklets, en
+// Expo Go (SDK 51) el aviso de FIN de un gesto hacia JS quedaba retenido hasta
+// el siguiente toque: el trazo de un muro no se cerraba al levantar el dedo y
+// se mezclaba con el siguiente. La cámara sigue siendo un shared value: se
+// escribe desde JS y la matriz se aplica en el hilo UI.
 //
-// 2. DECISIONES EN EL CONTROLADOR. Este componente solo traduce gestos a
-//    intenciones (tap, doble tap, long-press, arrastre de handle, cámara).
-//    Qué significan lo decide EditorController, que es testeable en Node.
+// DECISIONES EN EL CONTROLADOR. Este componente traduce gestos a intenciones
+// (tap, doble tap, long-press, arrastre de handle, trazo de muro, cámara); qué
+// significan lo decide EditorController, testeable en Node. Lo único que se
+// resuelve aquí es si un toque cae sobre un handle, porque decidir ENTRE panear
+// o arrastrar tiene que ser síncrono con el dedo.
 //
-// El único cálculo de "negocio" que se replica aquí es el acierto sobre un
-// handle, porque decidir ENTRE panear o arrastrar tiene que ser síncrono con
-// el dedo; el controlador vuelve a validarlo en `beginDrag`.
+// Con una herramienta de trazo activa, UN dedo dibuja y DOS dedos mueven y
+// hacen zoom (como LevON).
 // =============================================================================
 
-import React, { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Canvas, Circle, Fill, Group, Path, Picture, Skia, createPicture } from '@shopify/react-native-skia';
+import { Canvas, Circle, Fill, Group, Path, Picture, Shader, Skia, createPicture } from '@shopify/react-native-skia';
 import type { SkCanvas } from '@shopify/react-native-skia';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import {
@@ -29,7 +38,7 @@ import {
   runOnJS,
   useDerivedValue,
   useSharedValue,
-  withDecay,
+  Easing,
   withDelay,
   withSequence,
   withTiming,
@@ -37,7 +46,7 @@ import {
 import { SkiaCanvasAdapter } from '../../native/canvas/SkiaCanvasAdapter';
 import type { CanvasTransform } from '../../domain/geometry/types';
 import { MAX_SCALE, MIN_SCALE } from '../../application/canvas/types';
-import { drawPlan, PlanScene } from './planRenderer';
+import { drawPlan, drawPlanOverlay, PlanScene } from './planRenderer';
 import { CANVAS_PALETTES, CanvasPalette } from '../design/canvasThemes';
 import { sizes } from '../design/tokens';
 import { duration, LONG_PRESS_MS } from '../design/motion';
@@ -47,7 +56,10 @@ import { haptic } from '../design/haptics';
 // Props
 // ---------------------------------------------------------------------------
 
-export type PlanCanvasScene = Omit<PlanScene, 'width' | 'height' | 'transform' | 'palette' | 'gridOverscanPx'>;
+export type PlanCanvasScene = Omit<
+  PlanScene,
+  'width' | 'height' | 'transform' | 'palette' | 'gridOverscanPx' | 'showGrid' | 'gridStyle'
+>;
 
 export interface PlanCanvasProps {
   width: number;
@@ -56,13 +68,16 @@ export interface PlanCanvasProps {
   /** Cámara del controlador. Si cambia desde fuera (encuadre, botones), se anima. */
   transform: CanvasTransform;
   palette?: CanvasPalette;
+  grid: { show: boolean; lines: boolean; dots: boolean };
   /** Los handles del objeto seleccionado se pueden arrastrar. */
   dragEnabled: boolean;
+  /** Un dedo traza (herramienta Muro); la cámara pasa a dos dedos. */
+  drawEnabled: boolean;
   /** El doble toque está disponible (solo con Seleccionar, para no retrasar el trazo). */
   doubleTapEnabled: boolean;
   longPressEnabled: boolean;
-  /** Un arrastre está enganchado a un nodo: dispara la háptica de snap al entrar. */
-  dragSnapped?: boolean;
+  /** Un arrastre o trazo está enganchado a un nodo: háptica al entrar. */
+  snapped?: boolean;
 
   onTap: (x: number, y: number) => void;
   onDoubleTap?: (x: number, y: number) => void;
@@ -71,21 +86,86 @@ export interface PlanCanvasProps {
   onDragMove: (x: number, y: number) => void;
   onDragEnd: (x: number, y: number) => void;
   onDragCancel: () => void;
+  onDrawBegin?: (x: number, y: number) => void;
+  onDrawMove?: (x: number, y: number) => void;
+  onDrawEnd?: (x: number, y: number) => void;
+  onDrawCancel?: () => void;
   onCameraChange: (transform: CanvasTransform) => void;
 }
 
 /** Movimiento máximo (px) que sigue contando como toque. Con guantes, 0 sería inusable. */
 const TAP_SLOP_PX = 8;
 /** Cada cuánto se entrega la cámara al controlador durante un gesto. */
-const COMMIT_INTERVAL_MS = 33;
-/** Radio del anillo de progreso del long-press. */
+const COMMIT_INTERVAL_MS = 50;
+/** Intervalo mínimo entre movimientos de trazo/arrastre entregados al controlador. */
+const MOVE_INTERVAL_MS = 33;
+/** Inercia del paneo: cuánto sigue deslizando y en cuánto tiempo. */
+const GLIDE_SECONDS = 0.18;
+const GLIDE_MS = 420;
 const RING_RADIUS = 26;
+/** Límites del contenido grabado, en metros. */
+const WORLD_BOUNDS = { x: -1e5, y: -1e5, width: 2e5, height: 2e5 };
 
 const RING_PATH = (() => {
   const p = Skia.Path.Make();
   p.addArc({ x: -RING_RADIUS, y: -RING_RADIUS, width: RING_RADIUS * 2, height: RING_RADIUS * 2 }, -90, 360);
   return p;
 })();
+
+// ---------------------------------------------------------------------------
+// Rejilla en GPU
+// ---------------------------------------------------------------------------
+
+const GRID_SHADER = Skia.RuntimeEffect.Make(`
+uniform float2 u_off;
+uniform float u_step;
+uniform float u_lines;
+uniform float u_dots;
+uniform float u_lineW;
+uniform float u_dotR;
+uniform float4 u_lineColor;
+uniform float4 u_dotColor;
+uniform float4 u_axisColor;
+
+float4 layer(float4 acc, float4 c, float cov) {
+  float k = clamp(cov, 0.0, 1.0) * c.a;
+  return float4(c.rgb * k, k) + acc * (1.0 - k);
+}
+
+half4 main(float2 p) {
+  float2 w = p - u_off;
+  float s = u_step;
+  float4 acc = float4(0.0);
+  if (u_lines > 0.5) {
+    float2 g = mod(w, s);
+    float2 d = min(g, s - g);
+    float h = u_lineW * 0.5;
+    acc = layer(acc, u_lineColor, 1.0 - smoothstep(h, h + 1.0, min(d.x, d.y)));
+  }
+  if (u_dots > 0.5) {
+    float2 q = mod(w + (u_lines > 0.5 ? s * 0.5 : 0.0), s);
+    float dd = length(min(q, s - q));
+    acc = layer(acc, u_dotColor, 1.0 - smoothstep(u_dotR - 0.75, u_dotR + 0.75, dd));
+  }
+  float ax = min(abs(w.x), abs(w.y));
+  acc = layer(acc, u_axisColor, 1.0 - smoothstep(u_lineW, u_lineW + 1.0, ax));
+  return half4(acc);
+}
+`)!;
+
+function rgba(color: string): number[] {
+  return Array.from(Skia.Color(color));
+}
+
+/** Versión worklet de `gridStepMeters`: paso de rejilla que deja 20–100 px por celda. */
+function gridStepPx(scale: number): number {
+  'worklet';
+  const candidates = [0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 25, 50, 100];
+  for (let i = 0; i < candidates.length; i++) {
+    if (candidates[i] * scale >= 20) return candidates[i] * scale;
+  }
+  return candidates[candidates.length - 1] * scale;
+}
 
 // ---------------------------------------------------------------------------
 // Componente
@@ -95,107 +175,138 @@ export function PlanCanvas(props: PlanCanvasProps) {
   const { width, height, scene, transform } = props;
   const palette = props.palette ?? CANVAS_PALETTES.claro;
 
-  // Los callbacks cambian de identidad en cada render del padre; los gestos se
-  // construyen una vez y leen siempre la versión vigente desde esta ref.
+  // Los gestos se construyen una vez y leen siempre los callbacks vigentes.
   const cb = useRef(props);
   cb.current = props;
 
   // --- Cámara viva (hilo UI) ------------------------------------------------
+  // Cámara: `cam` es la verdad en el hilo JS (donde corren los gestos); los
+  // shared values son solo la salida hacia el hilo UI. Leer un shared value
+  // justo después de escribirlo desde JS devuelve el valor anterior, así que
+  // nunca se hace `camX.value += dx`: se acumula en `cam` y se publica.
+  const cam = useRef({ s: transform.scale, x: transform.offsetX, y: transform.offsetY }).current;
   const camS = useSharedValue(transform.scale);
   const camX = useSharedValue(transform.offsetX);
   const camY = useSharedValue(transform.offsetY);
-  /** Cámara con la que se grabó el Picture que está en pantalla. */
-  const drawnS = useSharedValue(transform.scale);
-  const drawnX = useSharedValue(transform.offsetX);
-  const drawnY = useSharedValue(transform.offsetY);
+  const publish = () => {
+    camS.value = cam.s;
+    camX.value = cam.x;
+    camY.value = cam.y;
+  };
 
-  const gesturing = useSharedValue(false);
-  const pinching = useSharedValue(false);
-  const lastCommit = useSharedValue(0);
-  const decays = useSharedValue(0);
-
-  const grabbing = useSharedValue(false);
-  const panActive = useSharedValue(false);
-
-  const pinchStartS = useSharedValue(1);
-  const pinchStartX = useSharedValue(0);
-  const pinchStartY = useSharedValue(0);
-  const pinchFocalX = useSharedValue(0);
-  const pinchFocalY = useSharedValue(0);
-
-  /** Handles del objeto seleccionado, en coordenadas mundo, para acertar en el hilo UI. */
-  const handleXs = useSharedValue<number[]>([]);
-  const handleYs = useSharedValue<number[]>([]);
-  const dragEnabled = useSharedValue(props.dragEnabled);
-
-  useEffect(() => {
-    handleXs.value = scene.handles.map((h) => h.position.x);
-    handleYs.value = scene.handles.map((h) => h.position.y);
-  }, [scene.handles, handleXs, handleYs]);
-
-  useEffect(() => {
-    dragEnabled.value = props.dragEnabled;
-  }, [props.dragEnabled, dragEnabled]);
+  /** Estado del gesto en curso (solo JS). */
+  const g = useRef({
+    gesturing: false,
+    pinching: false,
+    grabbing: false,
+    drawing: false,
+    panActive: false,
+    decaying: false,
+    lastCommit: 0,
+    pinchStart: { s: 1, x: 0, y: 0, fx: 0, fy: 0 },
+  }).current;
 
   // La cámara del controlador cambió por algo que NO fue un gesto (encuadre,
   // botones de zoom, cambio de recinto): se anima hasta ella.
   useEffect(() => {
-    if (gesturing.value) return;
+    if (g.gesturing) return;
     const same =
-      Math.abs(camS.value - transform.scale) < 1e-6 &&
-      Math.abs(camX.value - transform.offsetX) < 0.5 &&
-      Math.abs(camY.value - transform.offsetY) < 0.5;
+      Math.abs(cam.s - transform.scale) < 1e-6 &&
+      Math.abs(cam.x - transform.offsetX) < 0.5 &&
+      Math.abs(cam.y - transform.offsetY) < 0.5;
+    cam.s = transform.scale;
+    cam.x = transform.offsetX;
+    cam.y = transform.offsetY;
     if (same) return;
     const cfg = { duration: duration.base };
     camS.value = withTiming(transform.scale, cfg);
     camX.value = withTiming(transform.offsetX, cfg);
     camY.value = withTiming(transform.offsetY, cfg);
-  }, [transform, gesturing, camS, camX, camY]);
+  }, [transform, g, cam, camS, camX, camY]);
 
-  // --- Picture: se regraba solo cuando cambia el contenido o la cámara commit.
-  const overscan = Math.max(width, height);
+  // --- Contenido: Picture en coordenadas mundo -----------------------------
+  //
+  // Dos capas: la planta (cara, cambia al crear/editar) y la del trazo en
+  // curso (barata, cambia en cada movimiento del dedo). Si el trazo viviera en
+  // la misma capa, cada movimiento regrabaría toda la planta y el hilo JS se
+  // saturaría hasta retrasar el fin del gesto varios segundos.
+  const recScale = transform.scale;
+  const {
+    objects, selectedId, handles, showLabels, rooms, roomName, showNodes,
+    measureTargetId, photoMarkers, selectedPhotoMarkerId, wallDraft, draftThickness, snapIndicator,
+  } = scene;
   const picture = useMemo(
     () =>
-      createPicture(
-        (canvas: SkCanvas) => {
-          drawPlan(new SkiaCanvasAdapter(canvas), {
-            ...scene,
-            transform,
-            width,
-            height,
-            palette,
-            gridOverscanPx: overscan,
-          });
-        },
-        { x: -overscan, y: -overscan, width: width + overscan * 2, height: height + overscan * 2 },
-      ),
-    [scene, transform, width, height, palette, overscan],
+      createPicture((canvas: SkCanvas) => {
+        canvas.scale(1 / recScale, 1 / recScale);
+        drawPlan(new SkiaCanvasAdapter(canvas), {
+          objects, selectedId, handles, showLabels, rooms, roomName, showNodes,
+          measureTargetId, photoMarkers, selectedPhotoMarkerId,
+          transform: { scale: recScale, offsetX: 0, offsetY: 0 },
+          width,
+          height,
+          palette,
+          showGrid: false,
+        });
+      }, WORLD_BOUNDS),
+    [objects, selectedId, handles, showLabels, rooms, roomName, showNodes, measureTargetId, photoMarkers,
+      selectedPhotoMarkerId, recScale, width, height, palette],
+  );
+  const overlay = useMemo(
+    () =>
+      createPicture((canvas: SkCanvas) => {
+        canvas.scale(1 / recScale, 1 / recScale);
+        drawPlanOverlay(new SkiaCanvasAdapter(canvas), {
+          objects: [], selectedId: null, handles: [], showLabels: false,
+          wallDraft, draftThickness, snapIndicator,
+          transform: { scale: recScale, offsetX: 0, offsetY: 0 },
+          width,
+          height,
+          palette,
+          showGrid: false,
+        });
+      }, WORLD_BOUNDS),
+    [wallDraft, draftThickness, snapIndicator, recScale, width, height, palette],
   );
 
-  useLayoutEffect(() => {
-    drawnS.value = transform.scale;
-    drawnX.value = transform.offsetX;
-    drawnY.value = transform.offsetY;
-  }, [picture, transform, drawnS, drawnX, drawnY]);
+  const camera = useDerivedValue(() => [
+    { translateX: camX.value },
+    { translateY: camY.value },
+    { scale: camS.value },
+  ]);
 
-  // Pantalla_viva = (pantalla_grabada − t0)·k + t,  con k = s/s0.
-  const compensation = useDerivedValue(() => {
-    const k = camS.value / drawnS.value;
-    return [
-      { translateX: camX.value - drawnX.value * k },
-      { translateY: camY.value - drawnY.value * k },
-      { scale: k },
-    ];
-  });
+  // --- Rejilla -----------------------------------------------------------------
+  const gridColors = useMemo(
+    () => ({ line: rgba(palette.grid), dot: rgba(palette.gridDot), axis: rgba(palette.gridMajor) }),
+    [palette],
+  );
+  const gridLines = props.grid.lines ? 1 : 0;
+  const gridDots = props.grid.dots ? 1 : 0;
+  const lineW = 0.75 * palette.lineScale;
+  const dotR = palette.dotRadius;
+  const gridUniforms = useDerivedValue(
+    () => ({
+      u_off: [camX.value, camY.value],
+      u_step: gridStepPx(camS.value),
+      u_lines: gridLines,
+      u_dots: gridDots,
+      u_lineW: lineW,
+      u_dotR: dotR,
+      u_lineColor: gridColors.line,
+      u_dotColor: gridColors.dot,
+      u_axisColor: gridColors.axis,
+    }),
+    [gridColors, gridLines, gridDots, lineW, dotR],
+  );
 
   // --- Háptica de snap: al ENTRAR en el nodo, no en cada frame dentro de él.
   const wasSnapped = useRef(false);
   useEffect(() => {
-    if (props.dragSnapped && !wasSnapped.current) haptic.snap();
-    wasSnapped.current = !!props.dragSnapped;
-  }, [props.dragSnapped]);
+    if (props.snapped && !wasSnapped.current) haptic.snap();
+    wasSnapped.current = !!props.snapped;
+  }, [props.snapped]);
 
-  // --- Pulso de selección ---------------------------------------------------
+  // --- Pulso de selección -------------------------------------------------------
   const pulse = useSharedValue(0);
   const pulseX = useSharedValue(0);
   const pulseY = useSharedValue(0);
@@ -214,178 +325,215 @@ export function PlanCanvas(props: PlanCanvasProps) {
   const pulseR = useDerivedValue(() => 10 + pulse.value * 26);
   const pulseOpacity = useDerivedValue(() => (pulse.value > 0 && pulse.value < 1 ? 0.45 * (1 - pulse.value) : 0));
 
-  // --- Anillo de long-press -------------------------------------------------
+  // --- Anillo de long-press -----------------------------------------------------
   const ring = useSharedValue(0);
   const ringX = useSharedValue(0);
   const ringY = useSharedValue(0);
   const ringTransform = useDerivedValue(() => [{ translateX: ringX.value }, { translateY: ringY.value }]);
   const ringOpacity = useDerivedValue(() => (ring.value > 0.02 ? 0.9 : 0));
 
-  // --- Gestos ---------------------------------------------------------------
+  // --- Gestos (todos en el hilo JS) ---------------------------------------
   const gesture = useMemo(() => {
-    const commit = (s: number, x: number, y: number) => {
-      cb.current.onCameraChange({ scale: s, offsetX: x, offsetY: y });
-    };
-    const js = {
-      tap: (x: number, y: number) => cb.current.onTap(x, y),
-      doubleTap: (x: number, y: number) => cb.current.onDoubleTap?.(x, y),
-      longPress: (x: number, y: number) => {
-        haptic.grab();
-        cb.current.onLongPress?.(x, y);
-      },
-      dragStart: (x: number, y: number) => {
-        if (cb.current.onDragStart(x, y)) haptic.grab();
-      },
-      dragMove: (x: number, y: number) => cb.current.onDragMove(x, y),
-      dragEnd: (x: number, y: number) => {
-        haptic.tap();
-        cb.current.onDragEnd(x, y);
-      },
-      dragCancel: () => cb.current.onDragCancel(),
-    };
-
+    const commit = () => cb.current.onCameraChange({ scale: cam.s, offsetX: cam.x, offsetY: cam.y });
     const commitThrottled = () => {
-      'worklet';
       const now = Date.now();
-      if (now - lastCommit.value < COMMIT_INTERVAL_MS) return;
-      lastCommit.value = now;
-      runOnJS(commit)(camS.value, camX.value, camY.value);
-    };
-    const stopCamera = () => {
-      'worklet';
-      cancelAnimation(camS);
-      cancelAnimation(camX);
-      cancelAnimation(camY);
+      if (now - g.lastCommit < COMMIT_INTERVAL_MS) return;
+      g.lastCommit = now;
+      commit();
     };
     const finishCamera = () => {
-      'worklet';
-      gesturing.value = false;
-      runOnJS(commit)(camS.value, camX.value, camY.value);
+      g.gesturing = false;
+      commit();
     };
-    const hitsHandle = (x: number, y: number) => {
-      'worklet';
-      if (!dragEnabled.value) return false;
-      const xs = handleXs.value;
-      const ys = handleYs.value;
-      const tol = sizes.canvasTouchTolerance;
-      for (let i = 0; i < xs.length; i++) {
-        const hx = xs[i] * camS.value + camX.value;
-        const hy = ys[i] * camS.value + camY.value;
-        if ((hx - x) * (hx - x) + (hy - y) * (hy - y) <= tol * tol) return true;
+    /** Fin de la inercia (llega desde el hilo UI con la posición final). */
+    const onDecayEnd = (x: number, y: number) => {
+      if (!g.decaying) return;
+      g.decaying = false;
+      cam.x = x;
+      cam.y = y;
+      finishCamera();
+    };
+    const stopCamera = () => {
+      if (g.decaying) {
+        // Se interrumpe la inercia: la cámara queda donde la dejó el hilo UI.
+        g.decaying = false;
+        cancelAnimation(camX);
+        cancelAnimation(camY);
+        cam.x = camX.value;
+        cam.y = camY.value;
       }
-      return false;
+    };
+
+    // Movimientos a ~30 Hz como máximo: más no se ve y satura el hilo JS.
+    let lastMove = 0;
+    const throttledMove = (x: number, y: number, fn: (x: number, y: number) => void) => {
+      const now = Date.now();
+      if (now - lastMove < MOVE_INTERVAL_MS) return;
+      lastMove = now;
+      fn(x, y);
+    };
+
+    const hitsHandle = (x: number, y: number) => {
+      if (!cb.current.dragEnabled) return false;
+      const tol = sizes.canvasTouchTolerance;
+      return cb.current.scene.handles.some((h) => {
+        const hx = h.position.x * cam.s + cam.x;
+        const hy = h.position.y * cam.s + cam.y;
+        return (hx - x) * (hx - x) + (hy - y) * (hy - y) <= tol * tol;
+      });
     };
 
     const pan = Gesture.Pan()
+      .runOnJS(true)
       .minDistance(TAP_SLOP_PX)
       .averageTouches(true)
       .onBegin((e) => {
         stopCamera();
-        grabbing.value = hitsHandle(e.x, e.y);
-        panActive.value = false;
-        if (grabbing.value) runOnJS(js.dragStart)(e.x, e.y);
+        g.grabbing = hitsHandle(e.x, e.y);
+        g.drawing = false;
+        g.panActive = false;
+        if (g.grabbing && cb.current.onDragStart(e.x, e.y)) haptic.grab();
       })
-      .onStart(() => {
-        panActive.value = true;
-        if (!grabbing.value) gesturing.value = true;
-      })
-      .onChange((e) => {
-        if (grabbing.value) {
-          runOnJS(js.dragMove)(e.x, e.y);
+      .onStart((e) => {
+        g.panActive = true;
+        if (g.grabbing) return;
+        if (cb.current.drawEnabled && e.numberOfPointers === 1) {
+          g.drawing = true;
+          cb.current.onDrawBegin?.(e.x - e.translationX, e.y - e.translationY);
+          cb.current.onDrawMove?.(e.x, e.y);
           return;
         }
-        if (pinching.value || e.numberOfPointers > 1) return;
-        camX.value += e.changeX;
-        camY.value += e.changeY;
+        g.gesturing = true;
+      })
+      .onChange((e) => {
+        if (g.grabbing) {
+          throttledMove(e.x, e.y, (x, y) => cb.current.onDragMove(x, y));
+          return;
+        }
+        if (g.drawing) {
+          if (e.numberOfPointers > 1) {
+            // Entró un segundo dedo: era un zoom, no un trazo.
+            g.drawing = false;
+            cb.current.onDrawCancel?.();
+            return;
+          }
+          throttledMove(e.x, e.y, (x, y) => cb.current.onDrawMove?.(x, y));
+          return;
+        }
+        if (!g.gesturing || g.pinching || e.numberOfPointers > 1) return;
+        cam.x += e.changeX;
+        cam.y += e.changeY;
+        publish();
         commitThrottled();
       })
       .onEnd((e) => {
-        if (grabbing.value) {
-          runOnJS(js.dragEnd)(e.x, e.y);
+        if (g.grabbing) {
+          g.grabbing = false;
+          haptic.tap();
+          cb.current.onDragEnd(e.x, e.y);
           return;
         }
-        if (pinching.value) return;
-        // Inercia: soltar con velocidad deja deslizar la vista, como un mapa.
-        // La cámara se entrega al controlador cuando terminan LAS DOS inercias.
-        decays.value = 2;
-        const done = () => {
-          'worklet';
-          decays.value -= 1;
-          if (decays.value === 0) finishCamera();
-        };
-        camX.value = withDecay({ velocity: e.velocityX, deceleration: 0.994 }, done);
-        camY.value = withDecay({ velocity: e.velocityY, deceleration: 0.994 }, done);
+        if (g.drawing) {
+          g.drawing = false;
+          cb.current.onDrawEnd?.(e.x, e.y);
+          return;
+        }
+        if (g.pinching || !g.gesturing) return;
+        // Inercia corta: soltar con velocidad deja deslizar la vista. Se
+        // anima en el hilo UI; al terminar devuelve la posición final a JS.
+        const speed = Math.hypot(e.velocityX, e.velocityY);
+        if (speed < 200) {
+          finishCamera();
+          return;
+        }
+        g.decaying = true;
+        // Deslizamiento de duración fija en los dos ejes (mismo final para ambos).
+        const tx = cam.x + e.velocityX * GLIDE_SECONDS;
+        const ty = cam.y + e.velocityY * GLIDE_SECONDS;
+        const cfg = { duration: GLIDE_MS, easing: Easing.out(Easing.cubic) };
+        camY.value = withTiming(ty, cfg);
+        camX.value = withTiming(tx, cfg, (finished) => {
+          if (finished) runOnJS(onDecayEnd)(tx, ty);
+        });
       })
       .onFinalize((_e, success) => {
-        if (grabbing.value) {
-          // Tocó un handle sin llegar a arrastrar (fue un tap), o el sistema
-          // canceló el gesto: se suelta sin persistir.
-          if (!panActive.value || !success) runOnJS(js.dragCancel)();
-        } else if (panActive.value && !success && !pinching.value) {
+        if (g.grabbing) {
+          // Tocó un handle sin llegar a arrastrar (fue un tap), o el sistema canceló.
+          if (!g.panActive || !success) cb.current.onDragCancel();
+        } else if (g.drawing) {
+          cb.current.onDrawCancel?.();
+        } else if (g.panActive && !success && !g.pinching && g.gesturing && !g.decaying) {
           finishCamera();
         }
-        grabbing.value = false;
-        panActive.value = false;
+        g.grabbing = false;
+        g.drawing = false;
+        g.panActive = false;
       });
 
     const pinch = Gesture.Pinch()
+      .runOnJS(true)
       .onStart((e) => {
         stopCamera();
-        gesturing.value = true;
-        pinching.value = true;
-        pinchStartS.value = camS.value;
-        pinchStartX.value = camX.value;
-        pinchStartY.value = camY.value;
-        pinchFocalX.value = e.focalX;
-        pinchFocalY.value = e.focalY;
+        g.gesturing = true;
+        g.pinching = true;
+        g.pinchStart = { s: cam.s, x: cam.x, y: cam.y, fx: e.focalX, fy: e.focalY };
       })
       .onUpdate((e) => {
-        const s = Math.min(MAX_SCALE, Math.max(MIN_SCALE, pinchStartS.value * e.scale));
+        const p = g.pinchStart;
+        const s = Math.min(MAX_SCALE, Math.max(MIN_SCALE, p.s * e.scale));
         // El punto del mundo que estaba bajo los dedos al empezar sigue bajo
-        // ellos (y se desplaza con ellos si los dedos se mueven juntos).
-        const wx = (pinchFocalX.value - pinchStartX.value) / pinchStartS.value;
-        const wy = (pinchFocalY.value - pinchStartY.value) / pinchStartS.value;
-        camS.value = s;
-        camX.value = e.focalX - wx * s;
-        camY.value = e.focalY - wy * s;
+        // ellos, y se desplaza con ellos (pan a dos dedos).
+        const wx = (p.fx - p.x) / p.s;
+        const wy = (p.fy - p.y) / p.s;
+        cam.s = s;
+        cam.x = e.focalX - wx * s;
+        cam.y = e.focalY - wy * s;
+        publish();
         commitThrottled();
       })
       .onFinalize(() => {
-        if (!pinching.value) return;
-        pinching.value = false;
+        if (!g.pinching) return;
+        g.pinching = false;
         finishCamera();
       });
 
     const tap = Gesture.Tap()
+      .runOnJS(true)
       .maxDistance(TAP_SLOP_PX)
       .onEnd((e, success) => {
-        if (success) runOnJS(js.tap)(e.x, e.y);
+        if (success) cb.current.onTap(e.x, e.y);
       });
 
     const doubleTap = Gesture.Tap()
+      .runOnJS(true)
       .numberOfTaps(2)
       .maxDistance(TAP_SLOP_PX * 2)
       .enabled(props.doubleTapEnabled && !!props.onDoubleTap)
       .onEnd((e, success) => {
-        if (success) runOnJS(js.doubleTap)(e.x, e.y);
+        if (success) cb.current.onDoubleTap?.(e.x, e.y);
       });
 
+    let longFired = false;
     const longPress = Gesture.LongPress()
+      .runOnJS(true)
       .minDuration(LONG_PRESS_MS)
       .maxDistance(TAP_SLOP_PX)
       .enabled(props.longPressEnabled && !!props.onLongPress)
       .onBegin((e) => {
+        longFired = false;
         ringX.value = e.x;
         ringY.value = e.y;
         // El anillo aparece tarde: un toque normal no debe mostrarlo.
         ring.value = withDelay(120, withTiming(1, { duration: LONG_PRESS_MS - 120 }));
       })
       .onStart((e) => {
+        longFired = true;
         ring.value = withSequence(withTiming(1, { duration: 0 }), withTiming(0, { duration: duration.fast }));
-        runOnJS(js.longPress)(e.x, e.y);
+        haptic.grab();
+        cb.current.onLongPress?.(e.x, e.y);
       })
       .onFinalize(() => {
-        if (ring.value < 1) {
+        if (!longFired) {
           cancelAnimation(ring);
           ring.value = withTiming(0, { duration: duration.instant });
         }
@@ -401,8 +549,14 @@ export function PlanCanvas(props: PlanCanvasProps) {
       <View style={[styles.container, { width, height, backgroundColor: palette.background }]} collapsable={false}>
         <Canvas style={{ width, height }}>
           <Fill color={palette.background} />
-          <Group transform={compensation}>
+          {props.grid.show && (
+            <Fill>
+              <Shader source={GRID_SHADER} uniforms={gridUniforms} />
+            </Fill>
+          )}
+          <Group transform={camera}>
             <Picture picture={picture} />
+            <Picture picture={overlay} />
           </Group>
           <Circle cx={pulseCx} cy={pulseCy} r={pulseR} color={palette.selection} opacity={pulseOpacity} style="stroke" strokeWidth={3} />
           <Group transform={ringTransform} opacity={ringOpacity}>

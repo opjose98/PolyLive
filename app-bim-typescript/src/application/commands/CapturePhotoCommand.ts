@@ -3,28 +3,38 @@
 // =============================================================================
 
 import { Command } from './Command';
-import { IObjectStore, AuditPhotoId, RevitObjectId } from '../../domain/objects';
+import { IObjectStore, AuditPhotoId } from '../../domain/objects';
 
 /**
- * Captura y guarda foto. Undo marca la foto como borrada.
+ * Las fotos viven en su propia tabla (`audit_photos`), fuera del contrato
+ * genérico de objetos: el comando recibe explícitamente las dos operaciones
+ * que necesita. Antes hacía `updateObject` sobre la tabla de objetos BIM, que
+ * no contiene fotos, así que Deshacer no borraba nada.
  */
+export interface PhotoLifecycle {
+  deleteAuditPhoto(id: AuditPhotoId): Promise<void>;
+  restoreAuditPhoto(id: AuditPhotoId): Promise<void>;
+}
+
+/** Captura y guarda foto. Undo la marca como borrada; redo la restaura. */
 export class CapturePhotoCommand extends Command {
   readonly type = 'CapturePhoto' as const;
   private readonly photoId: AuditPhotoId;
+  private readonly photos: PhotoLifecycle;
 
-  constructor(photoId: AuditPhotoId) {
+  constructor(photoId: AuditPhotoId, photos: PhotoLifecycle) {
     super();
     this.photoId = photoId;
+    this.photos = photos;
   }
 
   async execute(_store: IObjectStore): Promise<void> {
-    // Ya ejecutado por CapturePhotoUseCase
+    // La foto la persiste CapturePhotoUseCase; al rehacer se restaura. Es
+    // idempotente sobre una foto que no está borrada.
+    await this.photos.restoreAuditPhoto(this.photoId);
   }
 
-  async undo(store: IObjectStore): Promise<void> {
-    // Soft-delete la foto (no se puede borrar físicamente el archivo fácilmente)
-    await store.updateObject(this.photoId as unknown as RevitObjectId, {
-      is_deleted: true,
-    } as any);
+  async undo(_store: IObjectStore): Promise<void> {
+    await this.photos.deleteAuditPhoto(this.photoId);
   }
 }

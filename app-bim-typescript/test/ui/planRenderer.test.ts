@@ -64,6 +64,9 @@ class RecordingRenderer implements ICanvasRenderer {
   strokeCircle(...a: number[]): void {
     this.record('strokeCircle', a);
   }
+  strokePolyline(points: { x: number; y: number }[]): void {
+    this.record('strokePolyline', [points]);
+  }
   drawPoints(points: { x: number; y: number }[], radius: number): void {
     this.record('drawPoints', [points, radius]);
   }
@@ -117,7 +120,6 @@ function makeWall(id: string, ax: number, ay: number, bx: number, by: number, st
 function scene(overrides: Partial<PlanScene> = {}): PlanScene {
   return {
     objects: [],
-    vertices: [],
     transform: { scale: 100, offsetX: 0, offsetY: 0 },
     selectedId: null,
     handles: [],
@@ -179,44 +181,53 @@ describe('gridStepMeters', () => {
 // Muros
 // ---------------------------------------------------------------------------
 
-describe('drawPlan — muros', () => {
-  it('dibuja un segmento por muro, en coordenadas de pantalla', () => {
+describe('drawPlan — muros (representación de plano)', () => {
+  const wallFill = CANVAS_PALETTES.claro.wallFill;
+  const ink = CANVAS_PALETTES.claro.ink;
+  const fills = (r: RecordingRenderer, color: string) =>
+    r.ops('fillPolygon').filter((c) => (c.args[1] as { fill: string }).fill === color);
+  const inkLines = (r: RecordingRenderer) =>
+    r.ops('drawLine').filter((c) => (c.args[4] as { stroke: string }).stroke === ink);
+
+  it('un muro suelto es un rectángulo relleno de su espesor, con dos caras y dos tapas', () => {
     const r = new RecordingRenderer();
     drawPlan(r, scene({ objects: [makeWall('w1', 0, 0, 4, 0)] }));
 
-    const lines = r.ops('drawLine');
-    expect(lines).toHaveLength(1);
-    expect(lines[0].args.slice(0, 4)).toEqual([0, 0, 400, 0]);
+    const poly = fills(r, wallFill);
+    expect(poly).toHaveLength(1);
+    const ys = (poly[0].args[0] as { y: number }[]).map((p) => p.y).sort((m, n) => m - n);
+    expect(ys[0]).toBeCloseTo(-7.5); // 0.15 m × 100 px/m, centrado en el eje
+    expect(ys[3]).toBeCloseTo(7.5);
+    expect(inkLines(r)).toHaveLength(4);
   });
 
-  it('distingue visualmente un muro portante de una partición ligera', () => {
+  it('en una esquina las caras se cierran a inglete: sin tapas en el nudo compartido', () => {
     const r = new RecordingRenderer();
-    drawPlan(r, scene({ objects: [makeWall('w1', 0, 0, 4, 0, true), makeWall('w2', 0, 1, 4, 1, false)] }));
-
-    const strokes = r.ops('drawLine').map((c) => (c.args[4] as { stroke: string }).stroke);
-    expect(new Set(strokes).size).toBe(2);
+    drawPlan(r, scene({ objects: [makeWall('w1', 0, 0, 4, 0), makeWall('w2', 4, 0, 4, 3)] }));
+    // 2 muros × 2 caras + 2 tapas (los extremos libres), ninguna en la esquina.
+    expect(inkLines(r)).toHaveLength(6);
   });
 
-  it('dibuja el muro con su espesor real a escala, con un mínimo visible', () => {
-    const thick = new RecordingRenderer();
-    drawPlan(thick, scene({ objects: [makeWall('w1', 0, 0, 4, 0)] }));
-    const widthAt100 = (thick.ops('drawLine')[0].args[4] as { width: number }).width;
-    expect(widthAt100).toBeCloseTo(15); // 0.15 m × 100 px/m
-
-    const zoomedOut = new RecordingRenderer();
-    drawPlan(
-      zoomedOut,
-      scene({ objects: [makeWall('w1', 0, 0, 4, 0)], transform: { scale: 5, offsetX: 0, offsetY: 0 } }),
-    );
-    // 0.15 × 5 = 0.75 px: por debajo del mínimo, el muro desaparecería.
-    expect((zoomedOut.ops('drawLine')[0].args[4] as { width: number }).width).toBeGreaterThanOrEqual(2);
+  it('distingue un muro portante de una partición por su relleno', () => {
+    const r = new RecordingRenderer();
+    drawPlan(r, scene({ objects: [makeWall('w1', 0, 0, 4, 0, true), makeWall('w2', 0, 2, 4, 2, false)] }));
+    expect(fills(r, wallFill)).toHaveLength(1);
+    expect(fills(r, CANVAS_PALETTES.claro.partitionFill)).toHaveLength(1);
   });
 
   it('subraya el muro elegido como destino de medición', () => {
     const r = new RecordingRenderer();
     drawPlan(r, scene({ objects: [makeWall('w1', 0, 0, 4, 0)], measureTargetId: 'w1' }));
+    const marks = r.ops('drawLine').filter((c) => (c.args[4] as { stroke: string }).stroke === CANVAS_PALETTES.claro.snapNode);
+    expect(marks).toHaveLength(1);
+  });
 
-    expect(r.ops('drawLine')).toHaveLength(2); // el muro + el subrayado
+  it('muestra los nudos como puntos de enganche solo cuando se pide', () => {
+    const off = new RecordingRenderer();
+    drawPlan(off, scene({ objects: [makeWall('w1', 0, 0, 4, 0)] }));
+    const on = new RecordingRenderer();
+    drawPlan(on, scene({ objects: [makeWall('w1', 0, 0, 4, 0)], showNodes: true }));
+    expect(on.ops('fillCircle').length - off.ops('fillCircle').length).toBe(2);
   });
 });
 
@@ -225,50 +236,28 @@ describe('drawPlan — muros', () => {
 // ---------------------------------------------------------------------------
 
 describe('drawPlan — recintos', () => {
-  const room = new Room({
-    id: revitObjectId('room-1'),
-    roomId: ROOM_ID,
-    levelId: levelId('level-1'),
-    geometry: [
-      { x: 0, y: 0 },
-      { x: 4, y: 0 },
-      { x: 4, y: 3 },
-      { x: 0, y: 3 },
-    ],
-    area: squareMeters(12),
-  });
+  const polygon = [
+    { x: 0, y: 0 },
+    { x: 4, y: 0 },
+    { x: 4, y: 3 },
+    { x: 0, y: 3 },
+  ];
 
-  it('rellena y contornea el polígono del recinto', () => {
+  it('rellena solo los recintos cerrados detectados', () => {
     const r = new RecordingRenderer();
-    drawPlan(r, scene({ objects: [room] }));
-
-    expect(r.ops('fillPolygon')).toHaveLength(1);
-    expect(r.ops('strokePolygon')).toHaveLength(1);
+    drawPlan(r, scene({ rooms: [{ polygon, area: 12, centroid: { x: 2, y: 1.5 } }] }));
+    expect(r.ops('fillPolygon').filter((c) => (c.args[1] as { fill: string }).fill === CANVAS_PALETTES.claro.roomFill)).toHaveLength(1);
   });
 
-  it('no dibuja un recinto con menos de 3 vértices (todavía en trazo)', () => {
-    const open = new Room({
-      id: revitObjectId('room-2'),
+  it('un Recinto con geometría pero sin contorno cerrado no se rellena (nada de triángulos fantasma)', () => {
+    const room = new Room({
+      id: revitObjectId('room-1'),
       roomId: ROOM_ID,
       levelId: levelId('level-1'),
-      geometry: [{ x: 0, y: 0 }, { x: 4, y: 0 }],
+      geometry: polygon.slice(0, 3),
     });
     const r = new RecordingRenderer();
-    drawPlan(r, scene({ objects: [open] }));
-
-    expect(r.ops('fillPolygon')).toHaveLength(0);
-  });
-
-  it('dibuja las sugerencias de detección solo con contorno, para no confundirlas con recintos reales', () => {
-    const r = new RecordingRenderer();
-    drawPlan(
-      r,
-      scene({
-        suggestions: [{ polygon: [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 3 }] }],
-      }),
-    );
-
-    expect(r.ops('strokePolygon')).toHaveLength(1);
+    drawPlan(r, scene({ objects: [room] }));
     expect(r.ops('fillPolygon')).toHaveLength(0);
   });
 });
@@ -289,26 +278,27 @@ describe('drawPlan — vanos', () => {
     height: meters(2.1),
   });
 
-  it('dibuja la puerta como un hueco sobre el muro más su símbolo', () => {
+  it('la puerta corta el muro, deja jambas y dibuja hoja + arco de giro (no un círculo)', () => {
     const r = new RecordingRenderer();
     drawPlan(r, scene({ objects: [wall, door] }));
 
-    // 1 muro + 1 hueco (color de fondo) + 1 símbolo de puerta.
-    expect(r.ops('drawLine')).toHaveLength(3);
+    // Hueco borrado con el color de fondo, de 1.0 a 1.9 m (100 a 190 px).
+    const hole = r.ops('fillPolygon').find((c) => (c.args[1] as { fill: string }).fill === CANVAS_PALETTES.claro.background)!;
+    const xs = (hole.args[0] as { x: number }[]).map((p) => p.x);
+    expect(Math.min(...xs)).toBeCloseTo(100);
+    expect(Math.max(...xs)).toBeCloseTo(190);
+
+    // El arco es una polilínea; la hoja mide lo que el vano (90 px).
+    expect(r.ops('strokePolyline')).toHaveLength(1);
+    expect(r.ops('strokeCircle')).toHaveLength(0);
+    const leaf = r.ops('drawLine').find((c) => {
+      const [x1, y1, x2, y2] = c.args as number[];
+      return Math.abs(x1 - 100) < 1e-6 && Math.abs(x2 - 100) < 1e-6 && Math.abs(Math.abs(y2 - y1) - 90) < 1e-6;
+    });
+    expect(leaf).toBeDefined();
   });
 
-  it('centra el hueco en la posición derivada del muro padre', () => {
-    const r = new RecordingRenderer();
-    drawPlan(r, scene({ objects: [wall, door] }));
-
-    // Puerta de 0.9 m con offset 1 → centro en x=1.45 → hueco de 1.0 a 1.9 m
-    // → 100 a 190 px.
-    const hole = r.ops('drawLine')[1];
-    expect(hole.args[0]).toBeCloseTo(100);
-    expect(hole.args[2]).toBeCloseTo(190);
-  });
-
-  it('una ventana añade las dos líneas desplazadas del símbolo convencional', () => {
+  it('una ventana dibuja marco a ambos lados y el vidrio en el eje', () => {
     const win = new Window({
       id: revitObjectId('win1'),
       roomId: ROOM_ID,
@@ -320,16 +310,16 @@ describe('drawPlan — vanos', () => {
     });
     const r = new RecordingRenderer();
     drawPlan(r, scene({ objects: [wall, win] }));
-
-    // 1 muro + hueco + línea central + 2 líneas desplazadas.
-    expect(r.ops('drawLine')).toHaveLength(5);
+    const glass = r.ops('drawLine').filter((c) => (c.args[4] as { stroke: string }).stroke === CANVAS_PALETTES.claro.opening);
+    expect(glass).toHaveLength(1);
+    expect(glass[0].args.slice(0, 4)).toEqual([200, 0, 320, 0]);
   });
 
   it('no dibuja un vano cuyo muro padre ya no existe', () => {
     const r = new RecordingRenderer();
-    drawPlan(r, scene({ objects: [door] })); // sin el muro
-
+    drawPlan(r, scene({ objects: [door] }));
     expect(r.ops('drawLine')).toHaveLength(0);
+    expect(r.ops('strokePolyline')).toHaveLength(0);
   });
 });
 
@@ -348,13 +338,12 @@ describe('drawPlan — columnas', () => {
     });
     const r = new RecordingRenderer();
     drawPlan(r, scene({ objects: [column] }));
-
     const circles = r.ops('fillCircle');
     expect(circles).toHaveLength(1);
-    expect(circles[0].args.slice(0, 3)).toEqual([200, 100, 20]); // r = 0.2 m × 100
+    expect(circles[0].args.slice(0, 3)).toEqual([200, 100, 20]);
   });
 
-  it('dibuja una columna rectangular como su huella rotada', () => {
+  it('dibuja una columna rectangular como su sección rellena y contorneada', () => {
     const column = new Column({
       id: revitObjectId('c1'),
       roomId: ROOM_ID,
@@ -367,31 +356,34 @@ describe('drawPlan — columnas', () => {
     });
     const r = new RecordingRenderer();
     drawPlan(r, scene({ objects: [column] }));
-
     expect(r.ops('fillPolygon')).toHaveLength(1);
-    expect((r.ops('fillPolygon')[0].args[0] as unknown[]).length).toBe(4);
+    expect(r.ops('strokePolygon')).toHaveLength(1);
   });
 });
 
 // ---------------------------------------------------------------------------
-// Trazo en curso
+// Muro en curso de trazado
 // ---------------------------------------------------------------------------
 
-describe('drawPlan — trazo en curso', () => {
-  it('une los vértices y marca cada uno', () => {
+describe('drawPlan — muro en curso', () => {
+  it('previsualiza el muro con su espesor y rotula su longitud en vivo', () => {
     const r = new RecordingRenderer();
-    drawPlan(r, scene({ vertices: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }] }));
-
-    expect(r.ops('drawLine')).toHaveLength(2);
-    expect(r.ops('fillCircle')).toHaveLength(4); // 3 vértices + el último resaltado
+    drawPlan(r, scene({ wallDraft: { start: { x: 0, y: 0 }, end: { x: 3, y: 0 }, snappedToNode: false }, draftThickness: 0.2 }));
+    expect(r.ops('strokePolygon')).toHaveLength(1);
+    expect(r.texts()).toContain('3.00 m');
   });
 
-  it('con un solo vértice no dibuja segmentos, pero sí el punto', () => {
+  it('con solo el primer punto fijado muestra el punto, sin muro', () => {
     const r = new RecordingRenderer();
-    drawPlan(r, scene({ vertices: [{ x: 0, y: 0 }] }));
+    drawPlan(r, scene({ wallDraft: { start: { x: 1, y: 1 }, end: null, snappedToNode: false } }));
+    expect(r.ops('strokePolygon')).toHaveLength(0);
+    expect(r.ops('fillCircle')).toHaveLength(1);
+  });
 
-    expect(r.ops('drawLine')).toHaveLength(0);
-    expect(r.ops('fillCircle')).toHaveLength(2);
+  it('marca el enganche a un nodo con un anillo', () => {
+    const r = new RecordingRenderer();
+    drawPlan(r, scene({ wallDraft: { start: { x: 0, y: 0 }, end: { x: 2, y: 0 }, snappedToNode: true } }));
+    expect(r.ops('strokeCircle').some((c) => c.args[0] === 200 && c.args[2] === 14)).toBe(true);
   });
 });
 
@@ -400,14 +392,29 @@ describe('drawPlan — trazo en curso', () => {
 // ---------------------------------------------------------------------------
 
 describe('drawPlan — selección', () => {
-  it('resalta el muro seleccionado con un trazo más grueso que el propio muro', () => {
+  it('resalta el muro seleccionado rellenando y contorneando su contorno', () => {
     const wall = makeWall('w1', 0, 0, 4, 0);
     const r = new RecordingRenderer();
     drawPlan(r, scene({ objects: [wall], selectedId: wall.id }));
+    const sel = r.ops('strokePolygon').filter((c) => (c.args[1] as { stroke: string }).stroke === CANVAS_PALETTES.claro.selection);
+    expect(sel).toHaveLength(1);
+  });
 
-    const widths = r.ops('drawLine').map((c) => (c.args[4] as { width: number }).width);
-    expect(widths).toHaveLength(2);
-    expect(widths[1]).toBeGreaterThan(widths[0]);
+  it('una puerta seleccionada se resalta con un rectángulo sobre el vano, no con un círculo', () => {
+    const wall = makeWall('w1', 0, 0, 4, 0);
+    const door = new Door({
+      id: revitObjectId('d1'),
+      roomId: ROOM_ID,
+      parentWallId: wallId('w1'),
+      offsetAlongWall: meters(1),
+      offsetPerpendicular: meters(0),
+      width: meters(0.9),
+      height: meters(2.1),
+    });
+    const r = new RecordingRenderer();
+    drawPlan(r, scene({ objects: [wall, door], selectedId: door.id }));
+    expect(r.ops('strokeCircle')).toHaveLength(0);
+    expect(r.ops('strokePolygon')).toHaveLength(1);
   });
 
   it('dibuja los handles del objeto seleccionado como círculos con borde', () => {
@@ -425,7 +432,6 @@ describe('drawPlan — selección', () => {
         ],
       }),
     );
-
     expect(r.ops('fillCircle')).toHaveLength(3);
     expect(r.ops('strokeCircle')).toHaveLength(3);
   });
@@ -446,66 +452,33 @@ describe('drawPlan — etiquetas', () => {
   it('rotula la longitud de cada muro cuando showLabels está activo', () => {
     const r = new RecordingRenderer();
     drawPlan(r, scene({ objects: [makeWall('w1', 0, 0, 4, 0)], showLabels: true }));
-
     expect(r.texts()).toContain('4.00 m');
   });
 
   it('no rotula nada si showLabels está apagado', () => {
     const r = new RecordingRenderer();
     drawPlan(r, scene({ objects: [makeWall('w1', 0, 0, 4, 0)], showLabels: false }));
-
     expect(r.texts()).toHaveLength(0);
   });
 
   it('omite la cota de un muro demasiado corto en pantalla para que sea legible', () => {
     const r = new RecordingRenderer();
+    drawPlan(r, scene({ objects: [makeWall('w1', 0, 0, 0.2, 0)], showLabels: true }));
+    expect(r.texts()).toHaveLength(0);
+  });
+
+  it('rotula nombre y área del recinto cerrado principal', () => {
+    const r = new RecordingRenderer();
     drawPlan(
       r,
       scene({
-        objects: [makeWall('w1', 0, 0, 0.2, 0)], // 20 px a escala 100
+        rooms: [{ polygon: [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 3 }], area: 12, centroid: { x: 2, y: 1 } }],
+        roomName: 'Salón',
         showLabels: true,
       }),
     );
-
-    expect(r.texts()).toHaveLength(0);
-  });
-
-  it('rotula nombre y área de un recinto cerrado', () => {
-    const room = new Room({
-      id: revitObjectId('room-1'),
-      roomId: ROOM_ID,
-      levelId: levelId('level-1'),
-      geometry: [
-        { x: 0, y: 0 },
-        { x: 4, y: 0 },
-        { x: 4, y: 3 },
-        { x: 0, y: 3 },
-      ],
-      area: squareMeters(12),
-      properties: { name: 'Salón' },
-    });
-    const r = new RecordingRenderer();
-    drawPlan(r, scene({ objects: [room], showLabels: true }));
-
     expect(r.texts()).toContain('Salón');
     expect(r.texts()).toContain('12.00 m²');
-  });
-
-  it('no rotula el área de un recinto todavía abierto (área null)', () => {
-    const open = new Room({
-      id: revitObjectId('room-1'),
-      roomId: ROOM_ID,
-      levelId: levelId('level-1'),
-      geometry: [
-        { x: 0, y: 0 },
-        { x: 4, y: 0 },
-        { x: 4, y: 3 },
-      ],
-    });
-    const r = new RecordingRenderer();
-    drawPlan(r, scene({ objects: [open], showLabels: true }));
-
-    expect(r.texts()).toHaveLength(0);
   });
 });
 
