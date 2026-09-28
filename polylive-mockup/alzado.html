@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<!-- =====================================================================
+     PolyLive · Mockup · SurveyScreen · Vista Alzado (frontal de muro)
+     alzado.html — misma estructura que planta, catálogos distintos.
+     Navegación: double-tap en un muro de planta.html llega aquí.
+     ===================================================================== -->
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PolyLive · SurveyScreen · Alzado (mockup)</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<div class="phone" id="phone">
+
+  <!-- STATUS BAR · 2 filas -->
+  <header class="statusbar">
+    <div class="sb-row1"><div class="sb-title" id="sbTitle"></div></div>
+    <div class="sb-row2">
+      <button class="icon-btn is-muted" id="btnMenu" aria-label="Menú principal">☰</button>
+      <div class="sb-right">
+        <button class="icon-btn" id="btnUndo" aria-label="Deshacer">↺</button>
+        <button class="icon-btn is-disabled" id="btnRedo" aria-label="Rehacer" disabled>↻</button>
+        <button class="icon-btn" id="btnBle" aria-label="Bluetooth (mantener para opciones)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6.5 6.5 17.5 17.5 12 23V1l5.5 5.5L6.5 17.5"/></svg>
+        </button>
+        <button class="icon-btn" id="btnConfig" aria-label="Configuración">⋮</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- LIENZO DE ALZADO -->
+  <main class="canvas" id="canvas" data-tema="claro">
+    <div class="world" id="world">
+      <!-- El muro frontal y las líneas de nivel se construyen por JS -->
+    </div>
+
+    <!-- BPC (contenido por bpc-alzado.js) -->
+    <div class="bpc" id="bpc" role="toolbar" aria-label="Propiedades"></div>
+
+    <!-- Chip: muestra el muro activo (llenado por main-alzado.js) -->
+    <div class="level-chip" id="levelChip" aria-live="polite"></div>
+
+    <!-- Grupo lateral: solo Fase (sin Nivel en alzado) -->
+    <div class="rs-group" id="rsGroup"></div>
+  </main>
+
+</div>
+
+<p class="note">PolyLive · mockup Alzado · vista frontal de muro · toca el fondo para deseleccionar</p>
+
+<!-- Orden de carga: base → alzado-específicos → componentes reutilizados → main alzado -->
+<script src="js/core.js"></script>
+<script src="js/config.js"></script>
+<script src="js/config-alzado.js"></script>
+<script src="js/components/canvas-alzado.js"></script>
+<script src="js/components/statusbar.js"></script>
+<script src="js/components/bpc-alzado.js"></script>
+<script src="js/components/range-selector.js"></script>
+<script src="js/components/fab-view.js"></script>
+<script src="js/components/corner-tools.js"></script>
+<script src="js/components/fab-create.js"></script>
+<script src="js/components/config-drawer.js"></script>
+<script src="js/components/minimap.js"></script>
+<script src="js/components/alzado-actions.js"></script>
+<script src="js/main-alzado.js"></script>
+</body>
+</html>

@@ -1,0 +1,376 @@
+/* =====================================================================
+   PolyLive · Mockup SurveyScreen · Vista Planta
+   styles.css — hoja única del mockup
+   ---------------------------------------------------------------------
+   Índice
+     1. Tokens (colores, sombras, medidas)
+     2. Temas del lienzo (claro / oscuro / alto contraste)
+     3. Base y marco del teléfono
+     4. Primitivas reutilizables (botones, tooltip, check, toast)
+     5. Status bar (2 filas)
+     6. Lienzo: world, muros, cuadrícula
+     7. BPC · Barra de Propiedades Contextual
+     8. Chip de nivel actual
+     9. FAB de creación (inferior derecha)
+    10. FAB de vista + Filtros/Capas (superior derecha)
+    11. Herramientas de lienzo (inferior izquierda)
+    12. Selectores de rango: Nivel y Fase (lateral izquierdo)
+    13. Ventanas flotantes
+    14. Drawer de configuración (⋮)
+   Convención: prefijo por componente (sb-, bpc-, fc-, fv-, ct-, rs-, fw-, cd-)
+   ===================================================================== */
+
+/* 1. TOKENS ------------------------------------------------------------ */
+:root{
+  --ambar:#FF8F00;          /* acción primaria / estado activo */
+  --ambar-d:#E65100;        /* acento sobre blanco (texto, borde FAB vista) */
+  --bg:#FAFAFA;             /* fondo de superficies secundarias */
+  --gris:#E0E0E0;           /* bordes, pista del selector */
+  --texto:#212121;          /* texto principal */
+  --texto-sec:#757575;      /* texto secundario */
+  --tooltip:#424242;        /* etiquetas oscuras (FAB labels, tooltips) */
+  --blanco:#FFFFFF;
+  --sombra-1:0 2px 4px rgba(0,0,0,.12);
+  --sombra-2:0 3px 8px rgba(0,0,0,.18);
+  --sombra-3:0 6px 16px rgba(0,0,0,.25);
+  --statusbar-h:96px;       /* incluye ~22px de zona segura (cámara/notch) */
+}
+
+/* 2. TEMAS DEL LIENZO (solo afectan al canvas, no a la UI) ------------- */
+.canvas{ --cv-bg:#FFFFFF; --cv-grid:#EEEEEE; --cv-dot:#BDBDBD; --cv-ink:#212121; }
+/* Oscuro: trabajo en interiores o de noche, bajo brillo, sin deslumbrar. */
+.canvas[data-tema="oscuro"]{
+  --cv-bg:#121212; --cv-grid:#2A2A2A; --cv-dot:#4A4A4A; --cv-ink:#EDEDED;
+  --cv-sel:#FFB74D; --cv-line-w:1px; --cv-sel-w:3px;
+}
+/* Alto contraste: pensado para exteriores con sol directo. La pantalla
+   se "lava" con la luz y los grises intermedios son lo primero que
+   desaparece, así que aquí se evita el gris: fondo blanco puro (el
+   máximo brillo posible del panel ayuda a vencer el reflejo), tinta
+   negra pura al máximo grosor, cuadrícula en un azul saturado que
+   sigue siendo visible cuando el negro se ve algo lavado, y el
+   color de selección es magenta (nunca se confunde con nada del lienzo,
+   ni con el amarillo/ámbar de la marca). Líneas más gruesas: un trazo
+   fino de 1px es lo primero que el sol vuelve invisible. */
+.canvas[data-tema="contraste"]{
+  --cv-bg:#FFFFFF; --cv-grid:#0B5ED7; --cv-dot:#0B5ED7; --cv-ink:#000000;
+  --cv-sel:#D500F9; --cv-line-w:2px; --cv-sel-w:5px;
+}
+
+/* 3. BASE Y MARCO ------------------------------------------------------ */
+*{box-sizing:border-box;margin:0;padding:0;font-family:Arial,Helvetica,sans-serif}
+body{background:#333;display:flex;flex-direction:column;align-items:center;gap:14px;padding:20px}
+[hidden]{display:none!important}   /* el atributo hidden siempre gana */
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--ambar);outline-offset:2px}
+.phone{
+  width:390px;height:780px;background:var(--bg);
+  border-radius:24px;overflow:hidden;position:relative;
+  box-shadow:0 0 0 8px #000;
+  user-select:none;-webkit-user-select:none;   /* los gestos no seleccionan texto */
+}
+.phone input{user-select:text;-webkit-user-select:text}
+.note{color:#aaa;font-size:11px}
+
+/* 4. PRIMITIVAS -------------------------------------------------------- */
+/* Botón de icono de la status bar (36px) */
+.icon-btn{
+  width:36px;height:36px;border-radius:8px;display:flex;
+  align-items:center;justify-content:center;font-size:18px;color:var(--texto);
+}
+.icon-btn.is-muted{background:var(--gris)}                 /* ☰ */
+.icon-btn.is-disabled{opacity:.4;cursor:default}            /* redo sin historial */
+.icon-btn.is-on{background:var(--ambar);color:#fff;border-radius:18px} /* BLE on / ⋮ abierto */
+
+/* Etiqueta oscura (labels de FAB, tooltips de selectores) */
+.tip{background:var(--tooltip);color:#fff;font-size:11px;padding:4px 8px;border-radius:6px;white-space:nowrap}
+
+/* Botón circular pequeño de opción (menús horizontales) */
+.opt{
+  width:28px;height:28px;border-radius:14px;background:#fff;border:1px solid var(--gris);
+  display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:bold;
+  color:var(--texto);flex-shrink:0;
+}
+.opt.is-on{background:var(--ambar);color:#fff;border-color:var(--ambar)}
+
+/* Casilla de verificación visual */
+.check{width:16px;height:16px;border:1px solid var(--gris);border-radius:4px;flex-shrink:0}
+.check.is-on{background:var(--ambar);border-color:var(--ambar)}
+
+/* Etiqueta de estado (drawer) */
+.tag{background:var(--bg);border:1px solid var(--gris);border-radius:6px;padding:3px 8px;font-size:11px;color:var(--texto)}
+.tag.is-on{background:var(--ambar);color:#fff;border-color:var(--ambar)}
+button.tag{cursor:pointer}
+
+/* Aviso breve (reemplaza alert) */
+.toast{
+  position:absolute;left:50%;bottom:96px;transform:translateX(-50%);
+  background:var(--tooltip);color:#fff;font-size:12px;padding:8px 12px;border-radius:8px;
+  box-shadow:var(--sombra-2);z-index:40;opacity:0;transition:opacity .25s;pointer-events:none;
+  max-width:300px;text-align:center;
+}
+.toast.is-visible{opacity:1}
+
+/* 5. STATUS BAR -------------------------------------------------------- */
+.statusbar{
+  height:var(--statusbar-h);background:#fff;border-bottom:1px solid var(--gris);
+  display:flex;flex-direction:column;justify-content:flex-end;gap:4px;
+  padding:22px 12px 6px 12px;           /* 22px: zona de cámara/notch */
+}
+.sb-row1{display:flex;align-items:center;justify-content:center;height:24px}
+.sb-row2{display:flex;align-items:center;justify-content:space-between;height:36px}
+.sb-right{display:flex;align-items:center;gap:8px}
+.sb-title{font-size:13px;color:var(--texto)}
+.sb-title b{font-size:14px}
+
+/* 6. LIENZO ------------------------------------------------------------ */
+.canvas{
+  position:absolute;top:var(--statusbar-h);bottom:0;left:0;right:0;
+  background-color:var(--cv-bg);overflow:hidden;
+}
+/* Cuadrícula: capas combinables (líneas y/o puntos) */
+.canvas.grid-lineas{
+  background-image:linear-gradient(var(--cv-grid) var(--cv-line-w,1px),transparent var(--cv-line-w,1px)),
+                   linear-gradient(90deg,var(--cv-grid) var(--cv-line-w,1px),transparent var(--cv-line-w,1px));
+  background-size:40px 40px;
+}
+.canvas.grid-puntos{
+  background-image:radial-gradient(var(--cv-dot) 1.4px,transparent 1.6px);
+  background-size:20px 20px;
+}
+.canvas[data-tema="contraste"].grid-puntos{
+  background-image:radial-gradient(var(--cv-dot) 2.6px,transparent 2.8px);  /* puntos más grandes bajo sol */
+}
+.canvas.grid-lineas.grid-puntos{
+  background-image:linear-gradient(var(--cv-grid) var(--cv-line-w,1px),transparent var(--cv-line-w,1px)),
+                   linear-gradient(90deg,var(--cv-grid) var(--cv-line-w,1px),transparent var(--cv-line-w,1px)),
+                   radial-gradient(var(--cv-dot) 1.4px,transparent 1.6px);
+  background-size:40px 40px,40px 40px,20px 20px;
+}
+/* Capa escalable con el contenido dibujado (zoom) */
+.world{position:absolute;inset:0;transform-origin:50% 50%;transition:transform .2s}
+.wall{position:absolute;background:var(--cv-ink);cursor:pointer}
+.wall.is-selected{background:var(--cv-sel,var(--ambar))}
+.miter-preview{position:absolute;border:2px dashed var(--cv-sel,var(--ambar));background:rgba(255,143,0,.08);pointer-events:none}
+
+/* 7. BPC --------------------------------------------------------------- */
+.bpc{
+  position:absolute;top:10px;left:10px;right:10px;height:44px;z-index:5;
+  background:#fff;border-radius:14px;box-shadow:var(--sombra-2);
+  display:flex;align-items:center;justify-content:center;padding:0 14px;gap:14px;
+  font-size:12px;color:var(--texto-sec);white-space:nowrap;
+}
+.bpc b{color:var(--texto)}
+.bpc-drag{                               /* propiedad editable por arrastre */
+  display:flex;align-items:center;gap:6px;background:var(--bg);touch-action:none;
+  border:1px solid var(--gris);border-radius:14px;padding:4px 10px 4px 6px;cursor:ew-resize;
+}
+.bpc-drag .h{color:var(--ambar);font-size:14px}
+.bpc-drag.is-dragging{border-color:var(--ambar)}
+
+/* 8. CHIP DE NIVEL ----------------------------------------------------- */
+.level-chip{position:absolute;top:64px;left:14px;z-index:1;font-size:11px;color:var(--texto-sec);display:flex;gap:5px}
+.level-chip b{font-weight:600}
+.canvas[data-tema="oscuro"] .level-chip,.canvas[data-tema="contraste"] .level-chip{color:#BDBDBD}
+
+/* 9. FAB DE CREACIÓN --------------------------------------------------- */
+.fc-wrap{position:absolute;bottom:24px;right:16px;width:56px;height:56px;z-index:10}
+.fc-main{
+  position:absolute;bottom:0;right:0;width:56px;height:56px;border-radius:28px;
+  background:var(--ambar);color:#fff;font-size:26px;display:flex;align-items:center;justify-content:center;
+  box-shadow:0 4px 8px rgba(0,0,0,.25);
+}
+.fc-minis{position:absolute;bottom:68px;right:0;display:flex;flex-direction:column-reverse;align-items:flex-end;gap:12px}
+.fc-mini{display:flex;align-items:center;gap:8px}
+.fc-mini .btn{
+  width:44px;height:44px;border-radius:22px;background:#fff;border:1px solid var(--gris);
+  display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 2px 4px rgba(0,0,0,.15);
+}
+
+/* 10. FAB DE VISTA + FILTROS/CAPAS ------------------------------------- */
+.fv-wrap{position:absolute;top:64px;right:16px;width:41px;height:41px;z-index:10}
+.fv-main{
+  position:absolute;top:0;right:0;width:41px;height:41px;border-radius:21px;background:#fff;
+  border:2px solid var(--ambar);color:var(--ambar-d);font-size:15px;
+  display:flex;align-items:center;justify-content:center;box-shadow:var(--sombra-2);
+}
+.fv-minis{position:absolute;top:50px;right:0;display:flex;flex-direction:column;align-items:flex-end;gap:9px}
+.fv-mini{display:flex;align-items:center;gap:7px}
+.fv-mini .tip{font-size:10px;padding:3px 7px}
+.fv-mini .btn{
+  width:34px;height:34px;border-radius:17px;background:#fff;border:1px solid var(--gris);
+  display:flex;align-items:center;justify-content:center;font-size:14px;box-shadow:0 2px 4px rgba(0,0,0,.15);
+}
+.fv-mini .btn.is-on{background:var(--ambar);color:#fff;border-color:var(--ambar)}
+.fv-extra{position:absolute;top:113px;right:22px;display:flex;flex-direction:column;gap:10px;z-index:9}
+.fv-extra button{
+  width:28px;height:28px;background:#fff;border:1px solid var(--gris);border-radius:7px;
+  box-shadow:0 2px 4px rgba(0,0,0,.1);font-size:12px;color:var(--texto);
+  display:flex;align-items:center;justify-content:center;
+}
+.fv-extra button.is-on{background:var(--ambar);color:#fff;border-color:var(--ambar)}
+
+/* 11. HERRAMIENTAS DE LIENZO (esquina inferior izquierda) -------------- */
+.ct-wrap{position:absolute;bottom:24px;left:16px;width:48px;height:48px;z-index:10}
+.ct-main{
+  position:absolute;bottom:0;left:0;width:48px;height:48px;border-radius:24px;
+  background:var(--ambar);color:#fff;font-size:20px;display:flex;align-items:center;justify-content:center;
+  box-shadow:0 4px 8px rgba(0,0,0,.25);
+}
+/* Columna de 48px = ancho del botón madre → los iconos comparten eje central */
+.ct-rows{position:absolute;bottom:58px;left:0;width:48px;display:flex;flex-direction:column-reverse;align-items:center;gap:10px}
+.ct-row{display:flex;align-items:center;gap:8px;width:100%}
+.ct-fab{
+  flex:0 0 30px;width:30px;height:30px;margin-left:9px;border-radius:7px;background:#fff;
+  border:1px solid var(--gris);display:flex;align-items:center;justify-content:center;
+  font-size:14px;color:var(--texto);box-shadow:0 2px 4px rgba(0,0,0,.1);
+}
+.ct-fab.is-on{background:var(--ambar);color:#fff;border-color:var(--ambar)}
+.ct-menu{display:flex;align-items:center;gap:6px}
+.ct-menu input{width:52px;height:28px;border:1px solid var(--gris);border-radius:6px;font-size:11px;text-align:center}
+
+/* 12. SELECTORES DE RANGO (Nivel / Fase) ------------------------------- */
+.rs-group{position:absolute;left:16px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:10px;align-items:center;z-index:10}
+.rs-fab{
+  width:34px;height:34px;border-radius:17px;background:var(--ambar);color:#fff;
+  display:flex;align-items:center;justify-content:center;box-shadow:0 4px 8px rgba(0,0,0,.25);
+}
+.rs-panel{position:absolute;left:16px;top:50%;transform:translateY(-50%);width:28px;height:62%;flex-direction:column;align-items:center;z-index:10}
+.rs-panel[hidden]{display:none}
+.rs-panel:not([hidden]){display:flex}
+.rs-btns{display:flex;flex-direction:column;gap:3px;margin-bottom:6px}
+.rs-btn{
+  width:20px;height:20px;border-radius:5px;background:#fff;border:1px solid var(--gris);
+  display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:bold;color:var(--texto-sec);
+}
+.rs-btn.is-on{background:var(--ambar);color:#fff;border-color:var(--ambar)}
+.rs-track-wrap{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;width:100%}
+.rs-inf{font-size:14px;color:var(--texto-sec);line-height:1}
+.rs-track{position:relative;flex:1;width:3px;background:var(--gris);border-radius:2px;margin:6px 0}
+.rs-thumb{
+  position:absolute;left:50%;transform:translate(-50%,-50%);touch-action:none;
+  width:14px;height:14px;border-radius:7px;background:#fff;
+  border:2px solid var(--gris);box-shadow:0 2px 5px rgba(0,0,0,.25);cursor:grab;
+}
+.rs-thumb.is-active{width:19px;height:19px;border-color:#fff;z-index:3}
+.rs-thumb.is-dim{opacity:.55}
+.rs-thumb[data-slot="nivel"]{background:var(--ambar);width:19px;height:19px;border-color:#fff;z-index:3} /* central siempre naranja */
+.rs-thumb .tip{position:absolute;left:22px;top:50%;transform:translateY(-50%);font-size:10px;padding:2px 5px;border-radius:4px;pointer-events:none}
+.rs-actions{display:flex;flex-direction:column;gap:8px;margin-top:8px;align-items:center}
+.rs-act{
+  width:22px;height:22px;border-radius:11px;background:#fff;border:1px solid var(--gris);
+  display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--texto);box-shadow:var(--sombra-1);
+}
+.rs-act.is-primary{background:var(--ambar);color:#fff;border-color:var(--ambar)}
+
+/* Lista editable (ventana flotante y drawer comparten este markup) */
+.rs-cfg-row{display:flex;align-items:center;gap:6px}
+.rs-cfg-row input{border:1px solid var(--gris);border-radius:6px;padding:3px 6px;font-size:11px}
+.rs-cfg-row input[type=text]{width:74px}
+.rs-cfg-row input[type=number]{width:52px}
+.rs-cfg-row input:disabled{background:var(--bg);color:var(--texto-sec)}
+.rs-cfg-del{color:var(--texto-sec);font-size:12px;width:16px}
+.rs-cfg-add{justify-content:center;color:var(--ambar-d);font-weight:bold;font-size:12px;width:100%;padding:4px 0}
+
+/* 13. VENTANAS FLOTANTES ----------------------------------------------- */
+.fw{
+  position:absolute;background:#fff;border-radius:12px;box-shadow:var(--sombra-3);z-index:20;
+  display:flex;flex-direction:column;overflow:hidden;width:200px;
+}
+.fw[hidden]{display:none}
+.fw-header{
+  display:flex;justify-content:space-between;align-items:center;padding:10px 12px;
+  background:var(--bg);border-bottom:1px solid var(--gris);font-size:13px;font-weight:bold;color:var(--texto);
+}
+.fw-close{color:var(--texto-sec);font-size:14px}
+.fw-body{padding:10px 12px;display:flex;flex-direction:column;gap:8px;max-height:260px;overflow-y:auto}
+.fw-row{display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--texto);gap:8px}
+button.fw-row{width:100%;text-align:left}
+.fw-link{justify-content:center;color:var(--ambar-d);font-weight:bold}
+
+/* 14. DRAWER DE CONFIGURACIÓN ------------------------------------------ */
+/* Arranca bajo la status bar para que el botón ✕ siga visible y operable */
+.cd-overlay{position:absolute;top:var(--statusbar-h);left:0;right:0;bottom:0;background:rgba(0,0,0,.35);z-index:30}
+.cd-overlay[hidden]{display:none}
+.cd-drawer{position:absolute;top:0;right:0;bottom:0;width:85%;background:#fff;box-shadow:-4px 0 12px rgba(0,0,0,.25);display:flex;flex-direction:column}
+.cd-header{height:48px;flex-shrink:0;display:flex;align-items:center;padding:0 14px;border-bottom:1px solid var(--gris);font-weight:bold;font-size:15px}
+.cd-body{flex:1;overflow-y:auto;padding:4px 0}
+.cd-section{border-bottom:1px solid var(--gris)}
+.cd-head{display:flex;align-items:center;justify-content:space-between;width:100%;padding:12px 14px;font-size:13px;font-weight:bold;color:var(--texto)}
+.cd-head .chev{transition:transform .2s;color:var(--texto-sec)}
+.cd-section.is-open .chev{transform:rotate(90deg)}
+.cd-content{display:none;padding:0 14px 12px 14px;flex-direction:column;gap:2px}
+.cd-section.is-open .cd-content{display:flex}
+.cd-row{display:flex;align-items:center;justify-content:space-between;padding:5px 0;font-size:12px;color:var(--texto-sec);gap:8px}
+.cd-row input[type=text]{border:1px solid var(--gris);border-radius:6px;padding:4px 8px;font-size:12px;width:130px}
+.cd-tags{display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end}
+
+@media (prefers-reduced-motion:reduce){ *{transition:none!important} }
+
+/* =====================================================================
+   ALZADO — Componentes específicos de la vista frontal
+   ===================================================================== */
+
+/* Muro frontal: rectángulo con borde visible y fondo semitransparente */
+.alzado-muro{
+  border:3px solid var(--cv-ink);background:rgba(128,128,128,.12);
+}
+.canvas[data-tema="oscuro"] .alzado-muro{background:rgba(200,200,200,.08)}
+.canvas[data-tema="contraste"] .alzado-muro{border-width:5px}
+
+/* Líneas horizontales de nivel de referencia */
+.alzado-nivel-line{
+  height:0;border-top:1.5px dashed var(--cv-ink);opacity:.45;
+  display:flex;flex-direction:column;padding-left:14px;
+}
+.canvas[data-tema="contraste"] .alzado-nivel-line{border-top-width:2.5px;opacity:.7}
+.alzado-nivel-label{
+  pointer-events:none;position:absolute;left:14px;z-index:4;
+  line-height:1.1;
+}
+.alzado-nivel-name{
+  font-size:10px;color:var(--texto-sec);opacity:.8;display:block;
+}
+.alzado-nivel-cota{
+  font-size:9px;color:var(--texto-sec);opacity:.55;display:block;margin-top:1px;
+}
+
+/* Mini-mapa y selector de lado (alzado) */
+.minimap-box{
+  position:absolute;top:90px;left:14px;z-index:6;
+  width:100px;background:#fff;border-radius:10px;box-shadow:var(--sombra-2);
+  display:flex;flex-direction:column;align-items:center;padding:8px 6px;gap:0;
+  cursor:pointer;
+}
+.minimap-box[hidden]{display:none}
+.minimap-svg{width:80px;height:56px;pointer-events:none}
+.minimap-svg svg{width:100%;height:100%}
+
+.minimap-btn{
+  position:absolute;top:90px;left:14px;z-index:6;
+  width:34px;height:34px;border-radius:17px;background:#fff;border:1px solid var(--gris);
+  display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--texto-sec);
+  box-shadow:var(--sombra-1);cursor:pointer;
+}
+.minimap-btn[hidden]{display:none}
+
+/* Botones de acción junto al FAB de creación (alzado) */
+/* Botón volver a planta: a la izquierda del FAB+, alineado con su borde inferior.
+   FAB+ = bottom:24px right:16px 56×56. Botón = 40×40.
+   bottom = 24px (misma línea inferior que el FAB)
+   right = 16 + 56 + 8 = 80px (56 del FAB + 8 de gap) */
+.fc-action-left{
+  position:absolute;bottom:24px;right:80px;
+  width:40px;height:40px;border-radius:20px;background:#fff;border:2px solid var(--gris);
+  display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--texto);
+  box-shadow:var(--sombra-1);
+}
+/* Botón cambiar lado: arriba del FAB+, alineado con su borde derecho.
+   right = 16px (misma línea derecha que el FAB)
+   bottom = 24 + 56 + 8 = 88px */
+.fc-action-top{
+  position:absolute;bottom:88px;right:16px;
+  width:40px;height:40px;border-radius:20px;background:#fff;border:2px solid var(--ambar);
+  display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--ambar-d);
+  box-shadow:var(--sombra-1);
+}
