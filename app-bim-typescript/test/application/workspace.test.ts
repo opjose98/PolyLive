@@ -241,6 +241,34 @@ describe('workspaceStore', () => {
     expect(CATEGORIES_PLAN[2].tools[0].props?.thickness).toBe(15);
   });
 
+  it('una herramienta con formas de creación abre el nivel 3 y la forma elegida queda activa', () => {
+    const st = createWorkspaceStore();
+    st.getState().pressFabMain();
+    st.getState().pickFabCategory('arquitectonico');
+    const r = st.getState().pickFabTool('arquitectonico', 'muro');
+    expect(r).toEqual({ ok: true, pending: 'methods' });
+    expect(st.getState().fab).toEqual({ level: 'methods', categoryId: 'arquitectonico', toolId: 'muro' });
+    expect(st.getState().activeTool).toBeNull();
+
+    st.getState().pressFabMain(); // ← vuelve a las herramientas
+    expect(st.getState().fab).toEqual({ level: 'tools', categoryId: 'arquitectonico' });
+
+    st.getState().pickFabTool('arquitectonico', 'muro');
+    st.getState().activateTool('arquitectonico', 'muro', 'points');
+    expect(st.getState().activeTool).toMatchObject({ toolId: 'muro', methodId: 'points', methodLabel: 'Punto a punto' });
+    expect(st.getState().fab.level).toBe('closed');
+  });
+
+  it('una herramienta sin formas se activa directo desde el FAB', () => {
+    const st = createWorkspaceStore();
+    st.getState().pressFabMain();
+    st.getState().pickFabCategory('arquitectonico');
+    const r = st.getState().pickFabTool('arquitectonico', 'puerta');
+    expect(r.ok).toBe(true);
+    expect(st.getState().activeTool?.toolId).toBe('puerta');
+    expect(st.getState().activeTool?.methodId).toBeUndefined();
+  });
+
   it('una herramienta deshabilitada no se activa', () => {
     const st = createWorkspaceStore();
     expect(st.getState().activateTool('acotado', 'cota')).toEqual({ ok: false, reason: 'disabled' });

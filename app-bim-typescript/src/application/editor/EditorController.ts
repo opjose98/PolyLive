@@ -203,7 +203,7 @@ export class EditorController {
   private readonly selection = new SelectionService();
   private readonly snap: SnapHandler;
   private readonly miter = new MiterHandler();
-  private readonly defaults: EditorDefaults;
+  private defaults: EditorDefaults;
 
   private listeners: EditorListener[] = [];
   private state: EditorState;
@@ -408,6 +408,15 @@ export class EditorController {
     this.patch({ creation: { ...this.state.creation, [tool]: method }, wallDraft: null });
   }
 
+  /** Valores con que se crean los objetos nuevos (espesor de muro, ancho de vano…). */
+  getDefaults(): EditorDefaults {
+    return this.defaults;
+  }
+
+  setDefaults(partial: Partial<EditorDefaults>): void {
+    this.defaults = { ...this.defaults, ...partial };
+  }
+
   setSnapEnabled(enabled: boolean): void {
     this.snap.setEnabled(enabled);
     this.patch({ snapEnabled: enabled });
@@ -480,11 +489,35 @@ export class EditorController {
     this.patch({ transform: this.canvas.getTransform() });
   }
 
+  /** Acerca o aleja alrededor del centro del viewport. */
+  zoomBy(factor: number, viewportWidth: number, viewportHeight: number): void {
+    this.zoomAround(viewportWidth / 2, viewportHeight / 2, factor);
+  }
+
+  /** Encuadra el objeto seleccionado. Sin selección, encuadra todo. */
+  zoomToSelection(viewportWidth: number, viewportHeight: number): void {
+    const sel = this.selected;
+    if (!sel || sel instanceof Room) {
+      this.zoomToFit(viewportWidth, viewportHeight);
+      return;
+    }
+    const pts = this.selection.handlesFor(sel).map((h) => h.position);
+    if (sel instanceof Column) {
+      const r = (sel.dimensionX as number) * 2;
+      pts.push({ x: sel.position.x - r, y: sel.position.y - r }, { x: sel.position.x + r, y: sel.position.y + r });
+    }
+    this.fitPoints(pts, viewportWidth, viewportHeight, 64);
+  }
+
   /** Encuadra todo lo dibujado en el viewport dado, con un margen. */
   zoomToFit(viewportWidth: number, viewportHeight: number, paddingPx = 32): void {
     const pts: Point2D[] = [];
     for (const w of this.walls) pts.push(w.startPoint, w.endPoint);
     for (const o of this.state.objects) if (o instanceof Column) pts.push(o.position);
+    this.fitPoints(pts, viewportWidth, viewportHeight, paddingPx);
+  }
+
+  private fitPoints(pts: Point2D[], viewportWidth: number, viewportHeight: number, paddingPx: number): void {
 
     if (pts.length === 0) {
       this.canvas.setTransform({ scale: 100, offsetX: viewportWidth / 2, offsetY: viewportHeight / 2 });

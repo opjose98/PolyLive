@@ -303,17 +303,6 @@ export default function App() {
       <StatusBar barStyle="dark-content" backgroundColor={colors.surface} />
       {/* Barra de estado BLE oculta: el medidor láser queda para una versión posterior. */}
 
-      <View style={styles.breadcrumb}>
-        <TouchableOpacity
-          onPress={() => setActiveRoomId(null)}
-          accessibilityRole="button"
-          accessibilityLabel={`Volver a los espacios de ${project.name}`}
-        >
-          <Text style={styles.breadcrumbLink}>‹ {project.name}</Text>
-        </TouchableOpacity>
-        <Text style={styles.breadcrumbCode}>{project.bimCode}</Text>
-      </View>
-
       <NavigationContainer>
         <Tab.Navigator
           screenOptions={{
@@ -337,6 +326,10 @@ export default function App() {
                 roomId={activeRoomId}
                 appStore={appStore}
                 onOpenElevation={(wallDbId) => setOverlay({ kind: 'elevation', wallDbId })}
+                projectName={project.name}
+                projectCode={project.bimCode}
+                operatorName={operator.name}
+                onExit={() => setActiveRoomId(null)}
               />
             )}
           </Tab.Screen>

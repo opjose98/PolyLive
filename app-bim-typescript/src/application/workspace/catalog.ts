@@ -50,13 +50,32 @@ export type ToolBinding =
   | { readonly kind: 'plan'; readonly tool: EditorTool }
   | { readonly kind: 'elevation'; readonly opening: OpeningType };
 
+/** Forma de creación de una herramienta (nivel 3 del FAB). */
+export interface MethodDef {
+  readonly id: string;
+  readonly label: string;
+  readonly icon: string;
+}
+
 export interface ToolDef {
   readonly id: string;
   readonly label: string;
   readonly icon: string;
   readonly props?: PropValues;
   readonly binding?: ToolBinding;
+  /** Si tiene más de una, el FAB abre un nivel 3 para elegirla. */
+  readonly methods?: readonly MethodDef[];
 }
+
+export const WALL_METHODS: readonly MethodDef[] = [
+  { id: 'drag', label: 'Arrastre libre', icon: 'gesture-swipe-horizontal' },
+  { id: 'points', label: 'Punto a punto', icon: 'vector-polyline' },
+];
+
+export const COLUMN_METHODS: readonly MethodDef[] = [
+  { id: 'rectangular', label: 'Rectangular', icon: 'square' },
+  { id: 'circular', label: 'Circular', icon: 'circle' },
+];
 
 export interface CategoryDef {
   readonly id: string;
@@ -111,8 +130,8 @@ export const CATEGORIES_PLAN: readonly CategoryDef[] = [
     label: 'Arquitectónico',
     icon: 'office-building-outline',
     tools: [
-      { id: 'muro', label: 'Muro', icon: 'wall', props: { thickness: 15 }, binding: { kind: 'plan', tool: 'wall' } },
-      { id: 'columna', label: 'Columna', icon: 'square', props: { side: 30 }, binding: { kind: 'plan', tool: 'column' } },
+      { id: 'muro', label: 'Muro', icon: 'wall', props: { thickness: 15 }, binding: { kind: 'plan', tool: 'wall' }, methods: WALL_METHODS },
+      { id: 'columna', label: 'Columna', icon: 'square', props: { side: 30 }, binding: { kind: 'plan', tool: 'column' }, methods: COLUMN_METHODS },
       { id: 'puerta', label: 'Puerta', icon: 'door', props: { width: 90 }, binding: { kind: 'plan', tool: 'door' } },
       { id: 'ventana', label: 'Ventana', icon: 'window-closed-variant', props: { width: 120 }, binding: { kind: 'plan', tool: 'window' } },
       { id: 'suelo', label: 'Suelo', icon: 'floor-plan', props: { thickness: 10 } },
@@ -123,7 +142,7 @@ export const CATEGORIES_PLAN: readonly CategoryDef[] = [
     label: 'Estructural',
     icon: 'crane',
     tools: [
-      { id: 'columna-e', label: 'Columna', icon: 'square', props: { side: 30 }, binding: { kind: 'plan', tool: 'column' } },
+      { id: 'columna-e', label: 'Columna', icon: 'square', props: { side: 30 }, binding: { kind: 'plan', tool: 'column' }, methods: COLUMN_METHODS },
       { id: 'viga', label: 'Viga', icon: 'minus-thick', props: { depth: 40 } },
     ],
   },

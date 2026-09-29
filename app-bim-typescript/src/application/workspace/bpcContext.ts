@@ -14,6 +14,9 @@ export interface ActiveTool {
   readonly label: string;
   readonly categoryLabel: string;
   readonly props: PropValues;
+  /** Forma de creación elegida (nivel 3), si la herramienta tiene. */
+  readonly methodId?: string;
+  readonly methodLabel?: string;
 }
 
 export interface SelectionSummary {

@@ -28,7 +28,7 @@ import {
   findTool,
   isToolEnabled,
 } from '../application/workspace/catalog';
-import { FAB_CLOSED, FabState, pickFabCategory, pressFabMain } from '../application/workspace/fabMachine';
+import { FAB_CLOSED, FabState, openFabMethods, pickFabCategory, pressFabMain } from '../application/workspace/fabMachine';
 import type { ActiveTool } from '../application/workspace/bpcContext';
 import {
   RangeSlot,
@@ -103,7 +103,13 @@ export interface WorkspaceActions {
 
   pressFabMain(): void;
   pickFabCategory(categoryId: string): void;
-  activateTool(categoryId: string, toolId: string): ToolActivation;
+  /**
+   * Toque sobre una herramienta del FAB: si tiene formas de creación abre el
+   * nivel 3; si no, la activa. Devuelve lo mismo que `activateTool`, o
+   * `methods` si quedó esperando la forma.
+   */
+  pickFabTool(categoryId: string, toolId: string): ToolActivation | { readonly ok: true; readonly pending: 'methods' };
+  activateTool(categoryId: string, toolId: string, methodId?: string): ToolActivation;
   clearTool(): void;
   setToolProp(key: PropKey, value: number): void;
 
@@ -142,12 +148,12 @@ export function initialWorkspaceData(mode: WorkspaceMode = 'plan'): WorkspaceDat
     fab: FAB_CLOSED,
     activeTool: null,
     view: 'arquitectura',
-    filters: { muros: true, columnas: true, vanos: true, puertas: true, vigas: true, cotas: false, fotos: true },
+    filters: { muros: true, columnas: true, vanos: true, puertas: true, vigas: true, cotas: true, fotos: true },
     layers: { arquitectonico: true, estructural: true, topografia: false, coordinacion: false },
     canvasTheme: 'claro',
     grid: { lines: true, dots: false, rotation: false },
     snap: { node: true, vertex: false, midpoint: false, angle: true },
-    scale: { dimensioned: false, annotative: false, denominator: '50' },
+    scale: { dimensioned: true, annotative: false, denominator: '50' },
     levels: createRangeState(RANGE_LABELS.levels.base),
     phases: createRangeState(RANGE_LABELS.phases.base),
     elevationSide: 'A',
@@ -202,7 +208,17 @@ export function createWorkspaceStore(initial: Partial<WorkspaceData> = {}) {
       },
       pickFabCategory: (categoryId) => set({ fab: pickFabCategory(get().fab, categoryId) }),
 
-      activateTool: (categoryId, toolId) => {
+      pickFabTool: (categoryId, toolId) => {
+        const categories = get().mode === 'plan' ? CATEGORIES_PLAN : CATEGORIES_ELEVATION;
+        const found = findTool(categories, categoryId, toolId);
+        if (found && isToolEnabled(found.tool) && (found.tool.methods?.length ?? 0) > 1) {
+          set({ fab: openFabMethods(get().fab, toolId) });
+          return { ok: true, pending: 'methods' } as const;
+        }
+        return get().activateTool(categoryId, toolId);
+      },
+
+      activateTool: (categoryId, toolId, methodId) => {
         const categories = get().mode === 'plan' ? CATEGORIES_PLAN : CATEGORIES_ELEVATION;
         const found = findTool(categories, categoryId, toolId);
         if (!found) return { ok: false, reason: 'not-found' };
@@ -214,6 +230,8 @@ export function createWorkspaceStore(initial: Partial<WorkspaceData> = {}) {
           categoryLabel: found.category.label,
           props: { ...found.tool.props },
         };
+        const method = found.tool.methods?.find((m) => m.id === methodId) ?? found.tool.methods?.[0];
+        if (method) Object.assign(tool, { methodId: method.id, methodLabel: method.label });
         set({ activeTool: tool, ...panelsOpenedAt(null) });
         return { ok: true, tool };
       },
