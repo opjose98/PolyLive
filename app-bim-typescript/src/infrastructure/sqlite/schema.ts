@@ -224,6 +224,26 @@ CREATE TABLE IF NOT EXISTS wall_elevations (
 );
 `;
 
+/**
+ * Tabla: project_markers
+ * Niveles (cota) y fases (orden) de cada proyecto. Aditiva: las bases ya
+ * existentes la crean con `IF NOT EXISTS`, sin tocar ninguna otra tabla.
+ * La base de cada tipo tiene un id determinista y se crea al primer uso.
+ */
+export const CREATE_PROJECT_MARKERS = `
+CREATE TABLE IF NOT EXISTS project_markers (
+  id           TEXT PRIMARY KEY NOT NULL,
+  project_id   TEXT NOT NULL,
+  kind         TEXT NOT NULL CHECK(kind IN ('level', 'phase')),
+  name         TEXT NOT NULL,
+  value        REAL NOT NULL DEFAULT 0,
+  is_base      INTEGER NOT NULL DEFAULT 0 CHECK(is_base IN (0, 1)),
+  is_deleted   INTEGER NOT NULL DEFAULT 0 CHECK(is_deleted IN (0, 1)),
+  created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+`;
+
 // ---------------------------------------------------------------------------
 // Índices para consultas frecuentes
 // ---------------------------------------------------------------------------
@@ -259,6 +279,9 @@ CREATE INDEX IF NOT EXISTS idx_survey_control_points_site_id
 CREATE INDEX IF NOT EXISTS idx_project_spaces_project
   ON project_spaces(project_id) WHERE is_deleted = 0;
 
+CREATE INDEX IF NOT EXISTS idx_project_markers_project
+  ON project_markers(project_id, kind) WHERE is_deleted = 0;
+
 CREATE INDEX IF NOT EXISTS idx_project_spaces_room
   ON project_spaces(room_id) WHERE is_deleted = 0;
 
@@ -281,5 +304,6 @@ export const ALL_DDL: string[] = [
   CREATE_PROJECTS,
   CREATE_PROJECT_SPACES,
   CREATE_WALL_ELEVATIONS,
+  CREATE_PROJECT_MARKERS,
   CREATE_INDEXES,
 ];

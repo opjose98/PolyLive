@@ -40,6 +40,7 @@ import { Door } from '../../domain/objects/door';
 import { Window } from '../../domain/objects/window';
 import { distanceToSegment } from '../../domain/geometry/polygon-utils';
 import { lineShape } from '../../domain/geometry/shapes';
+import { LEVEL_PROP, PHASE_PROP } from '../../domain/objects/marker';
 import { projectPointToWall, isVanoWithinWall } from '../../domain/geometry/projections';
 import { AppError } from '../../shared/errors/AppError';
 import { CanvasManager } from '../canvas/CanvasManager';
@@ -131,6 +132,26 @@ export interface DetectedRoom {
   readonly centroid: Point2D;
 }
 
+/**
+ * Alcance de nivel o fase. Un id desconocido (borrado, o un objeto levantado
+ * antes de que existieran niveles) se lee como la base.
+ */
+export interface MarkerScope {
+  readonly active: string;
+  readonly base: string;
+  readonly all: ReadonlySet<string>;
+}
+
+export interface LevelScope extends MarkerScope {
+  /** Otros niveles que se dibujan como calco atenuado. */
+  readonly underlay: ReadonlySet<string>;
+}
+
+export interface PhaseScope extends MarkerScope {
+  /** Orden de cada fase: lo creado en fases posteriores a la activa no se ve. */
+  readonly order: ReadonlyMap<string, number>;
+}
+
 /** Longitud mínima de un muro: por debajo es un toque accidental, no un muro (LevON). */
 export const MIN_WALL_LENGTH = 0.1;
 
@@ -212,6 +233,8 @@ export class EditorController {
   private dragOrigin: Point2D | null = null;
   private dragTolerancePx = 22;
   private wallCommits: Promise<void> = Promise.resolve();
+  private levelScope: LevelScope | null = null;
+  private phaseScope: PhaseScope | null = null;
 
   constructor(params: {
     services: AppServices;
@@ -290,8 +313,63 @@ export class EditorController {
   // Consultas derivadas — la vista las usa para pintar y para el panel
   // -------------------------------------------------------------------------
 
+  /** Muros del nivel y la fase activos: los únicos que se tocan, enganchan o miden. */
   get walls(): Wall[] {
-    return this.state.objects.filter((o): o is Wall => o instanceof Wall);
+    return this.scopedObjects.filter((o): o is Wall => o instanceof Wall);
+  }
+
+  /** Objetos del nivel activo, sin lo creado en fases posteriores a la activa. */
+  get scopedObjects(): RevitObjectBase[] {
+    return this.state.objects.filter((o) => this.inScope(o));
+  }
+
+  /** Objetos de otros niveles visibles como calco atenuado. */
+  get underlayObjects(): RevitObjectBase[] {
+    const lv = this.levelScope;
+    if (!lv) return [];
+    return this.state.objects.filter(
+      (o) => !(o instanceof Room) && !this.inScope(o) && this.phaseVisible(o) && lv.underlay.has(this.markerOf(o, LEVEL_PROP, lv)),
+    );
+  }
+
+  /** Nivel y fase donde nace lo que se crea, y qué se ve. `null` = todo en la base. */
+  setScope(level: LevelScope | null, phase: PhaseScope | null): void {
+    this.levelScope = level;
+    this.phaseScope = phase;
+    const sel = this.selected;
+    if (sel && !this.inScope(sel)) this.patch({ selectedId: null });
+    void this.reload();
+  }
+
+  private markerOf(o: RevitObjectBase, key: string, scope: MarkerScope): string {
+    const id = o.properties?.[key];
+    return typeof id === 'string' && scope.all.has(id) ? id : scope.base;
+  }
+
+  private phaseVisible(o: RevitObjectBase): boolean {
+    const ph = this.phaseScope;
+    if (!ph) return true;
+    const own = ph.order.get(this.markerOf(o, PHASE_PROP, ph)) ?? 0;
+    return own <= (ph.order.get(ph.active) ?? 0);
+  }
+
+  private inScope(o: RevitObjectBase): boolean {
+    if (o instanceof Room) return true;
+    const lv = this.levelScope;
+    if (lv && this.markerOf(o, LEVEL_PROP, lv) !== lv.active) return false;
+    return this.phaseVisible(o);
+  }
+
+  /** Graba nivel y fase activos en un objeto recién creado. */
+  private async stampScope(obj: RevitObjectBase): Promise<void> {
+    if (!this.levelScope && !this.phaseScope) return;
+    await this.services.store.updateObject(obj.id, {
+      properties: {
+        ...obj.properties,
+        ...(this.levelScope && { [LEVEL_PROP]: this.levelScope.active }),
+        ...(this.phaseScope && { [PHASE_PROP]: this.phaseScope.active }),
+      },
+    } as Partial<RevitObjectBase>);
   }
 
   get rooms(): Room[] {
@@ -312,8 +390,9 @@ export class EditorController {
   /** Objetos a dibujar: los persistidos, con el arrastrado en su posición en vivo. */
   get displayObjects(): readonly RevitObjectBase[] {
     const preview = this.state.dragPreview;
-    if (!preview) return this.state.objects;
-    return this.state.objects.map((o) => (o.id === preview.id ? preview : o));
+    const scoped = this.scopedObjects;
+    if (!preview) return scoped;
+    return scoped.map((o) => (o.id === preview.id ? preview : o));
   }
 
   worldToScreen(point: Point2D): CanvasPoint {
@@ -362,12 +441,20 @@ export class EditorController {
   /** Relee los objetos del Recinto, los marcadores de foto y el CommandStack. */
   async reload(): Promise<void> {
     let objects = await this.services.store.listObjects(this.roomId);
-    const walls = objects.filter((o): o is Wall => o instanceof Wall);
-    const rooms = this.services.useCases.detectRooms
-      .execute({ walls })
-      .suggestions.map((r) => ({ polygon: r.polygon, area: r.area as number, centroid: r.centroid }))
-      .sort((a, b) => b.area - a.area);
-    if (await this.syncRoomGeometry(objects, rooms)) {
+    const detect = (walls: Wall[]) =>
+      this.services.useCases.detectRooms
+        .execute({ walls })
+        .suggestions.map((r) => ({ polygon: r.polygon, area: r.area as number, centroid: r.centroid }))
+        .sort((a, b) => b.area - a.area);
+    const rooms = detect(objects.filter((o): o is Wall => o instanceof Wall && this.inScope(o)));
+    // El Recinto persistido (el que exportan IFC y DXF) es el de su nivel, la
+    // base: navegar a otro nivel no debe reescribir su geometría.
+    const lv = this.levelScope;
+    const baseRooms =
+      !lv || lv.active === lv.base
+        ? rooms
+        : detect(objects.filter((o): o is Wall => o instanceof Wall && this.markerOf(o, LEVEL_PROP, lv) === lv.base));
+    if (await this.syncRoomGeometry(objects, baseRooms)) {
       objects = await this.services.store.listObjects(this.roomId);
     }
     await this.reloadPhotoMarkers();
@@ -442,7 +529,7 @@ export class EditorController {
   selectAt(screenX: number, screenY: number, touchTolerancePx: number): RevitObjectBase | null {
     const world = this.screenToWorld(screenX, screenY);
     const tol = touchToleranceMeters(touchTolerancePx, this.state.transform.scale);
-    const hit = this.selection.hitTest({ worldPoint: world, objects: this.state.objects, thresholdMeters: tol });
+    const hit = this.selection.hitTest({ worldPoint: world, objects: this.scopedObjects, thresholdMeters: tol });
     if (hit) this.patch({ selectedId: hit.id });
     return hit ?? null;
   }
@@ -513,7 +600,7 @@ export class EditorController {
   zoomToFit(viewportWidth: number, viewportHeight: number, paddingPx = 32): void {
     const pts: Point2D[] = [];
     for (const w of this.walls) pts.push(w.startPoint, w.endPoint);
-    for (const o of this.state.objects) if (o instanceof Column) pts.push(o.position);
+    for (const o of this.scopedObjects) if (o instanceof Column) pts.push(o.position);
     this.fitPoints(pts, viewportWidth, viewportHeight, paddingPx);
   }
 
@@ -562,7 +649,7 @@ export class EditorController {
     switch (this.state.tool) {
       case 'select':
         this.patch({
-          selectedId: this.selection.hitTest({ worldPoint: world, objects: this.state.objects, thresholdMeters: tol })?.id ?? null,
+          selectedId: this.selection.hitTest({ worldPoint: world, objects: this.scopedObjects, thresholdMeters: tol })?.id ?? null,
         });
         return;
       case 'wall':
@@ -849,6 +936,7 @@ export class EditorController {
         height: this.defaults.wallHeight,
       });
       this.warnOnAcuteMeeting(created.wall);
+      await this.stampScope(created.wall);
       await this.reload();
     } catch (err) {
       this.fail(err, 'No se pudo crear el muro. Verifica que sea válido.');
@@ -882,9 +970,10 @@ export class EditorController {
         width,
         height,
       });
+      const created = 'door' in result ? result.door : result.window;
+      await this.stampScope(created);
       await this.reload();
 
-      const created = 'door' in result ? result.door : result.window;
       this.patch({ selectedId: created.id });
       if (result.warnings.length > 0) {
         this.notify('info', result.warnings.map((w) => w.message).join(' · '));
@@ -906,6 +995,7 @@ export class EditorController {
         sectionShape: this.state.creation.column,
         height: this.defaults.columnHeight,
       });
+      await this.stampScope(result.column);
       await this.reload();
       this.patch({ selectedId: result.column.id });
       if (result.warnings.length > 0) {

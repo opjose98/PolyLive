@@ -57,6 +57,10 @@ import { CornerTools } from '../workspace/CornerTools';
 import { LevelChip } from '../workspace/LevelChip';
 import { ConfigDrawer } from '../workspace/ConfigDrawer';
 import { MainMenu } from '../workspace/MainMenu';
+import { RangeEditHandlers, RangeSelectors } from '../workspace/RangeSelector';
+import { itemAt, RangeState } from '../../application/workspace/rangeModel';
+import { MarkerKind, ProjectMarker } from '../../domain/objects/marker';
+import { DEFAULT_EDITOR_DEFAULTS } from '../../application/editor/EditorController';
 import { sizes as chromeSizes, spacing as chromeSpacing } from '../design/tokens';
 import { useStore } from 'zustand';
 import { CameraCaptureView } from '../components/CameraCaptureView';
@@ -105,6 +109,8 @@ export interface SurveyScreenProps {
   onOpenElevation?: (wallDbId: string) => void;
   /** Abre la galería filtrada por el objeto indicado. */
   onOpenPhotos?: (objectId: string) => void;
+  /** Proyecto al que pertenece el espacio: define sus niveles y fases. */
+  projectId?: string;
   projectName?: string;
   projectCode?: string;
   operatorName?: string;
@@ -122,6 +128,7 @@ export function SurveyScreen({
   appStore,
   onOpenElevation,
   onOpenPhotos,
+  projectId,
   projectName = 'Proyecto',
   projectCode = '',
   operatorName = '',
@@ -233,6 +240,93 @@ export function SurveyScreen({
       ...(p.width !== undefined && activeTool?.toolId === 'ventana' && { windowWidth: cm(p.width)! }),
     });
   }, [editor, activeTool]);
+
+  // --- Niveles y fases del proyecto (selectores de rango) ---
+  const levelsState = useStore(workspaceStore, (s) => s.levels);
+  const phasesState = useStore(workspaceStore, (s) => s.phases);
+  const [markersLoaded, setMarkersLoaded] = useState(false);
+
+  const loadMarkers = useCallback(async () => {
+    if (!projectId) return;
+    const toItem = (m: ProjectMarker) => ({ id: m.id, name: m.name, value: m.value, base: m.isBase });
+    const [lv, ph] = await Promise.all([
+      services.markers.list(projectId, 'level'),
+      services.markers.list(projectId, 'phase'),
+    ]);
+    const ws = workspaceStore.getState();
+    ws.setRangeItems('levels', lv.map(toItem));
+    ws.setRangeItems('phases', ph.map(toItem));
+    setMarkersLoaded(true);
+  }, [services, projectId]);
+
+  useEffect(() => {
+    loadMarkers().catch(() => toast('No se pudieron leer los niveles del proyecto.', { kind: 'error' }));
+  }, [loadMarkers]);
+
+  // Nivel activo = donde nace lo que se crea; el tramo nivel → superior es la
+  // altura por defecto de muros y columnas; [inferior, superior] lo visible.
+  const levelInfo = useMemo(() => {
+    const finite = (st: RangeState) => st.items.filter((it) => Number.isFinite(it.value));
+    const nivel = itemAt(levelsState, 'nivel');
+    const sup = itemAt(levelsState, 'superior');
+    const inf = itemAt(levelsState, 'inferior');
+    const height = Number.isFinite(sup.value) && sup.value > nivel.value ? sup.value - nivel.value : null;
+    return { finite: finite(levelsState), nivel, sup, inf, height, phases: finite(phasesState), fase: itemAt(phasesState, 'nivel') };
+  }, [levelsState, phasesState]);
+
+  useEffect(() => {
+    if (!markersLoaded) return;
+    const { finite, nivel, sup, inf, phases, fase } = levelInfo;
+    editor.setScope(
+      {
+        active: nivel.id,
+        base: finite.find((i) => i.base)?.id ?? nivel.id,
+        all: new Set(finite.map((i) => i.id)),
+        underlay: new Set(finite.filter((i) => i.id !== nivel.id && i.value >= inf.value && i.value <= sup.value).map((i) => i.id)),
+      },
+      {
+        active: fase.id,
+        base: phases.find((i) => i.base)?.id ?? fase.id,
+        all: new Set(phases.map((i) => i.id)),
+        order: new Map(phases.map((i) => [i.id, i.value] as [string, number])),
+      },
+    );
+  }, [editor, markersLoaded, levelInfo]);
+
+  useEffect(() => {
+    const h = levelInfo.height !== null ? meters(levelInfo.height) : DEFAULT_EDITOR_DEFAULTS.wallHeight;
+    editor.setDefaults({ wallHeight: h, columnHeight: h });
+  }, [editor, levelInfo.height]);
+
+  const makeMarkerHandlers = useCallback(
+    (kind: MarkerKind, label: string): RangeEditHandlers => ({
+      onAdd: () => {
+        if (!projectId) return;
+        void services.markers.add(projectId, kind, label).then(() => {
+          haptic.commit();
+          return loadMarkers();
+        });
+      },
+      onRemove: (id) => {
+        void services.markers.remove(id).then((ok) => {
+          if (ok) toast(`${label} eliminado: lo que tenía pasa a la base`, { kind: 'info' });
+          return loadMarkers();
+        });
+      },
+      onRename: (id, name) => void services.markers.rename(id, name).then(loadMarkers),
+      onSetValue: async (id, value) => {
+        const r = await services.markers.setValue(id, value);
+        if (r.ok) {
+          await loadMarkers();
+          return null;
+        }
+        return r.reason === 'not-found' ? 'invalid' : r.reason;
+      },
+    }),
+    [services, projectId, loadMarkers],
+  );
+  const levelHandlers = useMemo(() => makeMarkerHandlers('level', 'Nivel'), [makeMarkerHandlers]);
+  const phaseHandlers = useMemo(() => makeMarkerHandlers('phase', 'Fase'), [makeMarkerHandlers]);
 
   // Reflejar la selección y la vista en el store global. GAP CERRADO: el
   // `uiSlice` de appStore (selectedObjectId, propertyPanelOpen, canvasTransform,
@@ -518,14 +612,19 @@ export function SurveyScreen({
       }),
     [displayObjects, filters, layers],
   );
+  const underlay = useMemo(
+    () => (markersLoaded ? editor.underlayObjects : []),
+    [editor, markersLoaded, state.objects, levelInfo],
+  );
   const sceneForCanvas = useMemo(
     () => ({
       ...canvasScene,
+      underlay,
       objects: visibleObjects,
       showLabels: filters.cotas,
       photoMarkers: filters.fotos ? canvasScene.photoMarkers : [],
     }),
-    [canvasScene, visibleObjects, filters.cotas, filters.fotos],
+    [canvasScene, underlay, visibleObjects, filters.cotas, filters.fotos],
   );
 
   // --- BPC: contexto, píldoras y acciones ---
@@ -696,6 +795,13 @@ export function SurveyScreen({
 
         <Bpc
           context={bpcContext}
+          toolDetail={
+            activeTool && (activeTool.toolId === 'muro' || activeTool.toolId.startsWith('columna'))
+              ? `${levelInfo.nivel.name} → ${Number.isFinite(levelInfo.sup.value) ? levelInfo.sup.name : '∞'} · h ${(
+                  levelInfo.height ?? (DEFAULT_EDITOR_DEFAULTS.wallHeight as number)
+                ).toFixed(2)} m`
+              : undefined
+          }
           pills={bpcPills}
           actions={bpcActions}
           onExitTool={() => workspaceStore.getState().clearTool()}
@@ -703,6 +809,7 @@ export function SurveyScreen({
           right={chromeSpacing.lg + chromeSizes.fabView + chromeSpacing.sm}
         />
         <LevelChip top={belowBpc} />
+        {projectId ? <RangeSelectors levels={levelHandlers} phases={phaseHandlers} /> : null}
         <FabView top={chromeTop} />
         <CornerTools onZoom={handleZoom} />
         <FabCreate onToolActivated={handleToolActivated} />

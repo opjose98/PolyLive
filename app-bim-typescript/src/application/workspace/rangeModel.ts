@@ -128,13 +128,34 @@ function reorder(state: RangeState, items: RangeItem[], prev: Selection): RangeS
   const last = sorted.length - 1;
 
   let nivel = idxOf(prev.nivel);
-  if (nivel < 0) nivel = idxOf(BASE_ID);
+  if (nivel < 0) nivel = sorted.findIndex((it) => it.base);
   let superior = idxOf(prev.superior);
   if (superior <= nivel) superior = last;
   let inferior = idxOf(prev.inferior);
   if (inferior < 0 || inferior >= nivel) inferior = 0;
 
   return { ...state, items: sorted, pos: { superior, nivel, inferior } };
+}
+
+/**
+ * Reemplaza los elementos editables por los que vienen de la base de datos
+ * (la base primero identificada por `base: true`), conservando lo que cada
+ * deslizador tenía seleccionado si sigue existiendo.
+ */
+export function withItems(
+  state: RangeState,
+  finite: readonly { id: string; name: string; value: number; base: boolean }[],
+): RangeState {
+  const prev = selectionOf(state);
+  const items: RangeItem[] = [
+    { id: NEG_INF_ID, name: '−∞', value: -Infinity, fixed: true },
+    ...finite.map((m) => ({ id: m.id, name: m.name, value: m.value, ...(m.base && { base: true }) })),
+    { id: POS_INF_ID, name: '+∞', value: Infinity, fixed: true },
+  ];
+  // Si la selección previa era la base "de demo", apunta a la base real.
+  const baseId = finite.find((m) => m.base)?.id;
+  const fix = (id: string) => (id === BASE_ID && baseId ? baseId : id);
+  return reorder(state, items, { superior: fix(prev.superior), nivel: fix(prev.nivel), inferior: fix(prev.inferior) });
 }
 
 export function addItem(state: RangeState, itemLabel: string, idPrefix: string): RangeState {

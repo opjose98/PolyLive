@@ -326,6 +326,7 @@ export default function App() {
                 roomId={activeRoomId}
                 appStore={appStore}
                 onOpenElevation={(wallDbId) => setOverlay({ kind: 'elevation', wallDbId })}
+                projectId={project.id as unknown as string}
                 projectName={project.name}
                 projectCode={project.bimCode}
                 operatorName={operator.name}
