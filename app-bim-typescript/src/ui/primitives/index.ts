@@ -7,3 +7,4 @@ export { Accordion } from './Accordion';
 export { SideDrawer } from './SideDrawer';
 export { FloatWindow } from './FloatWindow';
 export { BottomSheet } from './BottomSheet';
+export { IconButton } from './IconButton';

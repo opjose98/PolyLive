@@ -7,6 +7,7 @@
 // `fontFamily` y nunca `fontWeight`.
 // =============================================================================
 
+import type { TextStyle } from 'react-native';
 import {
   Roboto_400Regular,
   Roboto_500Medium,
@@ -33,5 +34,5 @@ export const type = {
   label: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16 },
   caption: { fontFamily: fonts.regular, fontSize: 11, lineHeight: 14 },
   /** Valores numéricos que cambian en vivo: dígitos de ancho fijo, sin saltos. */
-  value: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16, fontVariant: ['tabular-nums' as const] },
+  value: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16, fontVariant: ['tabular-nums'] as TextStyle['fontVariant'] },
 } as const;

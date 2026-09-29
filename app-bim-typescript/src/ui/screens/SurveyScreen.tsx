@@ -43,7 +43,21 @@ import { sizes } from '../design/tokens';
 import { CANVAS_PALETTES } from '../design/canvasThemes';
 import { haptic } from '../design/haptics';
 import { workspaceStore } from '../../state/workspaceStore';
-import { CANVAS_THEMES } from '../../application/workspace/catalog';
+import { CATEGORIES_PLAN, VIEWS_PLAN, ZoomAction, findTool, PropKey } from '../../application/workspace/catalog';
+import { resolveBpcContext, SelectionSummary } from '../../application/workspace/bpcContext';
+import { DEFAULT_SCALE } from '../../application/canvas/types';
+import { useShallow } from 'zustand/react/shallow';
+import { Column } from '../../domain/objects/column';
+import { Room } from '../../domain/objects/room';
+import { WorkspaceStatusBar } from '../workspace/WorkspaceStatusBar';
+import { Bpc, BpcAction, BpcPill } from '../workspace/Bpc';
+import { FabCreate } from '../workspace/FabCreate';
+import { FabView } from '../workspace/FabView';
+import { CornerTools } from '../workspace/CornerTools';
+import { LevelChip } from '../workspace/LevelChip';
+import { ConfigDrawer } from '../workspace/ConfigDrawer';
+import { MainMenu } from '../workspace/MainMenu';
+import { sizes as chromeSizes, spacing as chromeSpacing } from '../design/tokens';
 import { useStore } from 'zustand';
 import { CameraCaptureView } from '../components/CameraCaptureView';
 import { ExpoPhotoCapture } from '../../native/camera/ExpoPhotoCapture';
@@ -91,6 +105,11 @@ export interface SurveyScreenProps {
   onOpenElevation?: (wallDbId: string) => void;
   /** Abre la galería filtrada por el objeto indicado. */
   onOpenPhotos?: (objectId: string) => void;
+  projectName?: string;
+  projectCode?: string;
+  operatorName?: string;
+  /** Salir del espacio (volver a la lista de espacios del proyecto). */
+  onExit?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -103,6 +122,10 @@ export function SurveyScreen({
   appStore,
   onOpenElevation,
   onOpenPhotos,
+  projectName = 'Proyecto',
+  projectCode = '',
+  operatorName = '',
+  onExit,
 }: SurveyScreenProps) {
   const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
   const canvasHeight = Math.max(240, Math.round(screenHeight * 0.45));
@@ -126,10 +149,26 @@ export function SurveyScreen({
   const [manualValue, setManualValue] = useState(3);
   const [measurements, setMeasurements] = useState<readonly Measurement[]>([]);
 
-  // --- Tema y rejilla del lienzo (cromo del espacio de trabajo) ---
-  const canvasTheme = useStore(workspaceStore, (s) => s.canvasTheme);
-  const gridLines = useStore(workspaceStore, (s) => s.grid.lines);
-  const gridDots = useStore(workspaceStore, (s) => s.grid.dots);
+  // --- Cromo del espacio de trabajo (FABs, BPC, herramientas de esquina) ---
+  const wsState = useStore(
+    workspaceStore,
+    useShallow((s) => ({
+      canvasTheme: s.canvasTheme,
+      gridLines: s.grid.lines,
+      gridDots: s.grid.dots,
+      snapNode: s.snap.node,
+      snapAngle: s.snap.angle,
+      activeTool: s.activeTool,
+      view: s.view,
+      filters: s.filters,
+      layers: s.layers,
+      denominator: s.scale.denominator,
+    })),
+  );
+  const { canvasTheme, gridLines, gridDots } = wsState;
+
+  // El lienzo ocupa todo el alto disponible; se mide al montar.
+  const [canvasSize, setCanvasSize] = useState({ w: screenWidth, h: canvasHeight });
 
   // --- Captura de foto anclada a la planta (SPDS) ---
   const [photoCapture] = useState(() => new ExpoPhotoCapture());
@@ -160,6 +199,40 @@ export function SurveyScreen({
     editor.clearNotice();
     toast(message, { kind: kind === 'error' ? 'error' : kind === 'success' ? 'success' : 'info' });
   }, [state.notice, editor]);
+
+  // --- El cromo manda sobre el motor: snap, rejilla y herramienta activa ---
+  useEffect(() => editor.setNodeSnapEnabled(wsState.snapNode), [editor, wsState.snapNode]);
+  useEffect(() => editor.setSnapEnabled(wsState.snapAngle), [editor, wsState.snapAngle]);
+  useEffect(() => editor.setGridEnabled(gridLines || gridDots), [editor, gridLines, gridDots]);
+
+  const activeTool = wsState.activeTool;
+  useEffect(() => {
+    if (!activeTool) {
+      if (editor.getState().tool !== 'select') editor.setTool('select');
+      return;
+    }
+    const binding = findTool(CATEGORIES_PLAN, activeTool.categoryId, activeTool.toolId)?.tool.binding;
+    if (binding?.kind !== 'plan') return;
+    editor.setTool(binding.tool);
+    if (binding.tool === 'wall' && activeTool.methodId) editor.setCreationMethod('wall', activeTool.methodId as 'drag' | 'points');
+    if (binding.tool === 'column' && activeTool.methodId) {
+      editor.setCreationMethod('column', activeTool.methodId as 'rectangular' | 'circular');
+    }
+  }, [editor, activeTool?.categoryId, activeTool?.toolId, activeTool?.methodId]);
+
+  // Las propiedades de la herramienta (píldoras de la BPC) son los valores con
+  // que se crean los objetos nuevos.
+  useEffect(() => {
+    const p = activeTool?.props;
+    if (!p) return;
+    const cm = (v: number | undefined) => (v === undefined ? undefined : meters(v / 100));
+    editor.setDefaults({
+      ...(p.thickness !== undefined && { wallThickness: cm(p.thickness)! }),
+      ...(p.side !== undefined && { columnDiameter: cm(p.side)! }),
+      ...(p.width !== undefined && activeTool?.toolId === 'puerta' && { doorWidth: cm(p.width)! }),
+      ...(p.width !== undefined && activeTool?.toolId === 'ventana' && { windowWidth: cm(p.width)! }),
+    });
+  }, [editor, activeTool]);
 
   // Reflejar la selección y la vista en el store global. GAP CERRADO: el
   // `uiSlice` de appStore (selectedObjectId, propertyPanelOpen, canvasTransform,
@@ -256,6 +329,13 @@ export function SurveyScreen({
   // así seleccionar para arrastrar no tapa el plano con un panel.
   const handleTap = useCallback(
     (x: number, y: number) => {
+      // Tocar el lienzo con un panel abierto solo lo cierra (regla del mockup).
+      const wsNow = workspaceStore.getState();
+      if (wsNow.currentPanel || wsNow.currentWindow) {
+        wsNow.closePanels();
+        wsNow.closeWindow();
+        return;
+      }
       const before = editor.getState().selectedId;
       void editor.handleTap(x, y, CANVAS_TOUCH_TOLERANCE_PX).then(() => {
         const after = editor.getState().selectedId;
@@ -416,11 +496,6 @@ export function SurveyScreen({
       state.tool, state.measureTargetId, state.photoMarkers, snapIndicator,
     ],
   );
-  const themeLabel = CANVAS_THEMES.find((t) => t.id === canvasTheme)?.label ?? '';
-  const cycleTheme = () => {
-    const i = CANVAS_THEMES.findIndex((t) => t.id === canvasTheme);
-    workspaceStore.getState().setCanvasTheme(CANVAS_THEMES[(i + 1) % CANVAS_THEMES.length].id);
-  };
   const parentWallLength = useMemo(() => {
     if (!(selected instanceof Door) && !(selected instanceof Window)) return undefined;
     const wall = editor.parentWallOf(selected);
@@ -431,135 +506,220 @@ export function SurveyScreen({
   // Render
   // -----------------------------------------------------------------------
 
+  // --- Visibilidad: filtros y capas del FAB de vista ---
+  const { filters, layers } = wsState;
+  const visibleObjects = useMemo(
+    () =>
+      displayObjects.filter((o) => {
+        if (o instanceof Wall) return filters.muros && (o.isStructural ? layers.estructural : layers.arquitectonico);
+        if (o instanceof Column) return filters.columnas && layers.estructural;
+        if (o instanceof Door || o instanceof Window) return layers.arquitectonico;
+        return true;
+      }),
+    [displayObjects, filters, layers],
+  );
+  const sceneForCanvas = useMemo(
+    () => ({
+      ...canvasScene,
+      objects: visibleObjects,
+      showLabels: filters.cotas,
+      photoMarkers: filters.fotos ? canvasScene.photoMarkers : [],
+    }),
+    [canvasScene, visibleObjects, filters.cotas, filters.fotos],
+  );
+
+  // --- BPC: contexto, píldoras y acciones ---
+  const selectionSummary = useMemo((): SelectionSummary | null => {
+    const sel = selected;
+    if (!sel) return null;
+    const cm = (m: unknown) => Math.round(Number(m) * 100);
+    if (sel instanceof Wall) {
+      return {
+        typeLabel: 'Muro',
+        detail: `${Number(sel.length).toFixed(2)} m · ${sel.isStructural ? 'portante' : 'tabique'}`,
+        props: { thickness: cm(sel.thickness) },
+      };
+    }
+    if (sel instanceof Column) {
+      return { typeLabel: 'Columna', detail: sel.isCircular ? 'circular' : 'rectangular', props: { side: cm(sel.dimensionX) } };
+    }
+    if (sel instanceof Door) return { typeLabel: 'Puerta', detail: `${Number(sel.width).toFixed(2)} m`, props: { width: cm(sel.width) } };
+    if (sel instanceof Window) return { typeLabel: 'Ventana', detail: `${Number(sel.width).toFixed(2)} m`, props: { width: cm(sel.width) } };
+    if (sel instanceof Room) {
+      return { typeLabel: 'Recinto', detail: state.rooms[0] ? `${state.rooms[0].area.toFixed(2)} m²` : 'abierto', props: {} };
+    }
+    return { typeLabel: sel.type, props: {} };
+  }, [selected, state.rooms]);
+
+  const zoomPercent = (state.transform.scale / DEFAULT_SCALE) * 100;
+  const bpcContext = resolveBpcContext({
+    tool: activeTool,
+    selection: selectionSummary,
+    viewLabel: VIEWS_PLAN.find((v) => v.id === wsState.view)?.label ?? '',
+    scaleDenominator: wsState.denominator,
+    zoomPercent,
+  });
+
+  const commitSelectionProp = useCallback(
+    async (key: PropKey, valueCm: number) => {
+      const sel = editor.selected;
+      const m = meters(valueCm / 100);
+      if (sel instanceof Wall && key === 'thickness') await editor.updateSelectedProperty('thickness', m);
+      else if (sel instanceof Column && key === 'side') {
+        await editor.updateSelectedProperty('dimensionX', m);
+        if (!sel.isCircular) await editor.updateSelectedProperty('dimensionY', m);
+      } else if ((sel instanceof Door || sel instanceof Window) && key === 'width') {
+        await editor.updateSelectedProperty('width', m);
+      }
+    },
+    [editor],
+  );
+
+  const bpcPills: BpcPill[] =
+    bpcContext.kind === 'tool'
+      ? (Object.entries(bpcContext.tool.props) as [PropKey, number][]).map(([key, value]) => ({
+          key,
+          value,
+          onCommit: (v) => workspaceStore.getState().setToolProp(key, v),
+        }))
+      : bpcContext.kind === 'selection'
+        ? (Object.entries(bpcContext.selection.props) as [PropKey, number][]).map(([key, value]) => ({
+            key,
+            value,
+            onCommit: (v) => void commitSelectionProp(key, v),
+          }))
+        : [];
+
+  const bpcActions: BpcAction[] = [];
+  if (bpcContext.kind === 'selection') {
+    bpcActions.push({ icon: 'tune-variant', label: 'Propiedades', onPress: () => setPanelOpen(true) });
+  }
+  if (state.tool === 'wall' && state.wallDraft?.start) {
+    bpcActions.push({ icon: 'close-circle-outline', label: 'Soltar inicio', onPress: () => editor.clearWallDraft() });
+  }
+  if (state.tool === 'measure' && state.measureTargetId) {
+    bpcActions.push({ icon: 'pencil', label: 'Ingresar medida', onPress: () => setManualMeasureOpen(true) });
+  }
+
+  const handleZoom = useCallback(
+    (action: ZoomAction) => {
+      const { w, h } = canvasSize;
+      if (action === 'zoomFit') editor.zoomToFit(w, h);
+      else if (action === 'zoomIn') editor.zoomBy(1.25, w, h);
+      else if (action === 'zoomOut') editor.zoomBy(0.8, w, h);
+      else editor.zoomToSelection(w, h);
+    },
+    [editor, canvasSize],
+  );
+
+  const handleUndo = useCallback(() => void editor.undo(), [editor]);
+  const handleRedo = useCallback(() => void editor.redo(), [editor]);
+  const handleToolActivated = useCallback(() => editor.select(null), [editor]);
+  const wallCount = editor.walls.length;
+  const areaLabel = state.rooms[0] ? `${state.rooms[0].area.toFixed(2)} m²` : 'Abierto';
+  const fileInfo = useMemo(
+    () => ({
+      project: projectName,
+      projectCode,
+      space: roomName ?? 'Espacio',
+      operator: operatorName,
+      walls: wallCount,
+      objects: state.objects.length,
+      area: areaLabel,
+    }),
+    [projectName, projectCode, roomName, operatorName, wallCount, state.objects.length, areaLabel],
+  );
+  const menuItems = useMemo(
+    () => [
+      ...(onExit ? [{ icon: 'arrow-left', label: 'Volver a los espacios', onPress: onExit }] : []),
+      { icon: 'fit-to-screen-outline', label: 'Encuadrar todo', onPress: () => handleZoom('zoomFit') },
+    ],
+    [onExit, handleZoom],
+  );
+
+  const chromeTop = chromeSpacing.sm;
+  const belowBpc = chromeTop + chromeSizes.bpcHeight + chromeSpacing.sm;
+  const spaceName = roomName ?? 'Espacio';
+
+  // -----------------------------------------------------------------------
+  // Render
+  // -----------------------------------------------------------------------
+
   return (
-    <SafeAreaView style={styles.container}>
-      <ToolPalette tool={state.tool} disabled={state.busy} onSelect={(t) => editor.setTool(t)} />
-      {/* Formas de creación (nivel 3 del FAB de creación, provisional hasta F2). */}
-      {state.tool === 'wall' || state.tool === 'column' ? (
-        <View style={styles.methodRow}>
-          {(state.tool === 'wall'
-            ? ([['drag', 'Arrastre libre'], ['points', 'Punto a punto']] as const)
-            : ([['rectangular', 'Rectangular'], ['circular', 'Circular']] as const)
-          ).map(([id, label]) => (
-            <Chip
-              key={id}
-              label={label}
-              active={(state.tool === 'wall' ? state.creation.wall : state.creation.column) === id}
-              onPress={() =>
-                state.tool === 'wall'
-                  ? editor.setCreationMethod('wall', id as 'drag' | 'points')
-                  : editor.setCreationMethod('column', id as 'rectangular' | 'circular')
-              }
-              hint={label}
-            />
-          ))}
-          {state.tool === 'wall' && state.wallDraft?.start ? (
-            <Chip label="Soltar inicio" active={false} onPress={() => editor.clearWallDraft()} hint="Descarta el primer punto" />
-          ) : null}
-        </View>
-      ) : null}
-
-      <QuickBar
-        snapEnabled={state.snapEnabled}
-        nodeSnapEnabled={state.nodeSnapEnabled}
-        gridEnabled={state.gridEnabled}
-        labelsEnabled={showLabels}
-        canUndo={state.canUndo}
-        canRedo={state.canRedo}
-        busy={state.busy}
-        onToggleSnap={(v) => editor.setSnapEnabled(v)}
-        onToggleNodeSnap={(v) => editor.setNodeSnapEnabled(v)}
-        onToggleGrid={(v) => editor.setGridEnabled(v)}
-        onToggleLabels={setShowLabels}
-        onUndo={() => void editor.undo()}
-        onRedo={() => void editor.redo()}
-        onZoomToFit={() => editor.zoomToFit(screenWidth, canvasHeight)}
-      >
-        <Chip label={`Tema: ${themeLabel}`} active={canvasTheme !== 'claro'} onPress={cycleTheme} hint="Claro, oscuro o alto contraste" />
-        <Chip label="Líneas" active={gridLines} onPress={() => workspaceStore.getState().toggleGrid('lines')} hint="Rejilla de líneas" />
-        <Chip label="Puntos" active={gridDots} onPress={() => workspaceStore.getState().toggleGrid('dots')} hint="Rejilla de puntos" />
-      </QuickBar>
-
-      <PlanCanvas
-        width={screenWidth}
-        height={canvasHeight}
-        scene={canvasScene}
-        transform={state.transform}
-        palette={CANVAS_PALETTES[canvasTheme]}
-        grid={{ show: state.gridEnabled, lines: gridLines, dots: gridDots }}
-        dragEnabled={state.tool === 'select' && !state.busy}
-        drawEnabled={state.tool === 'wall'}
-        doubleTapEnabled={state.tool === 'select'}
-        longPressEnabled
-        snapped={state.dragSnappedToNode || !!state.wallDraft?.snappedToNode}
-        onTap={handleTap}
-        onDoubleTap={onOpenElevation ? handleDoubleTap : undefined}
-        onLongPress={handleLongPress}
-        onDragStart={handleDragStart}
-        onDragMove={handleDragMove}
-        onDragEnd={handleDragEnd}
-        onDragCancel={handleDragCancel}
-        onDrawBegin={(x, y) => editor.drawBegin(x, y)}
-        onDrawMove={(x, y) => editor.drawMove(x, y)}
-        onDrawEnd={(x, y) => {
-          haptic.commit();
-          void editor.drawEnd(x, y);
-        }}
-        onDrawCancel={() => editor.drawCancel()}
-        onCameraChange={(t) => editor.setTransform(t)}
+    <View style={styles.container}>
+      <WorkspaceStatusBar
+        project={projectName}
+        space={spaceName}
+        canUndo={state.canUndo && !state.busy}
+        canRedo={state.canRedo && !state.busy}
+        onUndo={handleUndo}
+        onRedo={handleRedo}
       />
 
-      <ScrollView style={styles.lowerPane} contentContainerStyle={styles.lowerPaneContent}>
-        <View style={styles.statsRow}>
-          <Stat label="Muros" value={String(editor.walls.length)} />
-          <Stat
-            label="Área"
-            value={state.rooms.length > 0 ? `${state.rooms[0].area.toFixed(2)} m²` : 'Abierto'}
-          />
-          <Stat label="Escala" value={`${Math.round(state.transform.scale)} px/m`} />
-        </View>
+      <View
+        style={styles.stage}
+        onLayout={(e) => {
+          const { width, height } = e.nativeEvent.layout;
+          setCanvasSize((prev) =>
+            Math.abs(prev.w - width) < 1 && Math.abs(prev.h - height) < 1 ? prev : { w: width, h: height },
+          );
+        }}
+      >
+        <PlanCanvas
+          width={canvasSize.w}
+          height={canvasSize.h}
+          scene={sceneForCanvas}
+          transform={state.transform}
+          palette={CANVAS_PALETTES[canvasTheme]}
+          grid={{ show: gridLines || gridDots, lines: gridLines, dots: gridDots }}
+          dragEnabled={state.tool === 'select' && !state.busy}
+          drawEnabled={state.tool === 'wall'}
+          doubleTapEnabled={state.tool === 'select'}
+          longPressEnabled
+          snapped={state.dragSnappedToNode || !!state.wallDraft?.snappedToNode}
+          onTap={handleTap}
+          onDoubleTap={onOpenElevation ? handleDoubleTap : undefined}
+          onLongPress={handleLongPress}
+          onDragStart={handleDragStart}
+          onDragMove={handleDragMove}
+          onDragEnd={handleDragEnd}
+          onDragCancel={handleDragCancel}
+          onDrawBegin={(x, y) => editor.drawBegin(x, y)}
+          onDrawMove={(x, y) => editor.drawMove(x, y)}
+          onDrawEnd={(x, y) => {
+            haptic.commit();
+            void editor.drawEnd(x, y);
+          }}
+          onDrawCancel={() => editor.drawCancel()}
+          onCameraChange={(t) => editor.setTransform(t)}
+        />
 
-        {selected ? (
-          <TouchableOpacity
-            style={styles.selectionBanner}
-            onPress={() => setPanelOpen(true)}
-            accessibilityRole="button"
-            accessibilityLabel="Abrir propiedades de la selección"
-          >
-            <Text style={styles.selectionBannerText}>
-              Seleccionado: {selected.type}
-              {selected instanceof Wall ? ` · ${Number(selected.length).toFixed(2)} m` : ''}
-            </Text>
-            <Text style={styles.selectionBannerAction}>Propiedades ›</Text>
-          </TouchableOpacity>
-        ) : null}
+        <Bpc
+          context={bpcContext}
+          pills={bpcPills}
+          actions={bpcActions}
+          onExitTool={() => workspaceStore.getState().clearTool()}
+          top={chromeTop}
+          right={chromeSpacing.lg + chromeSizes.fabView + chromeSpacing.sm}
+        />
+        <LevelChip top={belowBpc} />
+        <FabView top={chromeTop} />
+        <CornerTools onZoom={handleZoom} />
+        <FabCreate onToolActivated={handleToolActivated} />
 
-        {BLE_ENABLED ? (
-          <BLEStatus
-            state={bleState}
-            device={bleDevice}
-            lastDistance={lastDistance}
-            onConnect={handleConnect}
-            onDisconnect={handleDisconnect}
-            onMeasure={() => void handleMeasure()}
-          />
-        ) : null}
-
-        <View style={styles.actionsGrid}>
-          <ActionButton
-            label="Medida manual"
-            variant="secondary"
-            onPress={() => setManualMeasureOpen(true)}
-            disabled={!state.measureTargetId || state.busy}
-          />
-          <ActionButton
-            label="Propiedades"
-            variant="secondary"
-            onPress={() => setPanelOpen(true)}
-            disabled={!selected}
-          />
-        </View>
-      </ScrollView>
+        <ConfigDrawer
+          top={0}
+          zoomPercent={zoomPercent}
+          onZoom={handleZoom}
+          info={fileInfo}
+        />
+        <MainMenu
+          top={0}
+          title={projectName}
+          subtitle={`${spaceName}${projectCode ? ` · ${projectCode}` : ''}`}
+          items={menuItems}
+        />
+      </View>
 
       {/* --- Panel de propiedades --- */}
       <BottomSheet open={panelOpen} onClose={() => setPanelOpen(false)} heightRatio={0.68}>
@@ -652,7 +812,7 @@ export function SurveyScreen({
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -685,6 +845,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.surface,
+  },
+  stage: {
+    flex: 1,
+    overflow: 'hidden',
   },
   lowerPane: {
     flex: 1,
