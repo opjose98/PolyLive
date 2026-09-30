@@ -78,6 +78,11 @@ export interface PlanCanvasProps {
   longPressEnabled: boolean;
   /** Un arrastre o trazo está enganchado a un nodo: háptica al entrar. */
   snapped?: boolean;
+  /**
+   * Ángulos (rad) a los que se engancha el giro con dos dedos, además de los
+   * múltiplos de 90°: p. ej. el que deja el norte arriba.
+   */
+  rotationSnaps?: readonly number[];
 
   onTap: (x: number, y: number) => void;
   onDoubleTap?: (x: number, y: number) => void;
@@ -103,6 +108,8 @@ const MOVE_INTERVAL_MS = 33;
 const GLIDE_SECONDS = 0.18;
 const GLIDE_MS = 420;
 const RING_RADIUS = 26;
+/** Enganche del giro: a menos de esto de un ángulo notable, se queda en él. */
+const ROTATION_SNAP = (5 * Math.PI) / 180;
 /** Límites del contenido grabado, en metros. */
 const WORLD_BOUNDS = { x: -1e5, y: -1e5, width: 2e5, height: 2e5 };
 
@@ -118,6 +125,7 @@ const RING_PATH = (() => {
 
 const GRID_SHADER = Skia.RuntimeEffect.Make(`
 uniform float2 u_off;
+uniform float2 u_rot;
 uniform float u_step;
 uniform float u_lines;
 uniform float u_dots;
@@ -133,7 +141,10 @@ float4 layer(float4 acc, float4 c, float cov) {
 }
 
 half4 main(float2 p) {
-  float2 w = p - u_off;
+  // Se lleva el píxel al marco del mundo (sin el giro de la vista): así las
+  // líneas de la rejilla giran con el dibujo.
+  float2 d0 = p - u_off;
+  float2 w = float2(d0.x * u_rot.x + d0.y * u_rot.y, -d0.x * u_rot.y + d0.y * u_rot.x);
   float s = u_step;
   float4 acc = float4(0.0);
   if (u_lines > 0.5) {
@@ -184,14 +195,16 @@ export function PlanCanvas(props: PlanCanvasProps) {
   // shared values son solo la salida hacia el hilo UI. Leer un shared value
   // justo después de escribirlo desde JS devuelve el valor anterior, así que
   // nunca se hace `camX.value += dx`: se acumula en `cam` y se publica.
-  const cam = useRef({ s: transform.scale, x: transform.offsetX, y: transform.offsetY }).current;
+  const cam = useRef({ s: transform.scale, x: transform.offsetX, y: transform.offsetY, r: transform.rotation ?? 0 }).current;
   const camS = useSharedValue(transform.scale);
   const camX = useSharedValue(transform.offsetX);
   const camY = useSharedValue(transform.offsetY);
+  const camR = useSharedValue(transform.rotation ?? 0);
   const publish = () => {
     camS.value = cam.s;
     camX.value = cam.x;
     camY.value = cam.y;
+    camR.value = cam.r;
   };
 
   /** Estado del gesto en curso (solo JS). */
@@ -203,26 +216,34 @@ export function PlanCanvas(props: PlanCanvasProps) {
     panActive: false,
     decaying: false,
     lastCommit: 0,
-    pinchStart: { s: 1, x: 0, y: 0, fx: 0, fy: 0 },
+    pinchStart: { s: 1, x: 0, y: 0, fx: 0, fy: 0, wx: 0, wy: 0 },
+    /** Último foco de los dos dedos (para girar alrededor de él). */
+    focal: { x: 0, y: 0 },
+    rotStart: 0,
+    rotSnapped: false,
   }).current;
 
   // La cámara del controlador cambió por algo que NO fue un gesto (encuadre,
   // botones de zoom, cambio de recinto): se anima hasta ella.
   useEffect(() => {
     if (g.gesturing) return;
+    const rot = transform.rotation ?? 0;
     const same =
       Math.abs(cam.s - transform.scale) < 1e-6 &&
       Math.abs(cam.x - transform.offsetX) < 0.5 &&
-      Math.abs(cam.y - transform.offsetY) < 0.5;
+      Math.abs(cam.y - transform.offsetY) < 0.5 &&
+      Math.abs(cam.r - rot) < 1e-4;
     cam.s = transform.scale;
     cam.x = transform.offsetX;
     cam.y = transform.offsetY;
+    cam.r = rot;
     if (same) return;
     const cfg = { duration: duration.base };
     camS.value = withTiming(transform.scale, cfg);
     camX.value = withTiming(transform.offsetX, cfg);
     camY.value = withTiming(transform.offsetY, cfg);
-  }, [transform, g, cam, camS, camX, camY]);
+    camR.value = withTiming(rot, cfg);
+  }, [transform, g, cam, camS, camX, camY, camR]);
 
   // --- Contenido: Picture en coordenadas mundo -----------------------------
   //
@@ -273,6 +294,7 @@ export function PlanCanvas(props: PlanCanvasProps) {
   const camera = useDerivedValue(() => [
     { translateX: camX.value },
     { translateY: camY.value },
+    { rotate: camR.value },
     { scale: camS.value },
   ]);
 
@@ -288,6 +310,7 @@ export function PlanCanvas(props: PlanCanvasProps) {
   const gridUniforms = useDerivedValue(
     () => ({
       u_off: [camX.value, camY.value],
+      u_rot: [Math.cos(camR.value), Math.sin(camR.value)],
       u_step: gridStepPx(camS.value),
       u_lines: gridLines,
       u_dots: gridDots,
@@ -321,8 +344,12 @@ export function PlanCanvas(props: PlanCanvasProps) {
     // Solo al cambiar de objeto seleccionado, no cuando se mueve.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scene.selectedId]);
-  const pulseCx = useDerivedValue(() => pulseX.value * camS.value + camX.value);
-  const pulseCy = useDerivedValue(() => pulseY.value * camS.value + camY.value);
+  const pulseCx = useDerivedValue(
+    () => (pulseX.value * Math.cos(camR.value) - pulseY.value * Math.sin(camR.value)) * camS.value + camX.value,
+  );
+  const pulseCy = useDerivedValue(
+    () => (pulseX.value * Math.sin(camR.value) + pulseY.value * Math.cos(camR.value)) * camS.value + camY.value,
+  );
   const pulseR = useDerivedValue(() => 10 + pulse.value * 26);
   const pulseOpacity = useDerivedValue(() => (pulse.value > 0 && pulse.value < 1 ? 0.45 * (1 - pulse.value) : 0));
 
@@ -335,7 +362,20 @@ export function PlanCanvas(props: PlanCanvasProps) {
 
   // --- Gestos (todos en el hilo JS) ---------------------------------------
   const gesture = useMemo(() => {
-    const commit = () => cb.current.onCameraChange({ scale: cam.s, offsetX: cam.x, offsetY: cam.y });
+    const commit = () => cb.current.onCameraChange({ scale: cam.s, offsetX: cam.x, offsetY: cam.y, rotation: cam.r });
+    /** Mundo → pantalla con la cámara viva (JS). */
+    const toScreen = (wx: number, wy: number) => {
+      const c = Math.cos(cam.r);
+      const sn = Math.sin(cam.r);
+      return { x: (wx * c - wy * sn) * cam.s + cam.x, y: (wx * sn + wy * c) * cam.s + cam.y };
+    };
+    /** Coloca la cámara para que el punto mundo (wx, wy) quede bajo el foco (fx, fy). */
+    const anchor = (wx: number, wy: number, fx: number, fy: number) => {
+      const c = Math.cos(cam.r);
+      const sn = Math.sin(cam.r);
+      cam.x = fx - (wx * c - wy * sn) * cam.s;
+      cam.y = fy - (wx * sn + wy * c) * cam.s;
+    };
     const commitThrottled = () => {
       const now = Date.now();
       if (now - g.lastCommit < COMMIT_INTERVAL_MS) return;
@@ -378,9 +418,8 @@ export function PlanCanvas(props: PlanCanvasProps) {
       if (!cb.current.dragEnabled) return false;
       const tol = sizes.canvasTouchTolerance;
       return cb.current.scene.handles.some((h) => {
-        const hx = h.position.x * cam.s + cam.x;
-        const hy = h.position.y * cam.s + cam.y;
-        return (hx - x) * (hx - x) + (hy - y) * (hy - y) <= tol * tol;
+        const p = toScreen(h.position.x, h.position.y);
+        return (p.x - x) * (p.x - x) + (p.y - y) * (p.y - y) <= tol * tol;
       });
     };
 
@@ -477,18 +516,29 @@ export function PlanCanvas(props: PlanCanvasProps) {
         stopCamera();
         g.gesturing = true;
         g.pinching = true;
-        g.pinchStart = { s: cam.s, x: cam.x, y: cam.y, fx: e.focalX, fy: e.focalY };
+        // Punto del mundo bajo los dedos al empezar (con el giro de ese momento).
+        const dx = e.focalX - cam.x;
+        const dy = e.focalY - cam.y;
+        const c = Math.cos(cam.r);
+        const sn = Math.sin(cam.r);
+        g.pinchStart = {
+          s: cam.s,
+          x: cam.x,
+          y: cam.y,
+          fx: e.focalX,
+          fy: e.focalY,
+          wx: (dx * c + dy * sn) / cam.s,
+          wy: (-dx * sn + dy * c) / cam.s,
+        };
+        g.focal = { x: e.focalX, y: e.focalY };
       })
       .onUpdate((e) => {
         const p = g.pinchStart;
-        const s = Math.min(MAX_SCALE, Math.max(MIN_SCALE, p.s * e.scale));
         // El punto del mundo que estaba bajo los dedos al empezar sigue bajo
-        // ellos, y se desplaza con ellos (pan a dos dedos).
-        const wx = (p.fx - p.x) / p.s;
-        const wy = (p.fy - p.y) / p.s;
-        cam.s = s;
-        cam.x = e.focalX - wx * s;
-        cam.y = e.focalY - wy * s;
+        // ellos, y se desplaza con ellos (pan a dos dedos), con el giro actual.
+        cam.s = Math.min(MAX_SCALE, Math.max(MIN_SCALE, p.s * e.scale));
+        g.focal = { x: e.focalX, y: e.focalY };
+        anchor(p.wx, p.wy, e.focalX, e.focalY);
         publish();
         commitThrottled();
       })
@@ -540,7 +590,41 @@ export function PlanCanvas(props: PlanCanvasProps) {
         }
       });
 
-    return Gesture.Simultaneous(Gesture.Exclusive(longPress, doubleTap, tap), pan, pinch);
+    // Giro con dos dedos, enganchado a múltiplos de 90° y a los ángulos
+    // notables (norte). Solo cambia la vista: nunca el modelo.
+    const snapAngle = (raw: number): { r: number; snapped: boolean } => {
+      const targets = [0, Math.PI / 2, Math.PI, -Math.PI / 2, ...(cb.current.rotationSnaps ?? [])];
+      for (const t of targets) {
+        // Distancia angular mínima (con vueltas completas).
+        const d = Math.atan2(Math.sin(raw - t), Math.cos(raw - t));
+        if (Math.abs(d) < ROTATION_SNAP) return { r: raw - d, snapped: true };
+      }
+      return { r: raw, snapped: false };
+    };
+    const rotation = Gesture.Rotation()
+      .runOnJS(true)
+      .onStart(() => {
+        stopCamera();
+        g.gesturing = true;
+        g.rotStart = cam.r;
+        g.rotSnapped = false;
+      })
+      .onUpdate((e) => {
+        const { r, snapped } = snapAngle(g.rotStart + e.rotation);
+        if (snapped && !g.rotSnapped) haptic.snap();
+        g.rotSnapped = snapped;
+        cam.r = Math.atan2(Math.sin(r), Math.cos(r));
+        // Se gira alrededor de los dedos: el punto del mundo bajo ellos no se mueve.
+        const p = g.pinchStart;
+        if (g.pinching) anchor(p.wx, p.wy, g.focal.x, g.focal.y);
+        publish();
+        commitThrottled();
+      })
+      .onFinalize(() => {
+        if (!g.pinching) finishCamera();
+      });
+
+    return Gesture.Simultaneous(Gesture.Exclusive(longPress, doubleTap, tap), pan, pinch, rotation);
     // Los gestos solo se reconstruyen cuando cambia qué está habilitado.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.doubleTapEnabled, props.longPressEnabled, !!props.onDoubleTap, !!props.onLongPress]);

@@ -23,7 +23,8 @@ import { useShallow } from 'zustand/react/shallow';
 import { ElevationCanvas } from '../canvas/ElevationCanvas';
 import { ElevationEditor, ElevationEditorState } from '../../application/elevation/ElevationEditor';
 import { workspaceStore } from '../../state/workspaceStore';
-import { CATEGORIES_ELEVATION, PropKey, VIEWS_ELEVATION, ZoomAction, findTool } from '../../application/workspace/catalog';
+import { PropKey, ZoomAction, categoriesFor, findTool, workModeDef } from '../../application/workspace/catalog';
+import { AxisGizmo } from '../workspace/AxisGizmo';
 import { SelectionSummary, resolveBpcContext } from '../../application/workspace/bpcContext';
 import { ProjectMarker } from '../../domain/objects/marker';
 import { openingTypeLabel } from '../../domain/objects/wall-elevation';
@@ -68,7 +69,7 @@ export function ElevationView(props: ElevationViewProps) {
       grid: s.grid.lines || s.grid.dots,
       filters: s.filters,
       activeTool: s.activeTool,
-      view: s.view,
+      workMode: s.workMode,
       denominator: s.scale.denominator,
       fabOpen: s.currentPanel === 'fabCreate',
     })),
@@ -102,7 +103,8 @@ export function ElevationView(props: ElevationViewProps) {
       editor.setTool('select');
       return;
     }
-    const binding = findTool(CATEGORIES_ELEVATION, activeTool.categoryId, activeTool.toolId)?.tool.binding;
+    const binding = findTool(categoriesFor(workspaceStore.getState().workMode, 'elevation'), activeTool.categoryId, activeTool.toolId)?.tool
+      .binding;
     if (binding?.kind === 'elevation') editor.setTool(binding.opening);
   }, [editor, activeTool?.categoryId, activeTool?.toolId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -183,7 +185,7 @@ export function ElevationView(props: ElevationViewProps) {
   const context = resolveBpcContext({
     tool: activeTool,
     selection,
-    viewLabel: VIEWS_ELEVATION.find((v) => v.id === ws.view)?.label ?? '',
+    viewLabel: workModeDef(ws.workMode).label,
     scaleDenominator: ws.denominator,
     zoomPercent: (st.viewport.scale / 100) * 100,
     canvasTitle: 'Alzado',
@@ -242,7 +244,7 @@ export function ElevationView(props: ElevationViewProps) {
             onTap={onTap}
             onDoubleTap={() => editor.zoomToFit()}
             onLongPress={onLongPress}
-            onDragStart={(x, y) => editor.beginDrag(x, y, TOUCH_TOL)}
+            onDragStart={(x, y) => ws.workMode === 'levantamiento' && editor.beginDrag(x, y, TOUCH_TOL)}
             onDragMove={(x, y) => editor.updateDrag(x, y, TOUCH_TOL)}
             onDragEnd={() => void editor.endDrag()}
             onDragCancel={() => editor.cancelDrag()}
@@ -266,6 +268,7 @@ export function ElevationView(props: ElevationViewProps) {
       <Minimap walls={props.planWalls} activeId={st.wall ? (st.wall.id as string) : ''} top={belowBpc + 28} />
       <RangeSelectors levels={props.levelHandlers} phases={props.phaseHandlers} only="phases" />
       <FabView top={chromeTop} />
+      <AxisGizmo kind="elevation" mirrored={st.side === 'B'} bottom={spacing.xl + sizes.fabCreate + spacing.md} />
       <CornerTools onZoom={onZoom} />
       <FabCreate onToolActivated={() => editor.select(null)} />
 

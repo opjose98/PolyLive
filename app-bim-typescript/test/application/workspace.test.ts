@@ -7,9 +7,14 @@ import {
   CATEGORIES_PLAN,
   CORNER_TOOLS,
   PROPS,
-  VIEWS_ELEVATION,
-  VIEWS_PLAN,
   CANVAS_THEMES,
+  CATEGORIES_PROGRESS,
+  CATEGORIES_REVIEW,
+  CATEGORIES_TOPOGRAPHY,
+  WORK_MODES,
+  categoriesFor,
+  filtersFor,
+  modeBlock,
   isToolEnabled,
 } from '../../src/application/workspace/catalog';
 import { FAB_CLOSED, fabMainIcon, pickFabCategory, pressFabMain } from '../../src/application/workspace/fabMachine';
@@ -38,8 +43,10 @@ describe('catálogo', () => {
 
   it('todos los íconos existen en MaterialCommunityIcons', () => {
     const icons = [
-      ...[...CATEGORIES_PLAN, ...CATEGORIES_ELEVATION].flatMap((c) => [c.icon, ...c.tools.map((t) => t.icon)]),
-      ...[...VIEWS_PLAN, ...VIEWS_ELEVATION, ...CANVAS_THEMES].map((v) => v.icon!),
+      ...[...CATEGORIES_PLAN, ...CATEGORIES_ELEVATION, ...CATEGORIES_TOPOGRAPHY, ...CATEGORIES_PROGRESS, ...CATEGORIES_REVIEW].flatMap(
+        (c) => [c.icon, ...c.tools.map((t) => t.icon)],
+      ),
+      ...[...WORK_MODES, ...CANVAS_THEMES].map((v) => v.icon!),
       ...CORNER_TOOLS.flatMap((r) => [r.icon, ...r.items.map((i) => ('icon' in i ? i.icon : 'ruler'))]),
     ];
     expect(icons.filter((i) => !(i in glyphs))).toEqual([]);
@@ -62,8 +69,24 @@ describe('catálogo', () => {
     }
   });
 
-  it('alzado no ofrece la vista de topografía', () => {
-    expect(VIEWS_ELEVATION.map((v) => v.id)).not.toContain('topografia');
+  it('los modos van en el orden acordado', () => {
+    expect(WORK_MODES.map((m) => m.id)).toEqual(['levantamiento', 'topografia', 'avance', 'revision']);
+  });
+
+  it('Topografía solo en planta; Avance solo con objetos', () => {
+    expect(modeBlock('topografia', { view: 'elevation', hasObjects: true })).toBe('planOnly');
+    expect(modeBlock('avance', { view: 'plan', hasObjects: false })).toBe('needsObjects');
+    expect(modeBlock('avance', { view: 'elevation', hasObjects: true })).toBeNull();
+    expect(modeBlock('revision', { view: 'plan', hasObjects: false })).toBeNull();
+  });
+
+  it('el catálogo del FAB y los filtros dependen del modo', () => {
+    expect(categoriesFor('levantamiento', 'plan')).toBe(CATEGORIES_PLAN);
+    expect(categoriesFor('levantamiento', 'elevation')).toBe(CATEGORIES_ELEVATION);
+    expect(categoriesFor('avance', 'elevation')).toBe(CATEGORIES_PROGRESS);
+    expect(filtersFor('topografia', 'plan').map((f) => f.id)).toContain('mojones');
+    // Las herramientas de los modos nuevos esperan su fase (sin dominio aún).
+    expect([...CATEGORIES_TOPOGRAPHY, ...CATEGORIES_PROGRESS, ...CATEGORIES_REVIEW].flatMap((c) => c.tools).some(isToolEnabled)).toBe(false);
   });
 });
 
@@ -324,5 +347,25 @@ describe('workspaceStore', () => {
     const st = createWorkspaceStore();
     st.getState().setScaleDenominator('1:1a00');
     expect(st.getState().scale.denominator).toBe('1100');
+  });
+});
+
+describe('modos en el store', () => {
+  it('arranca en Levantamiento; cambiar de modo suelta la herramienta', () => {
+    const st = createWorkspaceStore();
+    expect(st.getState().workMode).toBe('levantamiento');
+    st.getState().activateTool('arquitectonico', 'muro');
+    expect(st.getState().activeTool).not.toBeNull();
+    st.getState().setWorkMode('revision');
+    expect(st.getState().activeTool).toBeNull();
+    // En Revisión el FAB + ofrece marcas (todavía deshabilitadas).
+    expect(st.getState().activateTool('marcas', 'trazo')).toEqual({ ok: false, reason: 'disabled' });
+  });
+
+  it('pasar a alzado desde Topografía vuelve a Levantamiento', () => {
+    const st = createWorkspaceStore();
+    st.getState().setWorkMode('topografia');
+    st.getState().setMode('elevation');
+    expect(st.getState().workMode).toBe('levantamiento');
   });
 });

@@ -43,7 +43,8 @@ import { sizes } from '../design/tokens';
 import { CANVAS_PALETTES } from '../design/canvasThemes';
 import { haptic } from '../design/haptics';
 import { workspaceStore } from '../../state/workspaceStore';
-import { CATEGORIES_PLAN, VIEWS_PLAN, ZoomAction, findTool, PropKey } from '../../application/workspace/catalog';
+import { ZoomAction, categoriesFor, findTool, PropKey, workModeDef } from '../../application/workspace/catalog';
+import { AxisGizmo } from '../workspace/AxisGizmo';
 import { resolveBpcContext, SelectionSummary } from '../../application/workspace/bpcContext';
 import { DEFAULT_SCALE } from '../../application/canvas/types';
 import { useShallow } from 'zustand/react/shallow';
@@ -184,7 +185,7 @@ export function SurveyScreen({
       snapNode: s.snap.node,
       snapAngle: s.snap.angle,
       activeTool: s.activeTool,
-      view: s.view,
+      workMode: s.workMode,
       filters: s.filters,
       layers: s.layers,
       denominator: s.scale.denominator,
@@ -236,7 +237,8 @@ export function SurveyScreen({
       if (editor.getState().tool !== 'select') editor.setTool('select');
       return;
     }
-    const binding = findTool(CATEGORIES_PLAN, activeTool.categoryId, activeTool.toolId)?.tool.binding;
+    const binding = findTool(categoriesFor(workspaceStore.getState().workMode, 'plan'), activeTool.categoryId, activeTool.toolId)?.tool
+      .binding;
     if (binding?.kind !== 'plan') return;
     editor.setTool(binding.tool);
     if (binding.tool === 'wall' && activeTool.methodId) editor.setCreationMethod('wall', activeTool.methodId as 'drag' | 'points');
@@ -260,6 +262,12 @@ export function SurveyScreen({
   }, [editor, activeTool]);
 
   // --- Niveles y fases del proyecto (selectores de rango) ---
+  // Solo Levantamiento edita el modelo; los demás modos lo consultan (y en
+  // M2–M4 agregan su propia capa: mojones, avance, marcas).
+  const editable = wsState.workMode === 'levantamiento';
+  // Avance solo se abre si hay algo que reportar.
+  const hasObjects = state.objects.some((o) => !(o instanceof Room));
+
   const levelsState = useStore(workspaceStore, (s) => s.levels);
   const phasesState = useStore(workspaceStore, (s) => s.phases);
   const [markersLoaded, setMarkersLoaded] = useState(false);
@@ -810,7 +818,9 @@ export function SurveyScreen({
   useEffect(() => setSelEdit(null), [state.selectedId, state.objects]);
 
   const constraintTarget: 'creation' | 'selection' | null =
-    creationEdit && (wallMethod || isColumnTool)
+    !editable
+      ? null
+      : creationEdit && (wallMethod || isColumnTool)
       ? 'creation'
       : !activeTool && selectedVerticalEdit && (selected instanceof Wall || selected instanceof Column)
         ? 'selection'
@@ -901,7 +911,7 @@ export function SurveyScreen({
   const bpcContext = resolveBpcContext({
     tool: activeTool,
     selection: selectionSummary,
-    viewLabel: VIEWS_PLAN.find((v) => v.id === wsState.view)?.label ?? '',
+    viewLabel: workModeDef(wsState.workMode).label,
     scaleDenominator: wsState.denominator,
     zoomPercent,
   });
@@ -1039,9 +1049,9 @@ export function SurveyScreen({
           transform={state.transform}
           palette={CANVAS_PALETTES[canvasTheme]}
           grid={{ show: gridLines || gridDots, lines: gridLines, dots: gridDots }}
-          dragEnabled={state.tool === 'select' && !state.busy}
-          drawEnabled={state.tool === 'wall'}
-          doubleTapEnabled={state.tool === 'select'}
+          dragEnabled={editable && state.tool === 'select' && !state.busy}
+          drawEnabled={editable && state.tool === 'wall'}
+          doubleTapEnabled={state.tool === 'select' && wsState.workMode !== 'topografia'}
           longPressEnabled
           snapped={state.dragSnappedToNode || !!state.wallDraft?.snappedToNode}
           onTap={handleTap}
@@ -1086,7 +1096,14 @@ export function SurveyScreen({
             />
             <LevelChip top={belowBpc} />
             {projectId ? <RangeSelectors levels={levelHandlers} phases={phaseHandlers} extra={constraintElement} /> : null}
-            <FabView top={chromeTop} />
+            <FabView top={chromeTop} hasObjects={hasObjects} />
+            <AxisGizmo
+              kind="plan"
+              rotation={state.transform.rotation ?? 0}
+              northAngle={wsState.workMode === 'topografia' && wsState.filters.norte ? 0 : null}
+              bottom={chromeSpacing.xl + chromeSizes.fabCreate + chromeSpacing.md}
+              onPress={() => editor.setRotation(0, canvasSize.w / 2, canvasSize.h / 2)}
+            />
             <CornerTools onZoom={handleZoom} />
             <FabCreate onToolActivated={handleToolActivated} />
           </>
@@ -1097,6 +1114,7 @@ export function SurveyScreen({
           zoomPercent={zoomPercent}
           onZoom={handleZoom}
           info={fileInfo}
+          hasObjects={hasObjects}
         />
         <MainMenu
           top={0}

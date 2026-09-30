@@ -688,6 +688,24 @@ export class EditorController {
     this.patch({ transform: this.canvas.getTransform() });
   }
 
+  /**
+   * Gira la VISTA a `rotation` (rad) alrededor de un punto de pantalla, que
+   * queda quieto. Solo visual: no toca el modelo.
+   */
+  setRotation(rotation: number, pivotX: number, pivotY: number): void {
+    const t = this.canvas.getTransform();
+    const w = this.canvas.screenToWorld(canvasPoint(pivotX, pivotY));
+    const c = Math.cos(rotation);
+    const s = Math.sin(rotation);
+    this.canvas.setTransform({
+      scale: t.scale,
+      rotation,
+      offsetX: pivotX - (w.x * c - w.y * s) * t.scale,
+      offsetY: pivotY - (w.x * s + w.y * c) * t.scale,
+    });
+    this.patch({ transform: this.canvas.getTransform() });
+  }
+
   /** Acerca o aleja alrededor del centro del viewport. */
   zoomBy(factor: number, viewportWidth: number, viewportHeight: number): void {
     this.zoomAround(viewportWidth / 2, viewportHeight / 2, factor);
@@ -724,8 +742,13 @@ export class EditorController {
       return;
     }
 
-    const xs = pts.map((p) => p.x);
-    const ys = pts.map((p) => p.y);
+    // Con la vista girada se encuadra la caja de los puntos YA girados.
+    const rot = this.canvas.getTransform().rotation ?? 0;
+    const c = Math.cos(rot);
+    const sn = Math.sin(rot);
+    const turned = pts.map((p) => ({ x: p.x * c - p.y * sn, y: p.x * sn + p.y * c }));
+    const xs = turned.map((p) => p.x);
+    const ys = turned.map((p) => p.y);
     const minX = Math.min(...xs);
     const maxX = Math.max(...xs);
     const minY = Math.min(...ys);
@@ -744,6 +767,7 @@ export class EditorController {
       scale,
       offsetX: viewportWidth / 2 - cx * scale,
       offsetY: viewportHeight / 2 - cy * scale,
+      rotation: rot,
     });
     this.patch({ transform: this.canvas.getTransform() });
   }

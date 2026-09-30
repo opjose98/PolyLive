@@ -20,6 +20,7 @@ import { Window } from '../../../domain/objects/window';
 import { Column } from '../../../domain/objects/column';
 import { RevitObjectBase } from '../../../domain/objects/base';
 import { LEVEL_PROP, PHASE_PROP } from '../../../domain/objects/marker';
+import { columnForExport, toLocal, wallForExport } from '../../../domain/geometry/handedness';
 import {
   LevelElevations,
   VerticalExtent,
@@ -90,10 +91,11 @@ export class IFCSerializer {
     // ------------------------------------------------------------------
     // 2. Filtrar objetos soft-deleted (criterio 7)
     // ------------------------------------------------------------------
-    const walls = input.walls.filter((w) => !w.is_deleted);
+    // IFC usa Y hacia arriba (norte); el modelo, Y hacia abajo (ver handedness.ts).
+    const walls = input.walls.filter((w) => !w.is_deleted).map(wallForExport);
     const doors = input.doors.filter((d) => !d.is_deleted);
     const windows = input.windows.filter((w) => !w.is_deleted);
-    const columns = input.columns.filter((c) => !c.is_deleted);
+    const columns = input.columns.filter((c) => !c.is_deleted).map(columnForExport);
     const floor = input.floor && !input.floor.is_deleted ? input.floor : null;
 
     const w = new StepWriter();
@@ -148,7 +150,7 @@ export class IFCSerializer {
     // ------------------------------------------------------------------
     // 4a. Espacio (Room) y losa, en el piso base
     // ------------------------------------------------------------------
-    const polygon = input.room.geometry.map((p) => ({ x: p.x, y: p.y }));
+    const polygon = input.room.geometry.map(toLocal);
     if (polygon.length >= 3) {
       const above = levels.find((l) => l.elevation > baseLevel.elevation);
       const spaceHeight = above ? above.elevation - baseLevel.elevation : 3;
