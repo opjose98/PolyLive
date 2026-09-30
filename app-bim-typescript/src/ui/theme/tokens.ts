@@ -24,10 +24,13 @@
 
 export const colors = {
   // Marca
-  navy: '#002F6C',
-  navyLight: '#1A4A8A',
-  yellow: '#FFD000',
-  yellowDark: '#E6BB00',
+  // F5: las pantallas heredadas pasan al sistema ámbar sin tocar su código:
+  // `navy` es el acento de texto/fondo (ámbar oscuro) y `yellow`, lo que va
+  // encima de él. Ver ui/design/tokens.ts.
+  navy: '#E65100',
+  navyLight: '#FF8F00',
+  yellow: '#FFFFFF',
+  yellowDark: '#FFE0B2',
 
   // Canvas (planta y elevación)
   canvasBg: '#F2F4F7',
@@ -51,19 +54,19 @@ export const colors = {
   photoMarker: '#8E44AD',
 
   // Feedback
-  error: '#FF3B30',
-  warning: '#FF9500',
-  success: '#34C759',
+  error: '#D32F2F',
+  warning: '#F9A825',
+  success: '#2E7D32',
   info: '#0A84FF',
 
   // Superficies y texto
   surface: '#FFFFFF',
-  surface2: '#F8F9FB',
-  surface3: '#EEF1F6',
-  divider: '#E5E9F0',
-  textPrimary: '#0D1B2A',
-  textSecondary: '#6B7A99',
-  textDisabled: '#B0B8CC',
+  surface2: '#FAFAFA',
+  surface3: '#F5F5F5',
+  divider: '#E0E0E0',
+  textPrimary: '#212121',
+  textSecondary: '#757575',
+  textDisabled: '#BDBDBD',
   textOnDark: '#FFFFFF',
   overlayScrim: 'rgba(13, 27, 42, 0.55)',
 } as const;
@@ -98,14 +101,16 @@ export const radius = {
 // Tipografía
 // ---------------------------------------------------------------------------
 
+// Roboto por familia (ver ui/design/typography.ts: en Android `fontWeight` no
+// elige la variante de una fuente cargada con expo-font).
 export const typography = {
-  title: { fontSize: 20, fontWeight: '700' },
-  heading: { fontSize: 16, fontWeight: '700' },
-  body: { fontSize: 14, fontWeight: '400' },
-  bodyStrong: { fontSize: 14, fontWeight: '600' },
-  label: { fontSize: 12, fontWeight: '600' },
-  caption: { fontSize: 11, fontWeight: '400' },
-  mono: { fontSize: 12, fontWeight: '500' },
+  title: { fontSize: 20, fontFamily: 'Roboto_700Bold' },
+  heading: { fontSize: 16, fontFamily: 'Roboto_500Medium' },
+  body: { fontSize: 14, fontFamily: 'Roboto_400Regular' },
+  bodyStrong: { fontSize: 14, fontFamily: 'Roboto_500Medium' },
+  label: { fontSize: 12, fontFamily: 'Roboto_500Medium' },
+  caption: { fontSize: 11, fontFamily: 'Roboto_400Regular' },
+  mono: { fontSize: 12, fontFamily: 'Roboto_500Medium' },
 } as const;
 
 // ---------------------------------------------------------------------------

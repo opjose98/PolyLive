@@ -14,11 +14,12 @@
 // =============================================================================
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, TextInput } from 'react-native';
 import { ObjectStore } from '../../infrastructure/sqlite/ObjectStore';
 import { Operator } from '../../domain/objects/operator';
 import { operatorId } from '../../domain/objects/survey';
 import { generateId } from '../../domain/objects';
+import { alertDialog } from '../primitives';
 
 export interface OperatorSelectorScreenProps {
   store: ObjectStore;
@@ -47,7 +48,7 @@ export function OperatorSelectorScreen({ store, onSelect }: OperatorSelectorScre
   const handleCreate = useCallback(async () => {
     const trimmed = newName.trim();
     if (trimmed.length === 0) {
-      Alert.alert('Nombre requerido', 'Escribe un nombre para el nuevo operador.');
+      alertDialog('Nombre requerido', 'Escribe un nombre para el nuevo operador.');
       return;
     }
     setCreating(true);
@@ -58,7 +59,7 @@ export function OperatorSelectorScreen({ store, onSelect }: OperatorSelectorScre
       await loadOperators();
       onSelect(operator);
     } catch (err: any) {
-      Alert.alert('Error', err?.message ?? 'No se pudo crear el operador.');
+      alertDialog('Error', err?.message ?? 'No se pudo crear el operador.');
     } finally {
       setCreating(false);
     }
@@ -112,8 +113,8 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 20,
-    fontWeight: '700',
-    color: '#212529',
+    fontFamily: 'Roboto_700Bold',
+    color: '#212121',
     marginBottom: 16,
   },
   list: {
@@ -125,28 +126,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F3F5',
+    borderBottomColor: '#EEEEEE',
     gap: 12,
   },
   avatar: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#2C3E50',
+    backgroundColor: '#FF8F00',
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarText: {
     color: '#FFFFFF',
-    fontWeight: '700',
+    fontFamily: 'Roboto_700Bold',
   },
   operatorName: {
     fontSize: 16,
-    color: '#212529',
+    color: '#212121',
   },
   emptyText: {
     fontSize: 14,
-    color: '#ADB5BD',
+    color: '#BDBDBD',
     marginBottom: 16,
   },
   createRow: {
@@ -157,21 +158,21 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#DEE2E6',
+    borderColor: '#E0E0E0',
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
   },
   createButton: {
-    backgroundColor: '#2C3E50',
+    backgroundColor: '#FF8F00',
     borderRadius: 8,
     paddingHorizontal: 20,
     justifyContent: 'center',
   },
   createButtonText: {
     color: '#FFFFFF',
-    fontWeight: '700',
+    fontFamily: 'Roboto_700Bold',
   },
 });
 

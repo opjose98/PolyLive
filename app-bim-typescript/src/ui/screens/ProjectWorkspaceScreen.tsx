@@ -19,7 +19,6 @@ import {
   FlatList,
   TouchableOpacity,
   Modal,
-  Alert,
   RefreshControl,
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -32,7 +31,7 @@ import { SpaceDetail } from '../../application/projects/ProjectService';
 import { Project } from '../../domain/objects/project';
 import { RoomId, roomId as toRoomId } from '../../domain/objects/base';
 import { AppError } from '../../shared/errors/AppError';
-import { ActionButton } from '../components/ToolPalette';
+import { ActionButton, alertDialog } from '../primitives';
 import { TextField } from '../components/fields';
 import { SpacePreview } from '../components/SpacePreview';
 import { colors, spacing, radius, typography, layout } from '../theme/tokens';
@@ -76,7 +75,7 @@ export function ProjectWorkspaceScreen({
   useEffect(() => {
     setLoading(true);
     load()
-      .catch(() => Alert.alert('Error', 'No se pudieron cargar los espacios.'))
+      .catch(() => alertDialog('Error', 'No se pudieron cargar los espacios.'))
       .finally(() => setLoading(false));
   }, [load]);
 
@@ -97,13 +96,13 @@ export function ProjectWorkspaceScreen({
       await load();
       onOpenSpace(room.roomId);
     } catch (err) {
-      Alert.alert('Error', err instanceof AppError ? err.userMessage : 'No se pudo crear el espacio.');
+      alertDialog('Error', err instanceof AppError ? err.userMessage : 'No se pudo crear el espacio.');
     }
   }, [services, project.id, newName, load, onOpenSpace]);
 
   const handleRemove = useCallback(
     (detail: SpaceDetail) => {
-      Alert.alert(
+      alertDialog(
         'Quitar espacio',
         `Se quitará "${detail.space.name}" de este proyecto.\n\n` +
           'El Recinto y todo lo dibujado en él NO se borran: quedan sin proyecto y se pueden volver ' +
@@ -118,7 +117,7 @@ export function ProjectWorkspaceScreen({
                 await services.projects.removeSpace(project.id, detail.space.roomId);
                 await load();
               } catch (err) {
-                Alert.alert(
+                alertDialog(
                   'Error',
                   err instanceof AppError ? err.userMessage : 'No se pudo quitar el espacio.',
                 );
@@ -157,7 +156,7 @@ export function ProjectWorkspaceScreen({
       await services.projects.updateSpace(project.id, detail.space.roomId, { name });
       await load();
     } catch {
-      Alert.alert('Error', 'No se pudo renombrar el espacio.');
+      alertDialog('Error', 'No se pudo renombrar el espacio.');
     }
   }, [renaming, renameValue, services, project.id, load]);
 
@@ -438,7 +437,7 @@ const styles = StyleSheet.create({
   codeBadgeText: {
     ...typography.caption,
     color: colors.yellow,
-    fontWeight: '700',
+    fontFamily: 'Roboto_700Bold',
   },
   spaceBadge: {
     paddingHorizontal: spacing.xs,
@@ -449,7 +448,7 @@ const styles = StyleSheet.create({
   spaceBadgeText: {
     ...typography.caption,
     color: colors.navy,
-    fontWeight: '700',
+    fontFamily: 'Roboto_700Bold',
   },
   title: {
     ...typography.title,

@@ -13,7 +13,7 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
 import { fontAssets } from './design/typography';
 import { colors } from './design/tokens';
-import { ToastHost } from './primitives';
+import { DialogHost, ToastHost } from './primitives';
 import App from './App';
 
 export default function Root() {
@@ -30,6 +30,7 @@ export default function Root() {
           {fontsLoaded || fontError ? <App /> : <View style={styles.splash} />}
         </SafeAreaView>
         <ToastHost />
+        <DialogHost />
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

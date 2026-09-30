@@ -25,7 +25,7 @@ import { Door } from '../../domain/objects/door';
 import { Window } from '../../domain/objects/window';
 import type { Measurement } from '../../domain/objects/measurement';
 import { NumberField, TextField, SegmentedField, ReadonlyRow } from './fields';
-import { ActionButton } from './ToolPalette';
+import { ActionButton } from '../primitives';
 import { colors, spacing, radius, typography } from '../theme/tokens';
 
 // ---------------------------------------------------------------------------

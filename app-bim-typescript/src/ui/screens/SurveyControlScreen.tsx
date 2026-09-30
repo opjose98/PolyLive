@@ -20,7 +20,7 @@
 // =============================================================================
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, SafeAreaView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, SafeAreaView, ActivityIndicator } from 'react-native';
 
 import { AppServices } from '../../application/AppServices';
 import { ExpoGpsProvider, IGpsProvider } from '../../native/location/ExpoGpsProvider';
@@ -36,7 +36,7 @@ import type { Operator } from '../../domain/objects/operator';
 import { meters, degrees } from '../../domain/geometry/types';
 import { AppError } from '../../shared/errors/AppError';
 import { NumberField, TextField, ReadonlyRow } from '../components/fields';
-import { ActionButton } from '../components/ToolPalette';
+import { ActionButton, alertDialog } from '../primitives';
 import type { AppStore } from '../../state/appStore';
 import { colors, spacing, radius, typography } from '../theme/tokens';
 
@@ -126,7 +126,7 @@ export function SurveyControlScreen({
     let cancelled = false;
     reload()
       .catch(() => {
-        if (!cancelled) Alert.alert('Error', 'No se pudo cargar la información topográfica.');
+        if (!cancelled) alertDialog('Error', 'No se pudo cargar la información topográfica.');
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -141,7 +141,7 @@ export function SurveyControlScreen({
   // -----------------------------------------------------------------------
 
   const defineSystem = useCallback(() => {
-    Alert.alert(
+    alertDialog(
       'Definir sistema de coordenadas',
       'Esta operación es IRREVERSIBLE: una vez definido, el sistema de coordenadas de la Sede no se ' +
         'puede cambiar, porque invalidaría las coordenadas de todos los Recintos ya trazados. ' +
@@ -161,9 +161,9 @@ export function SurveyControlScreen({
                 definedBy: makeOperatorId(operator.id as unknown as string),
               });
               await reload();
-              Alert.alert('Hecho', 'Sistema de coordenadas definido.');
+              alertDialog('Hecho', 'Sistema de coordenadas definido.');
             } catch (err) {
-              Alert.alert(
+              alertDialog(
                 'Error',
                 err instanceof AppError ? err.userMessage : 'No se pudo definir el sistema de coordenadas.',
               );
@@ -182,7 +182,7 @@ export function SurveyControlScreen({
       const fixed = await gps.getCurrentPosition();
       setLastFix(fixed);
     } catch (err) {
-      Alert.alert(
+      alertDialog(
         'GPS',
         err instanceof AppError ? err.userMessage : 'No se pudo obtener la posición GPS.',
       );
@@ -193,7 +193,7 @@ export function SurveyControlScreen({
 
   const createPoint = useCallback(async () => {
     if (!lastFix) {
-      Alert.alert('Falta el GPS', 'Captura primero la posición GPS del mojón.');
+      alertDialog('Falta el GPS', 'Captura primero la posición GPS del mojón.');
       return;
     }
 
@@ -210,9 +210,9 @@ export function SurveyControlScreen({
       setPointNotes('');
       setLastFix(null);
       await reload();
-      Alert.alert('Hecho', 'Punto de control guardado.');
+      alertDialog('Hecho', 'Punto de control guardado.');
     } catch (err) {
-      Alert.alert(
+      alertDialog(
         'Error',
         err instanceof AppError ? err.userMessage : 'No se pudo guardar el punto de control.',
       );
@@ -237,7 +237,6 @@ export function SurveyControlScreen({
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>Topografía</Text>
         <Text style={styles.muted}>
           Sede: {site as string}. Los puntos de control son referencia documental: en esta versión no
           intervienen en el cálculo de la geometría BIM.

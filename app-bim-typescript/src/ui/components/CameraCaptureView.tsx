@@ -11,9 +11,10 @@
 // =============================================================================
 
 import React, { useRef, useState, useCallback } from 'react';
-import { View, TouchableOpacity, Text, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { View, TouchableOpacity, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { CameraView } from 'expo-camera';
 import { ExpoPhotoCapture, PhotoResult } from '../../native/camera/ExpoPhotoCapture';
+import { alertDialog } from '../primitives';
 
 export interface CameraCaptureViewProps {
   capture: ExpoPhotoCapture;
@@ -33,7 +34,7 @@ export function CameraCaptureView({ capture, onCapture, onClose }: CameraCapture
       const photo = await capture.takePicture();
       await onCapture(photo);
     } catch (err: any) {
-      Alert.alert('Error de cámara', err?.message ?? 'No se pudo capturar la foto.');
+      alertDialog('Error de cámara', err?.message ?? 'No se pudo capturar la foto.');
     } finally {
       setCapturing(false);
     }
@@ -82,7 +83,7 @@ const styles = StyleSheet.create({
   closeButtonText: {
     color: '#FFFFFF',
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: 'Roboto_700Bold',
   },
   shutterContainer: {
     position: 'absolute',

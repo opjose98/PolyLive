@@ -32,13 +32,13 @@ import {
   Dimensions,
   SafeAreaView,
   TouchableOpacity,
-  Alert,
   Modal,
   ScrollView,
+  BackHandler,
 } from 'react-native';
 
 import { PlanCanvas } from '../canvas/PlanCanvas';
-import { BottomSheet, toast } from '../primitives';
+import { BottomSheet, toast, alertDialog } from '../primitives';
 import { sizes } from '../design/tokens';
 import { CANVAS_PALETTES } from '../design/canvasThemes';
 import { haptic } from '../design/haptics';
@@ -56,7 +56,7 @@ import { FabView } from '../workspace/FabView';
 import { CornerTools } from '../workspace/CornerTools';
 import { LevelChip } from '../workspace/LevelChip';
 import { ConfigDrawer } from '../workspace/ConfigDrawer';
-import { MainMenu } from '../workspace/MainMenu';
+import { MainMenu, MainMenuItem } from '../workspace/MainMenu';
 import { RangeEditHandlers, RangeSelectors } from '../workspace/RangeSelector';
 import { itemAt, RangeState } from '../../application/workspace/rangeModel';
 import { MarkerKind, ProjectMarker } from '../../domain/objects/marker';
@@ -70,11 +70,10 @@ import {
   sortLevels,
 } from '../../application/workspace/constraintModel';
 import { isUniformWall, sameExtent } from '../../domain/objects/vertical';
-import { saveTextToUserFolder } from '../../native/export/saveToUserFolder';
+import { exportRevitIfc } from '../workspace/exportActions';
 import { ElevationEditor } from '../../application/elevation/ElevationEditor';
 import { ElevationView } from './ElevationView';
 import type { CanvasTransform } from '../../domain/geometry/types';
-import { ValidationError } from '../../application/use-cases/types';
 import { sizes as chromeSizes, spacing as chromeSpacing } from '../design/tokens';
 import { useStore } from 'zustand';
 import { CameraCaptureView } from '../components/CameraCaptureView';
@@ -84,9 +83,8 @@ import { ExpoGpsProvider } from '../../native/location/ExpoGpsProvider';
 import { base64ToUint8Array } from '../../shared/encoding/base64';
 import { PHOTO_BIM_CODE_PREFIX } from '../../domain/objects/audit-photo';
 import { generateBimCode } from '../../domain/objects/project';
-import { ToolPalette, QuickBar, ActionButton, Chip } from '../components/ToolPalette';
+import { ActionButton } from '../primitives';
 import { PropertiesPanel } from '../components/PropertiesPanel';
-import { BLEStatus } from '../components/BLEStatus';
 import { NumberField } from '../components/fields';
 import {
   HuepaDeviceManager,
@@ -128,7 +126,14 @@ export interface SurveyScreenProps {
   operatorName?: string;
   /** Salir del espacio (volver a la lista de espacios del proyecto). */
   onExit?: () => void;
+  /** Salir del proyecto (volver a la lista de proyectos). */
+  onExitProject?: () => void;
+  /** Abre una pantalla del menú ☰ (galería, exportar, ajustes...). */
+  onNavigate?: (screen: MenuScreen) => void;
 }
+
+/** Pantallas que se abren desde el menú ☰, por encima del levantamiento. */
+export type MenuScreen = 'gallery' | 'export' | 'surveyControl' | 'settings' | 'profile';
 
 // ---------------------------------------------------------------------------
 // Componente
@@ -144,6 +149,8 @@ export function SurveyScreen({
   projectCode = '',
   operatorName = '',
   onExit,
+  onExitProject,
+  onNavigate,
 }: SurveyScreenProps) {
   const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
   const canvasHeight = Math.max(240, Math.round(screenHeight * 0.45));
@@ -441,6 +448,36 @@ export function SurveyScreen({
     },
     [editor, canvasSize, elevWallId],
   );
+  // Atrás de Android en la planta: cierra lo que esté abierto (panel,
+  // ventana, herramienta) y, si no hay nada, vuelve a los espacios. Sin esto,
+  // al quitar las pestañas el atrás cerraba la app entera. El alzado y las
+  // pantallas del menú registran su propio atrás encima de este.
+  useEffect(() => {
+    if (elevWallId) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (panelOpen) {
+        setPanelOpen(false);
+        return true;
+      }
+      const ws = workspaceStore.getState();
+      if (ws.currentPanel || ws.currentWindow) {
+        ws.closePanels();
+        ws.closeWindow();
+        return true;
+      }
+      if (ws.activeTool) {
+        ws.clearTool();
+        return true;
+      }
+      if (onExit) {
+        onExit();
+        return true;
+      }
+      return false;
+    });
+    return () => sub.remove();
+  }, [elevWallId, onExit, panelOpen]);
+
   const closeElevation = useCallback(() => {
     setElevWallId(null);
     workspaceStore.getState().setMode('plan');
@@ -531,7 +568,7 @@ export function SurveyScreen({
 
         await editor.attachPhotoMarker(result.photoId);
       } catch (err: unknown) {
-        Alert.alert(
+        alertDialog(
           'Error',
           err instanceof AppError ? err.userMessage : 'No se pudo guardar la foto.',
         );
@@ -603,7 +640,7 @@ export function SurveyScreen({
       const devices = await huepa.scan();
       if (devices.length === 0) {
         setBleState('disconnected');
-        Alert.alert('Sin dispositivo', 'No se encontró un dispositivo Huepa.');
+        alertDialog('Sin dispositivo', 'No se encontró un dispositivo Huepa.');
         return;
       }
       setBleState('connecting');
@@ -615,7 +652,7 @@ export function SurveyScreen({
       if (device) appStore.getState().setBleDevice({ id: device.id, name: device.name });
     } catch (error: any) {
       setBleState('disconnected');
-      Alert.alert('Error BLE', error?.message ?? 'No se pudo conectar.');
+      alertDialog('Error BLE', error?.message ?? 'No se pudo conectar.');
     }
   }, [huepa, appStore]);
 
@@ -636,7 +673,7 @@ export function SurveyScreen({
    */
   const handleMeasure = useCallback(async () => {
     if (!state.measureTargetId) {
-      Alert.alert(
+      alertDialog(
         'Elige el muro',
         'Selecciona la herramienta Medir y toca el muro que vas a medir con el Huepa.',
       );
@@ -659,7 +696,7 @@ export function SurveyScreen({
       const average = await editor.captureMeasurement('ble', undefined, result.samples);
       if (average == null) return;
 
-      Alert.alert(
+      alertDialog(
         'Medición guardada',
         `${Number(average).toFixed(3)} m. ¿Aplicarla como longitud del muro?`,
         [
@@ -669,7 +706,7 @@ export function SurveyScreen({
       );
     } catch (error: any) {
       setBleState('connected');
-      Alert.alert('Error medición', error?.message ?? 'La medición falló.');
+      alertDialog('Error medición', error?.message ?? 'La medición falló.');
     }
   }, [huepa, appStore, editor, state.measureTargetId]);
 
@@ -940,66 +977,32 @@ export function SurveyScreen({
     [projectName, projectCode, roomName, operatorName, wallCount, state.objects.length, areaLabel],
   );
   // --- Exportar a IFC (Revit): niveles, fases y antepechos del proyecto ---
-  const handleExportIfc = useCallback(async () => {
-    toast('Generando IFC…', { kind: 'info', durationMs: 1200 });
-    try {
-      const [lv, ph, elevs] = await Promise.all([
-        projectId ? services.markers.list(projectId, 'level') : Promise.resolve([] as ProjectMarker[]),
-        projectId ? services.markers.list(projectId, 'phase') : Promise.resolve([] as ProjectMarker[]),
-        services.elevations.listElevations(roomId),
-      ]);
-      const sills = new Map<string, number>();
-      for (const e of elevs) for (const o of e.openings) if (o.vanoId) sills.set(o.vanoId, o.sillHeight);
-      const out = await services.useCases.exportRoomIfc.execute({
+  const handleExportIfc = useCallback(
+    () =>
+      exportRevitIfc(services, {
         roomId,
-        levels: lv.map((m) => ({ id: m.id, name: m.name, elevation: m.value, isBase: m.isBase })),
-        phaseNames: new Map(ph.map((m) => [m.id, m.name] as [string, string])),
-        openingSills: sills,
+        projectId,
         projectName,
-        projectKey: projectId,
+        spaceName: roomName ?? 'Espacio',
         author: operatorName,
-      });
-      const slug = (s: string) =>
-        s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'x';
-      // Hora local (la del operador), no UTC: es la que reconoce al buscar el archivo.
-      const d = new Date();
-      const two = (n: number) => String(n).padStart(2, '0');
-      const stamp = `${d.getFullYear()}${two(d.getMonth() + 1)}${two(d.getDate())}-${two(d.getHours())}${two(d.getMinutes())}`;
-      const saved = await saveTextToUserFolder(`${slug(projectName)}-${slug(roomName ?? 'espacio')}-${stamp}.ifc`, out.ifcContent);
-      if (saved.ok) {
-        haptic.commit();
-        toast(`IFC guardado en ${saved.folderLabel}`, { kind: 'success' });
-      } else if (saved.reason !== 'cancelled') {
-        console.warn('[export-ifc]', saved);
-        toast(
-          saved.reason === 'unsupported'
-            ? 'Guardar en carpeta solo está disponible en Android'
-            : `No se pudo escribir el archivo${saved.detail ? `: ${saved.detail}` : ''}`,
-          { kind: 'error' },
-        );
-      } else {
-        toast('Exportación cancelada: no se eligió carpeta', { kind: 'info' });
-      }
-    } catch (err) {
-      console.warn('[export-ifc]', err);
-      const msg =
-        err instanceof ValidationError
-          ? `No se puede exportar: ${err.warnings.map((w) => w.message).join(' · ')}`
-          : err instanceof AppError
-            ? err.userMessage
-            : 'No se pudo exportar el IFC.';
-      toast(msg, { kind: 'error' });
-    }
-  }, [services, projectId, roomId, projectName, operatorName, roomName]);
-
-  const menuItems = useMemo(
-    () => [
-      ...(onExit ? [{ icon: 'arrow-left', label: 'Volver a los espacios', onPress: onExit }] : []),
-      { icon: 'fit-to-screen-outline', label: 'Encuadrar todo', onPress: () => handleZoom('zoomFit') },
-      { icon: 'file-export-outline', label: 'Exportar IFC (Revit)', onPress: () => void handleExportIfc() },
-    ],
-    [onExit, handleZoom, handleExportIfc],
+      }),
+    [services, projectId, roomId, projectName, operatorName, roomName],
   );
+
+  const menuItems = useMemo((): MainMenuItem[] => {
+    const go = (s: MenuScreen) => () => onNavigate?.(s);
+    return [
+      { section: 'Espacio', icon: 'fit-to-screen-outline', label: 'Encuadrar todo', onPress: () => handleZoom('zoomFit') },
+      { icon: 'image-multiple-outline', label: 'Galería de fotos', onPress: go('gallery') },
+      ...(onExit ? [{ icon: 'view-grid-outline', label: 'Otros espacios del proyecto', onPress: onExit }] : []),
+      { section: 'Exportar', icon: 'file-export-outline', label: 'IFC para Revit', detail: 'Pisos por nivel y restricciones', onPress: () => void handleExportIfc() },
+      { icon: 'file-cad', label: 'IFC y DXF del recinto', onPress: go('export') },
+      { section: 'Proyecto', icon: 'map-marker-radius-outline', label: 'Topografía', detail: 'Sistema de coordenadas y puntos de control', onPress: go('surveyControl') },
+      ...(onExitProject ? [{ icon: 'folder-outline', label: 'Cambiar de proyecto', onPress: onExitProject }] : []),
+      { section: 'App', icon: 'account-circle-outline', label: 'Operador', detail: operatorName || undefined, onPress: go('profile') },
+      { icon: 'cog-outline', label: 'Ajustes y respaldos', onPress: go('settings') },
+    ];
+  }, [onExit, onExitProject, onNavigate, handleZoom, handleExportIfc, operatorName]);
 
   const chromeTop = chromeSpacing.sm;
   const belowBpc = chromeTop + chromeSizes.bpcHeight + chromeSpacing.sm;
