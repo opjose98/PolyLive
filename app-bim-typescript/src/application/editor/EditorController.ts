@@ -1255,6 +1255,13 @@ export class EditorController {
   // Undo / Redo
   // -------------------------------------------------------------------------
 
+  /** Relee si hay algo que deshacer/rehacer (tras editar desde otra vista, p. ej. el alzado). */
+  refreshHistory(): void {
+    const canUndo = this.services.commandStack.canUndo();
+    const canRedo = this.services.commandStack.canRedo();
+    if (canUndo !== this.state.canUndo || canRedo !== this.state.canRedo) this.patch({ canUndo, canRedo });
+  }
+
   async undo(): Promise<void> {
     if (this.state.busy || !this.state.canUndo) return;
     this.patch({ busy: true });

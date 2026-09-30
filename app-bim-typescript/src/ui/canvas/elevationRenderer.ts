@@ -1,19 +1,21 @@
 // =============================================================================
-// elevationRenderer.ts — Dibujo de la elevación de un muro
-// Portado de LevON: features/walls/ui/wall_elevation_painter.dart
+// elevationRenderer.ts — Dibujo del alzado de un muro (vista frontal)
+// Portado de LevON (wall_elevation_painter.dart) y del mockup
+// (polylive-mockup/js/components/canvas-alzado.js)
 // =============================================================================
 //
-// Función pura sobre `ICanvasRenderer`, igual que planRenderer: así se puede
-// verificar que una culata se dibuja inclinada, que un hueco en error se marca
-// en rojo y que las cotas aparecen, sin montar un árbol de React.
+// Función pura sobre `ICanvasRenderer`, igual que planRenderer: se puede
+// verificar sin React que el perfil se dibuja inclinado, que un hueco en error
+// se marca en rojo o que el lado B es el espejo del A.
 //
 // CAPAS (de atrás hacia delante):
-//   1. suelo, rejilla de alturas y líneas de nivel del proyecto
-//   2. silueta del muro (rectángulo, o trapecio si base o tope difieren entre
-//      extremos: culata, base escalonada)
-//   3. huecos, coloreados según su validación
-//   4. líneas de umbral y dintel
-//   5. cotas y etiquetas
+//   1. rejilla de alturas
+//   2. líneas de nivel del proyecto (a todo el ancho)
+//   3. silueta del muro (su perfil real: rectángulo o trapecio)
+//   4. huecos, coloreados según su validación
+//   5. umbral y dintel
+//   6. cotas del muro y de los huecos
+//   7. rótulos de nivel, FIJOS a la izquierda de la pantalla (no escalan)
 // =============================================================================
 
 import type { ICanvasRenderer } from '../../native/canvas/SkiaCanvasAdapter';
@@ -21,10 +23,10 @@ import {
   WallElevation,
   WallOpening,
   WallOpeningId,
+  baseAt,
   effectiveLeftHeight,
   effectiveRightHeight,
   hasHeightProfile,
-  baseAt,
   openingEnd,
   openingTop,
   openingCenterX,
@@ -33,16 +35,8 @@ import {
   dintel,
   openingTypeLabel,
 } from '../../domain/objects/wall-elevation';
-import {
-  ElevationViewport,
-  cslToScreen,
-  ElevationSeverity,
-} from '../../application/elevation/WallElevationService';
-import { colors, layout } from '../theme/tokens';
-
-// ---------------------------------------------------------------------------
-// Escena
-// ---------------------------------------------------------------------------
+import type { ElevationSeverity, ElevationViewport } from '../../application/elevation/WallElevationService';
+import { CANVAS_PALETTES, CanvasPalette } from '../design/canvasThemes';
 
 export interface ElevationScene {
   readonly elevation: WallElevation;
@@ -50,257 +44,256 @@ export interface ElevationScene {
   readonly viewport: ElevationViewport;
   readonly width: number;
   readonly height: number;
+  /** Lado B: se ve el muro desde la otra cara (X en espejo). */
+  readonly mirrored?: boolean;
   readonly selectedOpeningId: WallOpeningId | null;
-  /** Severidad por hueco, del servicio de validación. */
+  /** Hueco arrastrado, en su posición en vivo: reemplaza al guardado. */
+  readonly dragPreview?: WallOpening | null;
   readonly severityByOpening: ReadonlyMap<string, ElevationSeverity>;
   readonly showGrid: boolean;
   readonly showLabels: boolean;
-  /** Niveles del proyecto, en altura CSL (0 = base más baja del muro). */
-  readonly levelLines?: readonly { readonly name: string; readonly y: number }[];
-  /** Cota absoluta del CSL 0, para rotular cotas reales. */
-  readonly baseElevation?: number;
+  /** Niveles del proyecto, en altura CSL (0 = base más baja del muro) y su cota. */
+  readonly levelLines?: readonly { readonly name: string; readonly y: number; readonly cota: number }[];
+  readonly palette?: CanvasPalette;
+  /** Filtros de la vista: qué tipos de hueco se ven (todos si falta). */
+  readonly visibleTypes?: ReadonlySet<string>;
 }
 
-// ---------------------------------------------------------------------------
-// Entrada principal
-// ---------------------------------------------------------------------------
+type ToScreen = (p: { x: number; y: number }) => { x: number; y: number };
+
+interface Ctx {
+  readonly r: ICanvasRenderer;
+  readonly scene: ElevationScene;
+  readonly pal: CanvasPalette;
+  readonly toScreen: ToScreen;
+  readonly openings: readonly WallOpening[];
+}
+
+const ERROR = '#E53935';
+const WARNING = '#FB8C00';
 
 export function drawElevation(r: ICanvasRenderer, scene: ElevationScene): void {
-  if (scene.showGrid) drawHeightGrid(r, scene);
-  drawLevelLines(r, scene);
-  drawWallSilhouette(r, scene);
-  drawOpenings(r, scene);
-  drawReferenceLines(r, scene);
-  if (scene.showLabels) drawElevationLabels(r, scene);
+  const pal = scene.palette ?? CANVAS_PALETTES.claro;
+  const { viewport, wallLength, mirrored } = scene;
+  const toScreen: ToScreen = (p) => ({
+    x: (mirrored ? wallLength - p.x : p.x) * viewport.scale + viewport.offsetX,
+    y: viewport.offsetY - p.y * viewport.scale,
+  });
+  const preview = scene.dragPreview;
+  const openings = scene.elevation.openings
+    .map((o) => (preview && o.id === preview.id ? preview : o))
+    .filter((o) => !scene.visibleTypes || scene.visibleTypes.has(o.type));
+  const ctx: Ctx = { r, scene, pal, toScreen, openings };
+
+  if (scene.showGrid) drawHeightGrid(ctx);
+  drawLevelLines(ctx);
+  drawWallSilhouette(ctx);
+  for (const o of openings) drawOpening(ctx, o);
+  drawReferenceLines(ctx);
+  if (scene.showLabels) drawElevationLabels(ctx);
+  drawLevelLabels(ctx);
 }
 
-// ---------------------------------------------------------------------------
-// 1. Rejilla de alturas
-// ---------------------------------------------------------------------------
-
-function drawHeightGrid(r: ICanvasRenderer, scene: ElevationScene): void {
-  const { elevation, wallLength, viewport } = scene;
-  const top = Math.max(
-    elevation.levels.coronacion,
-    effectiveLeftHeight(elevation.levels),
-    effectiveRightHeight(elevation.levels),
-  );
-
-  // Una línea por cada 0,5 m de altura. A diferencia de la planta, aquí el
-  // rango es siempre pequeño (un muro mide entre 2 y 6 m) y un paso fijo es
-  // más legible que uno adaptativo.
-  r.setStrokeStyle(colors.grid);
-  r.setLineWidth(0.5);
-  for (let h = 0; h <= top + 1e-6; h += 0.5) {
-    const a = cslToScreen({ x: 0, y: h }, viewport);
-    const b = cslToScreen({ x: wallLength, y: h }, viewport);
-    r.drawLine(a.x, a.y, b.x, b.y);
-  }
-
-  // Línea de suelo, más marcada: es la referencia de todas las alturas. Con
-  // base inclinada o escalonada sigue la base del muro.
-  const { levels } = elevation;
-  const groundA = cslToScreen({ x: 0, y: levels.leftBase ?? 0 }, viewport);
-  const groundB = cslToScreen({ x: wallLength, y: levels.rightBase ?? 0 }, viewport);
-  r.setStrokeStyle(colors.gridMajor);
-  r.setLineWidth(2);
-  r.drawLine(groundA.x - 0.2 * viewport.scale, groundA.y, groundA.x, groundA.y);
-  r.drawLine(groundA.x, groundA.y, groundB.x, groundB.y);
-  r.drawLine(groundB.x, groundB.y, groundB.x + 0.2 * viewport.scale, groundB.y);
-}
-
-// ---------------------------------------------------------------------------
-// 1b. Líneas de nivel
-// ---------------------------------------------------------------------------
-
-/**
- * Cada nivel del proyecto como una línea de trazos a lo ancho de la vista,
- * con su nombre: es lo que deja leer a qué nivel se ata cada extremo.
- */
-function drawLevelLines(r: ICanvasRenderer, scene: ElevationScene): void {
-  const lines = scene.levelLines ?? [];
-  if (lines.length === 0) return;
-  const { viewport, wallLength } = scene;
-  r.setLineWidth(1);
-  for (const line of lines) {
-    const a = cslToScreen({ x: -0.6, y: line.y }, viewport);
-    const b = cslToScreen({ x: wallLength + 0.6, y: line.y }, viewport);
-    r.setStrokeStyle(colors.info);
-    const dash = 8;
-    for (let x = a.x; x < b.x; x += dash * 2) r.drawLine(x, a.y, Math.min(x + dash, b.x), a.y);
-    r.setFillStyle(colors.info);
-    r.drawText(line.name, b.x - 2, a.y - 4, 10, 'right');
-  }
-}
-
-// ---------------------------------------------------------------------------
-// 2. Silueta del muro
-// ---------------------------------------------------------------------------
-
-function drawWallSilhouette(r: ICanvasRenderer, scene: ElevationScene): void {
-  const { elevation, wallLength, viewport } = scene;
-  const { levels } = elevation;
-
-  // Con culata la silueta es un TRAPECIO: las dos alturas de los extremos son
-  // distintas. Dibujarla siempre como rectángulo (usando la coronación) haría
-  // invisible la culata, que es justamente lo que se está levantando.
-  const outline = hasHeightProfile(levels)
+/** Contorno del muro en CSL: su perfil (base y tope de cada extremo). */
+export function wallOutline(elevation: WallElevation, wallLength: number): { x: number; y: number }[] {
+  const lv = elevation.levels;
+  return hasHeightProfile(lv)
     ? [
-        { x: 0, y: levels.leftBase ?? 0 },
-        { x: wallLength, y: levels.rightBase ?? 0 },
-        { x: wallLength, y: effectiveRightHeight(levels) },
-        { x: 0, y: effectiveLeftHeight(levels) },
+        { x: 0, y: lv.leftBase ?? 0 },
+        { x: wallLength, y: lv.rightBase ?? 0 },
+        { x: wallLength, y: effectiveRightHeight(lv) },
+        { x: 0, y: effectiveLeftHeight(lv) },
       ]
     : [
         { x: 0, y: 0 },
         { x: wallLength, y: 0 },
-        { x: wallLength, y: levels.coronacion },
-        { x: 0, y: levels.coronacion },
+        { x: wallLength, y: lv.coronacion },
+        { x: 0, y: lv.coronacion },
       ];
+}
 
-  const pts = outline.map((p) => cslToScreen(p, viewport));
+// ---------------------------------------------------------------------------
+// 1. Rejilla de alturas: una línea cada 0,5 m, del ancho del muro
+// ---------------------------------------------------------------------------
 
-  r.setFillStyle(colors.surface3);
+function drawHeightGrid({ r, scene, pal, toScreen }: Ctx): void {
+  const { elevation, wallLength } = scene;
+  const top = Math.max(elevation.levels.coronacion, effectiveLeftHeight(elevation.levels), effectiveRightHeight(elevation.levels));
+  r.setStrokeStyle(pal.grid);
+  r.setLineWidth(0.5 * pal.lineScale);
+  for (let h = 0; h <= top + 1e-6; h += 0.5) {
+    const a = toScreen({ x: 0, y: h });
+    const b = toScreen({ x: wallLength, y: h });
+    r.drawLine(a.x, a.y, b.x, b.y);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 2. Líneas de nivel (a todo el ancho de la vista, de trazos)
+// ---------------------------------------------------------------------------
+
+function drawLevelLines({ r, scene, pal, toScreen }: Ctx): void {
+  r.setStrokeStyle(pal.label);
+  r.setLineWidth(1 * pal.lineScale);
+  for (const line of scene.levelLines ?? []) {
+    const y = toScreen({ x: 0, y: line.y }).y;
+    if (y < -2 || y > scene.height + 2) continue;
+    const dash = 7;
+    for (let x = 0; x < scene.width; x += dash * 2) r.drawLine(x, y, Math.min(x + dash, scene.width), y);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 3. Silueta del muro (relleno claro + contorno)
+// ---------------------------------------------------------------------------
+
+function drawWallSilhouette({ r, scene, pal, toScreen }: Ctx): void {
+  const pts = wallOutline(scene.elevation, scene.wallLength).map(toScreen);
+  r.setFillStyle(pal.existingFill);
   r.fillPolygon(pts);
-  r.setStrokeStyle(colors.wallStroke);
-  r.setLineWidth(2);
+  r.setStrokeStyle(pal.ink);
+  r.setLineWidth(2.5 * pal.lineScale);
   r.strokePolygon(pts);
 }
 
 // ---------------------------------------------------------------------------
-// 3. Huecos
+// 4. Huecos
 // ---------------------------------------------------------------------------
 
-function drawOpenings(r: ICanvasRenderer, scene: ElevationScene): void {
-  for (const opening of scene.elevation.openings) {
-    const severity = scene.severityByOpening.get(opening.id as string) ?? 'ok';
-    const selected = opening.id === scene.selectedOpeningId;
-    drawOpening(r, scene, opening, severity, selected);
-  }
-}
-
-function drawOpening(
-  r: ICanvasRenderer,
-  scene: ElevationScene,
-  opening: WallOpening,
-  severity: ElevationSeverity,
-  selected: boolean,
-): void {
-  const { viewport } = scene;
+function drawOpening({ r, scene, pal, toScreen }: Ctx, opening: WallOpening): void {
+  const severity = scene.severityByOpening.get(opening.id as string) ?? 'ok';
+  const selected = opening.id === scene.selectedOpeningId;
   const rect = [
     { x: opening.xOffset, y: opening.sillHeight },
     { x: openingEnd(opening), y: opening.sillHeight },
     { x: openingEnd(opening), y: openingTop(opening) },
     { x: opening.xOffset, y: openingTop(opening) },
-  ].map((p) => cslToScreen(p, viewport));
+  ].map(toScreen);
 
-  // El hueco se "vacía": se pinta del color del fondo del lienzo, porque eso
-  // es lo que es — una ausencia de muro.
-  r.setFillStyle(colors.canvasBg);
+  // El hueco se "vacía": es una ausencia de muro.
+  r.setFillStyle(pal.background);
   r.fillPolygon(rect);
-
-  // El borde codifica la validación: rojo bloquea la exportación, naranja avisa.
-  const stroke =
-    severity === 'error' ? colors.error : severity === 'warning' ? colors.warning : colors.vanoStroke;
-  r.setStrokeStyle(selected ? colors.selectStroke : stroke);
-  r.setLineWidth(selected ? 3 : severity === 'ok' ? 1.5 : 2.5);
-  r.strokePolygon(rect);
-
-  // Símbolo por tipo: una puerta llega al suelo y lleva la marca del sentido de
-  // apertura; una ventana lleva su antepecho marcado.
-  if (opening.type === 'door') {
-    const hingeX = opening.isFlipped ? openingEnd(opening) : opening.xOffset;
-    const hinge = cslToScreen({ x: hingeX, y: 0 }, viewport);
-    const top = cslToScreen({ x: hingeX, y: openingTop(opening) }, viewport);
-    r.setStrokeStyle(stroke);
-    r.setLineWidth(2);
-    r.drawLine(hinge.x, hinge.y, top.x, top.y);
-  } else if (opening.type === 'window') {
-    const a = cslToScreen({ x: opening.xOffset, y: opening.sillHeight }, viewport);
-    const b = cslToScreen({ x: openingEnd(opening), y: opening.sillHeight }, viewport);
-    r.setStrokeStyle(stroke);
-    r.setLineWidth(3);
-    r.drawLine(a.x, a.y, b.x, b.y);
+  if (selected) {
+    r.setFillStyle(pal.selectionFill);
+    r.fillPolygon(rect);
   }
 
-  // Handles de los bordes, solo en el hueco seleccionado: con todos visibles a
-  // la vez el muro se vuelve ilegible.
+  // El borde codifica la validación: rojo bloquea la exportación, naranja avisa.
+  const stroke = severity === 'error' ? ERROR : severity === 'warning' ? WARNING : pal.opening;
+  r.setStrokeStyle(selected ? pal.selection : stroke);
+  r.setLineWidth((selected ? 2.5 : 1.8) * pal.lineScale);
+  r.strokePolygon(rect);
+
+  // Símbolo por tipo. Puerta: la hoja como triángulo con el vértice en las
+  // bisagras (convención de alzado). Ventana: marco interior y parteluz.
+  r.setStrokeStyle(stroke);
+  r.setLineWidth(1.2 * pal.lineScale);
+  if (opening.type === 'door') {
+    const hingeX = opening.isFlipped ? openingEnd(opening) : opening.xOffset;
+    const freeX = opening.isFlipped ? opening.xOffset : openingEnd(opening);
+    const a = toScreen({ x: freeX, y: opening.sillHeight });
+    const b = toScreen({ x: hingeX, y: openingCenterY(opening) });
+    const c = toScreen({ x: freeX, y: openingTop(opening) });
+    r.drawLine(a.x, a.y, b.x, b.y);
+    r.drawLine(b.x, b.y, c.x, c.y);
+  } else if (opening.type === 'window') {
+    const inset = Math.min(0.05, opening.width / 6, opening.height / 6);
+    const inner = [
+      { x: opening.xOffset + inset, y: opening.sillHeight + inset },
+      { x: openingEnd(opening) - inset, y: opening.sillHeight + inset },
+      { x: openingEnd(opening) - inset, y: openingTop(opening) - inset },
+      { x: opening.xOffset + inset, y: openingTop(opening) - inset },
+    ].map(toScreen);
+    r.strokePolygon(inner);
+    const m0 = toScreen({ x: openingCenterX(opening), y: opening.sillHeight + inset });
+    const m1 = toScreen({ x: openingCenterX(opening), y: openingTop(opening) - inset });
+    r.drawLine(m0.x, m0.y, m1.x, m1.y);
+  } else {
+    const a = toScreen({ x: opening.xOffset, y: opening.sillHeight });
+    const c = toScreen({ x: openingEnd(opening), y: openingTop(opening) });
+    r.drawLine(a.x, a.y, c.x, c.y);
+  }
+
   if (selected) {
     for (const x of [opening.xOffset, openingEnd(opening)]) {
-      const p = cslToScreen({ x, y: openingCenterY(opening) }, viewport);
-      r.setFillStyle(colors.handleFill);
-      r.fillCircle(p.x, p.y, layout.handleRadiusPx);
-      r.setStrokeStyle(colors.handleStroke);
+      const p = toScreen({ x, y: openingCenterY(opening) });
+      r.setFillStyle(pal.handleFill);
+      r.fillCircle(p.x, p.y, 7);
+      r.setStrokeStyle(pal.selection);
       r.setLineWidth(2);
-      r.strokeCircle(p.x, p.y, layout.handleRadiusPx);
+      r.strokeCircle(p.x, p.y, 7);
     }
   }
 }
 
 // ---------------------------------------------------------------------------
-// 4. Umbral y dintel
+// 5. Umbral y dintel
 // ---------------------------------------------------------------------------
 
-function drawReferenceLines(r: ICanvasRenderer, scene: ElevationScene): void {
-  const { elevation, wallLength, viewport } = scene;
-
-  const lines: { y: number; color: string }[] = [];
-  const u = umbral(elevation);
-  const d = dintel(elevation);
-  if (u != null) lines.push({ y: u, color: colors.info });
-  if (d != null) lines.push({ y: d, color: colors.info });
-
-  r.setLineWidth(1);
-  for (const line of lines) {
-    const a = cslToScreen({ x: 0, y: line.y }, viewport);
-    const b = cslToScreen({ x: wallLength, y: line.y }, viewport);
-    r.setStrokeStyle(line.color);
-    r.drawLine(a.x, a.y, b.x, b.y);
+function drawReferenceLines({ r, scene, pal, toScreen }: Ctx): void {
+  const lines: number[] = [];
+  const u = umbral(scene.elevation);
+  const d = dintel(scene.elevation);
+  if (u != null && u > 0) lines.push(u);
+  if (d != null) lines.push(d);
+  r.setStrokeStyle(pal.opening);
+  r.setLineWidth(0.8);
+  for (const y of lines) {
+    const a = toScreen({ x: 0, y });
+    const b = toScreen({ x: scene.wallLength, y });
+    const [x0, x1] = a.x < b.x ? [a.x, b.x] : [b.x, a.x];
+    for (let x = x0; x < x1; x += 8) r.drawLine(x, a.y, Math.min(x + 4, x1), a.y);
   }
 }
 
 // ---------------------------------------------------------------------------
-// 5. Cotas y etiquetas
+// 6. Cotas
 // ---------------------------------------------------------------------------
 
-function drawElevationLabels(r: ICanvasRenderer, scene: ElevationScene): void {
+function drawElevationLabels({ r, scene, pal, toScreen, openings }: Ctx): void {
   const { elevation, wallLength, viewport } = scene;
+  const lv = elevation.levels;
+  r.setFillStyle(pal.label);
 
-  r.setFillStyle(colors.textPrimary);
+  const base = toScreen({ x: wallLength / 2, y: Math.min(lv.leftBase ?? 0, lv.rightBase ?? 0) });
+  r.drawText(`${wallLength.toFixed(2)} m`, base.x, base.y + 20, 12, 'center');
 
-  // Longitud del muro, bajo la línea de suelo.
-  const base = cslToScreen({ x: wallLength / 2, y: 0 }, viewport);
-  r.drawText(`${wallLength.toFixed(2)} m`, base.x, base.y + 18, 11, 'center');
-
-  // Alturas de los extremos: dos etiquetas si el perfil no es rectangular
-  // (altura neta de cada extremo), una si lo es.
-  if (hasHeightProfile(elevation.levels)) {
-    const lv = elevation.levels;
-    const lh = effectiveLeftHeight(lv) - baseAt(lv, 0, wallLength);
-    const rh = effectiveRightHeight(lv) - baseAt(lv, wallLength, wallLength);
-    const left = cslToScreen({ x: 0, y: effectiveLeftHeight(lv) }, viewport);
-    const right = cslToScreen({ x: wallLength, y: effectiveRightHeight(lv) }, viewport);
-    r.drawText(`${lh.toFixed(2)} m`, left.x + 4, left.y - 6, 11, 'left');
-    r.drawText(`${rh.toFixed(2)} m`, right.x - 4, right.y - 6, 11, 'right');
+  // Alturas netas de los extremos (dos si el perfil no es rectangular), cada
+  // una del lado de la pantalla donde queda su extremo (el B va en espejo).
+  const startTop = toScreen({ x: 0, y: effectiveLeftHeight(lv) });
+  const endTop = toScreen({ x: wallLength, y: effectiveRightHeight(lv) });
+  if (hasHeightProfile(lv)) {
+    const sh = effectiveLeftHeight(lv) - baseAt(lv, 0, wallLength);
+    const eh = effectiveRightHeight(lv) - baseAt(lv, wallLength, wallLength);
+    const [lp, lh, rp, rh] = startTop.x <= endTop.x ? [startTop, sh, endTop, eh] : [endTop, eh, startTop, sh];
+    r.drawText(`${lh.toFixed(2)} m`, lp.x, lp.y - 8, 11, 'left');
+    r.drawText(`${rh.toFixed(2)} m`, rp.x, rp.y - 8, 11, 'right');
   } else {
-    const top = cslToScreen({ x: wallLength / 2, y: elevation.levels.coronacion }, viewport);
-    r.drawText(`${elevation.levels.coronacion.toFixed(2)} m`, top.x, top.y - 6, 11, 'center');
+    const top = toScreen({ x: wallLength / 2, y: lv.coronacion });
+    r.drawText(`${lv.coronacion.toFixed(2)} m`, top.x, top.y - 8, 11, 'center');
   }
 
-  // Etiqueta de cada hueco: tipo y dimensiones. Se omite si el hueco es
-  // demasiado estrecho en pantalla para que el texto quepa dentro.
-  for (const opening of elevation.openings) {
-    const widthPx = opening.width * viewport.scale;
-    if (widthPx < 48) continue;
+  for (const o of openings) {
+    if (o.width * viewport.scale < 52) continue;
+    const c = toScreen({ x: openingCenterX(o), y: openingCenterY(o) });
+    r.setFillStyle(pal.label);
+    r.drawText(openingTypeLabel(o.type), c.x, c.y - 4, 11, 'center');
+    r.drawText(`${o.width.toFixed(2)} × ${o.height.toFixed(2)}`, c.x, c.y + 12, 10, 'center');
+  }
+}
 
-    const center = cslToScreen({ x: openingCenterX(opening), y: openingCenterY(opening) }, viewport);
-    r.drawText(openingTypeLabel(opening.type), center.x, center.y - 4, 11, 'center');
-    r.drawText(
-      `${opening.width.toFixed(2)} × ${opening.height.toFixed(2)}`,
-      center.x,
-      center.y + 12,
-      10,
-      'center',
-    );
+// ---------------------------------------------------------------------------
+// 7. Rótulos de nivel: fijos a la izquierda (como en el mockup), nombre y cota
+// ---------------------------------------------------------------------------
+
+function drawLevelLabels({ r, scene, pal, toScreen }: Ctx): void {
+  for (const line of scene.levelLines ?? []) {
+    const y = toScreen({ x: 0, y: line.y }).y;
+    if (y < 28 || y > scene.height - 4) continue;
+    r.setFillStyle(pal.background);
+    r.fillRect(10, y - 27, 60, 24);
+    r.setFillStyle(pal.label);
+    r.drawText(line.name, 14, y - 15, 11, 'left');
+    r.drawText(`${line.cota >= 0 ? '+' : ''}${line.cota.toFixed(2)} m`, 14, y - 5, 9, 'left');
   }
 }

@@ -22,7 +22,7 @@ import type { OpeningType } from '../../domain/objects/wall-elevation';
 // Propiedades editables con la píldora de la BPC
 // ---------------------------------------------------------------------------
 
-export type PropKey = 'thickness' | 'side' | 'depth' | 'fontSize' | 'width';
+export type PropKey = 'thickness' | 'side' | 'depth' | 'fontSize' | 'width' | 'height' | 'sill';
 
 export interface PropDef {
   readonly label: string;
@@ -38,6 +38,8 @@ export const PROPS: Readonly<Record<PropKey, PropDef>> = {
   depth: { label: 'Peralte', unit: 'cm', min: 20, max: 120, step: 5 },
   fontSize: { label: 'Tamaño', unit: 'pt', min: 6, max: 48, step: 1 },
   width: { label: 'Ancho', unit: 'cm', min: 40, max: 400, step: 5 },
+  height: { label: 'Alto', unit: 'cm', min: 30, max: 400, step: 5 },
+  sill: { label: 'Antepecho', unit: 'cm', min: 0, max: 300, step: 5 },
 };
 
 export type PropValues = Partial<Record<PropKey, number>>;
@@ -209,7 +211,7 @@ export const VIEWS_PLAN: readonly OptionDef<ViewId>[] = [
 
 export const VIEWS_ELEVATION: readonly OptionDef<ViewId>[] = VIEWS_PLAN.filter((v) => v.id !== 'topografia');
 
-export type FilterId = 'muros' | 'columnas' | 'vanos' | 'puertas' | 'vigas' | 'cotas' | 'fotos';
+export type FilterId = 'muros' | 'columnas' | 'vanos' | 'puertas' | 'ventanas' | 'vigas' | 'cotas' | 'fotos';
 
 export const FILTERS_PLAN: readonly OptionDef<FilterId>[] = [
   { id: 'muros', label: 'Muros' },
@@ -221,6 +223,7 @@ export const FILTERS_PLAN: readonly OptionDef<FilterId>[] = [
 export const FILTERS_ELEVATION: readonly OptionDef<FilterId>[] = [
   { id: 'vanos', label: 'Vanos' },
   { id: 'puertas', label: 'Puertas' },
+  { id: 'ventanas', label: 'Ventanas' },
   { id: 'vigas', label: 'Vigas' },
   { id: 'cotas', label: 'Cotas' },
   { id: 'fotos', label: 'Fotos' },

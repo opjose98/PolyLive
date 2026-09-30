@@ -32,7 +32,6 @@ import { GalleryScreen } from './screens/GalleryScreen';
 import { ExportScreen } from './screens/ExportScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { SurveyControlScreen } from './screens/SurveyControlScreen';
-import { WallElevationScreen } from './screens/WallElevationScreen';
 // Alias para no chocar con el `StatusBar` de react-native (la barra del sistema
 // operativo) — este es nuestro componente de estado BLE.
 import { StatusBar as AppStatusBar } from './components/StatusBar';
@@ -63,8 +62,7 @@ type BootStatus =
 type Overlay =
   | { kind: 'none' }
   | { kind: 'profile' }
-  | { kind: 'surveyControl' }
-  | { kind: 'elevation'; wallDbId: string };
+  | { kind: 'surveyControl' };
 
 // ---------------------------------------------------------------------------
 // App
@@ -259,20 +257,6 @@ export default function App() {
     );
   }
 
-  if (overlay.kind === 'elevation' && activeRoomId) {
-    return (
-      <View style={styles.flex}>
-        <OverlayBar title="Elevación de muro" onBack={() => setOverlay({ kind: 'none' })} />
-        <WallElevationScreen
-          services={services}
-          roomId={activeRoomId}
-          wallDbId={overlay.wallDbId}
-          projectId={project ? (project.id as unknown as string) : undefined}
-          onClose={() => setOverlay({ kind: 'none' })}
-        />
-      </View>
-    );
-  }
 
   // --- Paso 2: proyecto ---
   if (!project) {
@@ -326,7 +310,6 @@ export default function App() {
                 services={services}
                 roomId={activeRoomId}
                 appStore={appStore}
-                onOpenElevation={(wallDbId) => setOverlay({ kind: 'elevation', wallDbId })}
                 projectId={project.id as unknown as string}
                 projectName={project.name}
                 projectCode={project.bimCode}

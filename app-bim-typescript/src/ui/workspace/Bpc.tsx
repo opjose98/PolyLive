@@ -63,7 +63,12 @@ export const Bpc = React.memo(function Bpc({ context, pills, actions = [], onExi
             </>
           ) : (
             <>
-              <Text style={styles.strong}>Lienzo</Text>
+              <Text style={styles.strong}>{context.title ?? 'Lienzo'}</Text>
+              {context.items?.map((it) => (
+                <Text key={it} style={styles.muted}>
+                  {it}
+                </Text>
+              ))}
               <Text style={styles.muted}>{context.viewLabel}</Text>
               <Text style={styles.muted}>
                 Escala <Text style={styles.value}>{context.scaleLabel}</Text>

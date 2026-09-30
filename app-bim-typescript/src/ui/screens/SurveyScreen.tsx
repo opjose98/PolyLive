@@ -71,6 +71,9 @@ import {
 } from '../../application/workspace/constraintModel';
 import { isUniformWall, sameExtent } from '../../domain/objects/vertical';
 import { saveTextToUserFolder } from '../../native/export/saveToUserFolder';
+import { ElevationEditor } from '../../application/elevation/ElevationEditor';
+import { ElevationView } from './ElevationView';
+import type { CanvasTransform } from '../../domain/geometry/types';
 import { ValidationError } from '../../application/use-cases/types';
 import { sizes as chromeSizes, spacing as chromeSpacing } from '../design/tokens';
 import { useStore } from 'zustand';
@@ -116,8 +119,6 @@ export interface SurveyScreenProps {
   services: AppServices;
   roomId: RoomId;
   appStore: AppStore;
-  /** Abre la vista de elevación del muro indicado (Motor de Elevación). */
-  onOpenElevation?: (wallDbId: string) => void;
   /** Abre la galería filtrada por el objeto indicado. */
   onOpenPhotos?: (objectId: string) => void;
   /** Proyecto al que pertenece el espacio: define sus niveles y fases. */
@@ -137,7 +138,6 @@ export function SurveyScreen({
   services,
   roomId,
   appStore,
-  onOpenElevation,
   onOpenPhotos,
   projectId,
   projectName = 'Proyecto',
@@ -390,6 +390,66 @@ export function SurveyScreen({
   const levelHandlers = useMemo(() => makeMarkerHandlers('level', 'Nivel'), [makeMarkerHandlers]);
   const phaseHandlers = useMemo(() => makeMarkerHandlers('phase', 'Fase'), [makeMarkerHandlers]);
 
+  // --- Alzado (F4): vive encima de la planta, que queda intacta debajo ---
+  const [elevWallId, setElevWallId] = useState<string | null>(null);
+  const planCamera = useRef<CanvasTransform | null>(null);
+  const projectLevels = useMemo<ProjectMarker[]>(
+    () =>
+      levelInfo.finite.map((i) => ({
+        id: i.id,
+        projectId: projectId ?? '',
+        kind: 'level' as const,
+        name: i.name,
+        value: i.value,
+        isBase: !!i.base,
+      })),
+    [levelInfo.finite, projectId],
+  );
+  const elevEditor = useMemo(
+    () => (elevWallId ? new ElevationEditor({ services, wallId: elevWallId, levels: projectLevels }) : null),
+    [services, elevWallId], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  useEffect(() => {
+    elevEditor?.setLevels(projectLevels);
+  }, [elevEditor, projectLevels]);
+  useEffect(() => {
+    if (!elevEditor) return;
+    void elevEditor.load();
+    // Lo editado en el alzado entra en la historia compartida: los botones de
+    // deshacer/rehacer de la barra tienen que enterarse.
+    return elevEditor.subscribe((s) => {
+      if (!s.busy) editor.refreshHistory();
+    });
+  }, [elevEditor, editor]);
+
+  /**
+   * Transición planta → alzado: la cámara vuela hasta el muro y, cuando
+   * llega, el alzado entra con un zoom y un fundido. Volver deshace el vuelo.
+   */
+  const openElevation = useCallback(
+    (wallDbId: string) => {
+      if (elevWallId) return;
+      planCamera.current = editor.getState().transform;
+      editor.select(revitObjectId(wallDbId));
+      editor.zoomToSelection(canvasSize.w, canvasSize.h);
+      const ws = workspaceStore.getState();
+      ws.closePanels();
+      ws.closeWindow();
+      ws.setMode('elevation');
+      haptic.select();
+      setTimeout(() => setElevWallId(wallDbId), 280);
+    },
+    [editor, canvasSize, elevWallId],
+  );
+  const closeElevation = useCallback(() => {
+    setElevWallId(null);
+    workspaceStore.getState().setMode('plan');
+    if (planCamera.current) editor.setTransform(planCamera.current);
+    planCamera.current = null;
+    // Lo hecho en el alzado (puertas, ventanas, alturas) se ve al volver.
+    void editor.reload();
+  }, [editor]);
+
   // Reflejar la selección y la vista en el store global. GAP CERRADO: el
   // `uiSlice` de appStore (selectedObjectId, propertyPanelOpen, canvasTransform,
   // snapAngularEnabled) existía desde el principio y NINGÚN componente lo
@@ -511,9 +571,9 @@ export function SurveyScreen({
   const handleDoubleTap = useCallback(
     (x: number, y: number) => {
       const hit = editor.selectAt(x, y, CANVAS_TOUCH_TOLERANCE_PX);
-      if (hit instanceof Wall && onOpenElevation) onOpenElevation(hit.id as string);
+      if (hit instanceof Wall) openElevation(hit.id as string);
     },
-    [editor, onOpenElevation],
+    [editor, openElevation],
   );
 
   const handleDragStart = useCallback(
@@ -861,8 +921,9 @@ export function SurveyScreen({
     [editor, canvasSize],
   );
 
-  const handleUndo = useCallback(() => void editor.undo(), [editor]);
-  const handleRedo = useCallback(() => void editor.redo(), [editor]);
+  // Una sola historia: deshacer en el alzado deshace también lo del alzado.
+  const handleUndo = useCallback(() => void editor.undo().then(() => elevEditor?.load(false)), [editor, elevEditor]);
+  const handleRedo = useCallback(() => void editor.redo().then(() => elevEditor?.load(false)), [editor, elevEditor]);
   const handleToolActivated = useCallback(() => editor.select(null), [editor]);
   const wallCount = editor.walls.length;
   const areaLabel = state.rooms[0] ? `${state.rooms[0].area.toFixed(2)} m²` : 'Abierto';
@@ -981,7 +1042,7 @@ export function SurveyScreen({
           longPressEnabled
           snapped={state.dragSnappedToNode || !!state.wallDraft?.snappedToNode}
           onTap={handleTap}
-          onDoubleTap={onOpenElevation ? handleDoubleTap : undefined}
+          onDoubleTap={handleDoubleTap}
           onLongPress={handleLongPress}
           onDragStart={handleDragStart}
           onDragMove={handleDragMove}
@@ -997,20 +1058,36 @@ export function SurveyScreen({
           onCameraChange={(t) => editor.setTransform(t)}
         />
 
-        <Bpc
-          context={bpcContext}
-          toolDetail={constraintTarget === 'creation' ? constraintSummary(creationEdit) : undefined}
-          pills={bpcPills}
-          actions={bpcActions}
-          onExitTool={() => workspaceStore.getState().clearTool()}
-          top={chromeTop}
-          right={chromeSpacing.lg + chromeSizes.fabView + chromeSpacing.sm}
-        />
-        <LevelChip top={belowBpc} />
-        {projectId ? <RangeSelectors levels={levelHandlers} phases={phaseHandlers} extra={constraintElement} /> : null}
-        <FabView top={chromeTop} />
-        <CornerTools onZoom={handleZoom} />
-        <FabCreate onToolActivated={handleToolActivated} />
+        {elevWallId && elevEditor ? (
+          <ElevationView
+            editor={elevEditor}
+            width={canvasSize.w}
+            height={canvasSize.h}
+            levels={projectLevels}
+            planWalls={editor.walls.map((w) => ({ id: w.id as string, start: w.startPoint, end: w.endPoint }))}
+            levelHandlers={levelHandlers}
+            phaseHandlers={phaseHandlers}
+            chromeTop={chromeTop}
+            onClose={closeElevation}
+          />
+        ) : (
+          <>
+            <Bpc
+              context={bpcContext}
+              toolDetail={constraintTarget === 'creation' ? constraintSummary(creationEdit) : undefined}
+              pills={bpcPills}
+              actions={bpcActions}
+              onExitTool={() => workspaceStore.getState().clearTool()}
+              top={chromeTop}
+              right={chromeSpacing.lg + chromeSizes.fabView + chromeSpacing.sm}
+            />
+            <LevelChip top={belowBpc} />
+            {projectId ? <RangeSelectors levels={levelHandlers} phases={phaseHandlers} extra={constraintElement} /> : null}
+            <FabView top={chromeTop} />
+            <CornerTools onZoom={handleZoom} />
+            <FabCreate onToolActivated={handleToolActivated} />
+          </>
+        )}
 
         <ConfigDrawer
           top={0}
@@ -1037,10 +1114,10 @@ export function SurveyScreen({
             onDelete={handleDelete}
             onClose={() => setPanelOpen(false)}
             onOpenElevation={
-              onOpenElevation && selected instanceof Wall
+              selected instanceof Wall
                 ? () => {
                     setPanelOpen(false);
-                    onOpenElevation(selected.id as string);
+                    openElevation(selected.id as string);
                   }
                 : undefined
             }

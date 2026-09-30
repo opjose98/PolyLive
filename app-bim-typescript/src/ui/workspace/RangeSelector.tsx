@@ -72,9 +72,12 @@ export const RangeSelectors = React.memo(function RangeSelectors({
   levels,
   phases,
   extra,
+  only,
 }: {
   levels: RangeEditHandlers;
   phases: RangeEditHandlers;
+  /** Solo uno de los selectores (en alzado los niveles son líneas, no selector). */
+  only?: RangeKey;
   /** Se muestra bajo los FABs mientras ningún selector está abierto (base/tope del elemento). */
   extra?: React.ReactNode;
 }) {
@@ -89,7 +92,7 @@ export const RangeSelectors = React.memo(function RangeSelectors({
         <RangePanel key={open} cfg={CONFIGS[open]} handlers={open === 'levels' ? levels : phases} />
       ) : (
         <Animated.View entering={FadeIn.duration(140)} style={styles.fabs}>
-          {(['levels', 'phases'] as const).map((k) => (
+          {(only ? [only] : (['levels', 'phases'] as const)).map((k) => (
             <IconButton
               key={k}
               icon={CONFIGS[k].icon}
@@ -104,8 +107,8 @@ export const RangeSelectors = React.memo(function RangeSelectors({
       )}
     </View>
     {/* Fuera de la columna lateral: se posicionan respecto del lienzo. */}
-    <ConfigWindow cfg={CONFIGS.levels} handlers={levels} />
-    <ConfigWindow cfg={CONFIGS.phases} handlers={phases} />
+    {only !== 'phases' ? <ConfigWindow cfg={CONFIGS.levels} handlers={levels} /> : null}
+    {only !== 'levels' ? <ConfigWindow cfg={CONFIGS.phases} handlers={phases} /> : null}
     </>
   );
 });
