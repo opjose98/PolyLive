@@ -531,3 +531,18 @@ describe('drawPlan — temas y rejilla', () => {
     expect(ring).toBeDefined();
   });
 });
+
+describe('fases: estilo existente', () => {
+  it('un muro de una fase anterior se rellena en medio tono; el nuevo, con el poché normal', () => {
+    const pal = CANVAS_PALETTES.claro;
+    const old = makeWall('old', 0, 0, 3, 0);
+    const neu = makeWall('new', 0, 2, 3, 2);
+    const r = new RecordingRenderer();
+    drawPlan(r, scene({ objects: [old, neu], existingIds: new Set(['old']) }));
+    const fills = r.ops('fillPolygon').map((c) => (c.args[1] as { fill: string }).fill);
+    expect(fills).toContain(pal.existingFill);
+    expect(fills).toContain(pal.wallFill);
+    const lines = r.ops('drawLine').map((c) => (c.args[4] as { stroke: string }).stroke);
+    expect(lines).toContain(pal.existingInk);
+  });
+});

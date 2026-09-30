@@ -234,6 +234,7 @@ export function PlanCanvas(props: PlanCanvasProps) {
   const {
     objects, selectedId, handles, showLabels, rooms, roomName, showNodes,
     measureTargetId, photoMarkers, selectedPhotoMarkerId, wallDraft, draftThickness, snapIndicator, underlay,
+    existingIds,
   } = scene;
   const picture = useMemo(
     () =>
@@ -241,7 +242,7 @@ export function PlanCanvas(props: PlanCanvasProps) {
         canvas.scale(1 / recScale, 1 / recScale);
         drawPlan(new SkiaCanvasAdapter(canvas), {
           objects, selectedId, handles, showLabels, rooms, roomName, showNodes,
-          measureTargetId, photoMarkers, selectedPhotoMarkerId, underlay,
+          measureTargetId, photoMarkers, selectedPhotoMarkerId, underlay, existingIds,
           transform: { scale: recScale, offsetX: 0, offsetY: 0 },
           width,
           height,
@@ -250,7 +251,7 @@ export function PlanCanvas(props: PlanCanvasProps) {
         });
       }, WORLD_BOUNDS),
     [objects, selectedId, handles, showLabels, rooms, roomName, showNodes, measureTargetId, photoMarkers,
-      selectedPhotoMarkerId, underlay, recScale, width, height, palette],
+      selectedPhotoMarkerId, underlay, existingIds, recScale, width, height, palette],
   );
   const overlay = useMemo(
     () =>

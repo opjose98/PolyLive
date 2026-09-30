@@ -52,11 +52,25 @@ import {
   effectiveLeftHeight,
   effectiveRightHeight,
   hasHeightProfile,
+  levelsFromProfile,
   openingEnd,
   openingTop,
   openingTypeLabel,
   OPENING_DEFAULTS,
 } from '../../domain/objects/wall-elevation';
+import {
+  LevelElevations,
+  VerticalExtent,
+  WallVertical,
+  isRectangularProfile,
+  profileBottom,
+  profileHeight,
+  profileProblem,
+  resolveWallProfile,
+  wallVerticalOf,
+} from '../../domain/objects/vertical';
+import { LEVEL_PROP, ProjectMarker } from '../../domain/objects/marker';
+import { describeExtent } from '../../application/workspace/constraintModel';
 import { Wall } from '../../domain/objects/wall';
 import { RoomId, revitObjectId } from '../../domain/objects/base';
 import { AppError, AppErrorCode } from '../../shared/errors/AppError';
@@ -71,6 +85,8 @@ export interface WallElevationScreenProps {
   roomId: RoomId;
   /** Id del muro cuya elevación se edita. */
   wallDbId: string;
+  /** Proyecto del muro: sus niveles dan las cotas de base y tope. */
+  projectId?: string;
   onClose: () => void;
 }
 
@@ -84,7 +100,7 @@ const OPENING_TOOLS: readonly { type: OpeningType; label: string }[] = [
 // Componente
 // ---------------------------------------------------------------------------
 
-export function WallElevationScreen({ services, roomId, wallDbId, onClose }: WallElevationScreenProps) {
+export function WallElevationScreen({ services, roomId, wallDbId, projectId, onClose }: WallElevationScreenProps) {
   const { width: screenWidth } = Dimensions.get('window');
   const canvasWidth = screenWidth;
   const canvasHeight = 260;
@@ -102,6 +118,15 @@ export function WallElevationScreen({ services, roomId, wallDbId, onClose }: Wal
   const [selectedId, setSelectedId] = useState<WallOpeningId | null>(null);
   const [showLabels, setShowLabels] = useState(true);
   const [showGrid, setShowGrid] = useState(true);
+  const [levelMarkers, setLevelMarkers] = useState<readonly ProjectMarker[]>([]);
+
+  useEffect(() => {
+    if (!projectId) return;
+    services.markers
+      .list(projectId, 'level')
+      .then(setLevelMarkers)
+      .catch(() => setLevelMarkers([]));
+  }, [services, projectId]);
 
   // -----------------------------------------------------------------------
   // Carga
@@ -135,14 +160,42 @@ export function WallElevationScreen({ services, roomId, wallDbId, onClose }: Wal
 
   const wallLength = wall ? (wall.length as number) : 0;
 
+  // --- Perfil real del muro: sus restricciones de nivel resueltas a cotas ---
+  const levelElevations = useMemo<LevelElevations>(
+    () => new Map(levelMarkers.map((m) => [m.id, m.value] as [string, number])),
+    [levelMarkers],
+  );
+  const baseLevelId = levelMarkers.find((m) => m.isBase)?.id ?? '';
+  const vertical = useMemo<WallVertical | null>(
+    () => (wall ? wallVerticalOf(wall, baseLevelId, LEVEL_PROP) : null),
+    [wall, baseLevelId],
+  );
+  // Un muro con restricciones guardadas manda sobre la culata del alzado; uno
+  // de antes de existir (sin `vertical`) conserva la culata que tuviera.
+  const profile = useMemo(
+    () => (wall?.vertical && vertical ? resolveWallProfile(vertical, levelElevations) : null),
+    [wall, vertical, levelElevations],
+  );
+  const shown = useMemo<WallElevation | null>(
+    () => (elevation && profile ? { ...elevation, levels: levelsFromProfile(profile) } : elevation),
+    [elevation, profile],
+  );
+  const baseElevation = profile ? profileBottom(profile) : levelElevations.get(vertical?.start.baseLevelId ?? '') ?? 0;
+  const levelLines = useMemo(
+    () => levelMarkers.map((m) => ({ name: m.name, y: m.value - baseElevation })),
+    [levelMarkers, baseElevation],
+  );
+
   const maxHeight = useMemo(() => {
-    if (!elevation) return 3;
+    if (!shown) return 3;
+    const lines = levelLines.map((l) => l.y).filter((y) => y > 0 && y < 60);
     return Math.max(
-      elevation.levels.coronacion,
-      effectiveLeftHeight(elevation.levels),
-      effectiveRightHeight(elevation.levels),
+      shown.levels.coronacion,
+      effectiveLeftHeight(shown.levels),
+      effectiveRightHeight(shown.levels),
+      ...lines.filter((y) => y <= shown.levels.coronacion + 3.5),
     );
-  }, [elevation]);
+  }, [shown, levelLines]);
 
   const viewport = useMemo(
     () => fitElevationViewport(wallLength, maxHeight, canvasWidth, canvasHeight),
@@ -151,16 +204,16 @@ export function WallElevationScreen({ services, roomId, wallDbId, onClose }: Wal
 
   const severityByOpening = useMemo(() => {
     const map = new Map<string, ElevationSeverity>();
-    if (!elevation || !wall) return map;
-    for (const opening of elevation.openings) {
-      map.set(opening.id as string, service.validateOpening(opening, elevation, wallLength).severity);
+    if (!shown || !wall) return map;
+    for (const opening of shown.openings) {
+      map.set(opening.id as string, service.validateOpening(opening, shown, wallLength).severity);
     }
     return map;
-  }, [elevation, wall, service, wallLength]);
+  }, [shown, wall, service, wallLength]);
 
   const quantification: WallQuantification | null = useMemo(
-    () => (elevation ? computeQuantification(elevation, wallLength) : null),
-    [elevation, wallLength],
+    () => (shown ? computeQuantification(shown, wallLength) : null),
+    [shown, wallLength],
   );
 
   const selected = useMemo(
@@ -268,6 +321,48 @@ export function WallElevationScreen({ services, roomId, wallDbId, onClose }: Wal
     );
   }, [elevation, selected, service]);
 
+  /**
+   * Guarda restricciones nuevas del muro (un paso de deshacer). Es el único
+   * camino para cambiar alturas: el alzado lee el muro, no una copia propia.
+   */
+  const saveVertical = useCallback(
+    async (next: WallVertical) => {
+      if (!wall) return;
+      const p = resolveWallProfile(next, levelElevations);
+      const problem = profileProblem(p);
+      if (problem) {
+        Alert.alert('Alturas no válidas', problem);
+        return;
+      }
+      setBusy(true);
+      try {
+        await services.useCases.updateObjectProperty.execute({
+          objectId: wall.id,
+          property: 'vertical',
+          newValue: next,
+          also: { height: profileHeight(p) },
+        });
+        await reload();
+      } catch (err) {
+        Alert.alert('Error', err instanceof AppError ? err.userMessage : 'No se pudo cambiar la altura.');
+      } finally {
+        setBusy(false);
+      }
+    },
+    [wall, levelElevations, services, reload],
+  );
+
+  /** Altura escrita a mano en un extremo: tope desconectado a esa altura sobre su base. */
+  const withHeight = (e: VerticalExtent, h: number): VerticalExtent => ({ ...e, topLevelId: null, topOffset: 0, unconnectedHeight: h });
+
+  const setEndHeight = (end: 'start' | 'end' | 'both', h: number) => {
+    if (!vertical) return;
+    void saveVertical({
+      start: end === 'end' ? vertical.start : withHeight(vertical.start, h),
+      end: end === 'start' ? vertical.end : withHeight(vertical.end, h),
+    });
+  };
+
   const updateLevels = useCallback(
     async (updates: Parameters<WallElevationService['updateLevels']>[2]) => {
       if (!elevation || !wall) return;
@@ -284,25 +379,49 @@ export function WallElevationScreen({ services, roomId, wallDbId, onClose }: Wal
     [elevation, wall, service, reload],
   );
 
+  /**
+   * Continuidad: cada muro que comparte un extremo con este toma, en ese
+   * extremo, la misma restricción de base y tope. Así una culata o una base
+   * escalonada sigue de un muro al siguiente sin saltos.
+   */
   const propagate = useCallback(async () => {
-    if (!elevation || !wall) return;
+    if (!wall || !vertical) return;
     setBusy(true);
     try {
       const objects = await services.store.listObjects(roomId);
-      const walls = objects.filter((o): o is Wall => o instanceof Wall);
-      const { updatedWallIds } = await service.propagateCoronacion(elevation, wall, walls);
+      const near = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y) < 1e-3;
+      let updated = 0;
+      for (const other of objects) {
+        if (!(other instanceof Wall) || other.id === wall.id) continue;
+        const ov = wallVerticalOf(other, baseLevelId, LEVEL_PROP);
+        let next = ov;
+        for (const [pt, ext] of [[wall.startPoint, vertical.start], [wall.endPoint, vertical.end]] as const) {
+          if (near(other.startPoint, pt)) next = { ...next, start: ext };
+          if (near(other.endPoint, pt)) next = { ...next, end: ext };
+        }
+        if (next === ov) continue;
+        const p = resolveWallProfile(next, levelElevations);
+        if (profileProblem(p)) continue;
+        await services.useCases.updateObjectProperty.execute({
+          objectId: other.id,
+          property: 'vertical',
+          newValue: next,
+          also: { height: profileHeight(p) },
+        });
+        updated++;
+      }
       Alert.alert(
-        'Coronación propagada',
-        updatedWallIds.length === 0
+        'Niveles propagados',
+        updated === 0
           ? 'Ningún muro comparte extremo con este.'
-          : `Se aplicó la coronación a ${updatedWallIds.length} muro(s) conectado(s).`,
+          : `Se igualaron base y tope en el encuentro de ${updated} muro(s) conectado(s).`,
       );
     } catch (err) {
       Alert.alert('Error', err instanceof AppError ? err.userMessage : 'No se pudo propagar la coronación.');
     } finally {
       setBusy(false);
     }
-  }, [elevation, wall, service, services, roomId]);
+  }, [wall, vertical, services, roomId, baseLevelId, levelElevations]);
 
   // -----------------------------------------------------------------------
   // Dibujo
@@ -310,9 +429,11 @@ export function WallElevationScreen({ services, roomId, wallDbId, onClose }: Wal
 
   const draw = useMemo(
     () => (r: ICanvasRenderer) => {
-      if (!elevation) return;
+      if (!shown) return;
       drawElevation(r, {
-        elevation,
+        elevation: shown,
+        levelLines,
+        baseElevation,
         wallLength,
         viewport,
         width: canvasWidth,
@@ -323,14 +444,14 @@ export function WallElevationScreen({ services, roomId, wallDbId, onClose }: Wal
         showLabels,
       });
     },
-    [elevation, wallLength, viewport, canvasWidth, canvasHeight, selectedId, severityByOpening, showGrid, showLabels],
+    [shown, levelLines, baseElevation, wallLength, viewport, canvasWidth, canvasHeight, selectedId, severityByOpening, showGrid, showLabels],
   );
 
   // -----------------------------------------------------------------------
   // Render
   // -----------------------------------------------------------------------
 
-  if (loading || !wall || !elevation) {
+  if (loading || !wall || !elevation || !shown) {
     return (
       <SafeAreaView style={styles.center}>
         <ActivityIndicator color={colors.navy} />
@@ -339,7 +460,10 @@ export function WallElevationScreen({ services, roomId, wallDbId, onClose }: Wal
     );
   }
 
-  const overallValidation = service.validateElevation(elevation, wallLength);
+  const overallValidation = service.validateElevation(shown, wallLength);
+  const levelsList = levelMarkers.map((m) => ({ id: m.id, name: m.name, value: m.value }));
+  const constrained = !!wall.vertical;
+  const sloped = profile ? !isRectangularProfile(profile) : hasHeightProfile(elevation.levels);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -404,6 +528,65 @@ export function WallElevationScreen({ services, roomId, wallDbId, onClose }: Wal
         {/* --- Niveles verticales --- */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Alturas del muro</Text>
+          {constrained && vertical ? (
+            <>
+              <ReadonlyRow label="Extremo A (inicio)" value={describeExtent(levelsList, vertical.start)} />
+              <ReadonlyRow label="Extremo B (fin)" value={describeExtent(levelsList, vertical.end)} />
+              {profile ? (
+                <ReadonlyRow
+                  label="Cotas A · B"
+                  value={`${profile.start.base.toFixed(2)}→${profile.start.top.toFixed(2)} · ${profile.end.base.toFixed(2)}→${profile.end.top.toFixed(2)} m`}
+                />
+              ) : null}
+              <Text style={styles.note}>
+                {sloped ? 'Perfil no rectangular: en Revit es un muro con perfil editado. ' : ''}
+                Los niveles de base y tope se eligen con el selector B/T de la planta. Escribir una altura aquí
+                desconecta el tope de su nivel.
+              </Text>
+              {sloped ? (
+                <>
+                  <NumberField
+                    label="Altura en el arranque (A)"
+                    unit="m"
+                    decimals={2}
+                    min={0.1}
+                    max={60}
+                    value={profile ? profile.start.top - profile.start.base : 0}
+                    disabled={busy}
+                    onCommit={(v) => setEndHeight('start', v)}
+                  />
+                  <NumberField
+                    label="Altura en el final (B)"
+                    unit="m"
+                    decimals={2}
+                    min={0.1}
+                    max={60}
+                    value={profile ? profile.end.top - profile.end.base : 0}
+                    disabled={busy}
+                    onCommit={(v) => setEndHeight('end', v)}
+                  />
+                </>
+              ) : (
+                <NumberField
+                  label="Altura"
+                  unit="m"
+                  decimals={2}
+                  min={0.1}
+                  max={60}
+                  value={profile ? profile.start.top - profile.start.base : elevation.levels.coronacion}
+                  disabled={busy}
+                  onCommit={(v) => setEndHeight('both', v)}
+                />
+              )}
+              <ActionButton
+                label="Igualar niveles en los muros conectados"
+                variant="secondary"
+                onPress={() => void propagate()}
+                disabled={busy}
+              />
+            </>
+          ) : (
+          <>
           <NumberField
             label="Coronación"
             unit="m"
@@ -455,12 +638,12 @@ export function WallElevationScreen({ services, roomId, wallDbId, onClose }: Wal
             </>
           ) : null}
 
-          <ActionButton
-            label="Propagar coronación a muros conectados"
-            variant="secondary"
-            onPress={() => void propagate()}
-            disabled={busy}
-          />
+          <Text style={styles.note}>
+            Este muro es anterior a los niveles. Para atar su base y tope a niveles del proyecto, selecciónalo en
+            la planta y usa el selector B/T.
+          </Text>
+          </>
+          )}
         </View>
 
         {/* --- Hueco seleccionado --- */}

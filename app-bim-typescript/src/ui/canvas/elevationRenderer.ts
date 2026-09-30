@@ -8,8 +8,9 @@
 // en rojo y que las cotas aparecen, sin montar un árbol de React.
 //
 // CAPAS (de atrás hacia delante):
-//   1. suelo y rejilla de alturas
-//   2. silueta del muro (rectángulo, o trapecio si hay culata)
+//   1. suelo, rejilla de alturas y líneas de nivel del proyecto
+//   2. silueta del muro (rectángulo, o trapecio si base o tope difieren entre
+//      extremos: culata, base escalonada)
 //   3. huecos, coloreados según su validación
 //   4. líneas de umbral y dintel
 //   5. cotas y etiquetas
@@ -23,6 +24,7 @@ import {
   effectiveLeftHeight,
   effectiveRightHeight,
   hasHeightProfile,
+  baseAt,
   openingEnd,
   openingTop,
   openingCenterX,
@@ -53,6 +55,10 @@ export interface ElevationScene {
   readonly severityByOpening: ReadonlyMap<string, ElevationSeverity>;
   readonly showGrid: boolean;
   readonly showLabels: boolean;
+  /** Niveles del proyecto, en altura CSL (0 = base más baja del muro). */
+  readonly levelLines?: readonly { readonly name: string; readonly y: number }[];
+  /** Cota absoluta del CSL 0, para rotular cotas reales. */
+  readonly baseElevation?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -61,6 +67,7 @@ export interface ElevationScene {
 
 export function drawElevation(r: ICanvasRenderer, scene: ElevationScene): void {
   if (scene.showGrid) drawHeightGrid(r, scene);
+  drawLevelLines(r, scene);
   drawWallSilhouette(r, scene);
   drawOpenings(r, scene);
   drawReferenceLines(r, scene);
@@ -90,12 +97,40 @@ function drawHeightGrid(r: ICanvasRenderer, scene: ElevationScene): void {
     r.drawLine(a.x, a.y, b.x, b.y);
   }
 
-  // Línea de suelo, más marcada: es la referencia de todas las alturas.
-  const groundA = cslToScreen({ x: -0.2, y: 0 }, viewport);
-  const groundB = cslToScreen({ x: wallLength + 0.2, y: 0 }, viewport);
+  // Línea de suelo, más marcada: es la referencia de todas las alturas. Con
+  // base inclinada o escalonada sigue la base del muro.
+  const { levels } = elevation;
+  const groundA = cslToScreen({ x: 0, y: levels.leftBase ?? 0 }, viewport);
+  const groundB = cslToScreen({ x: wallLength, y: levels.rightBase ?? 0 }, viewport);
   r.setStrokeStyle(colors.gridMajor);
   r.setLineWidth(2);
+  r.drawLine(groundA.x - 0.2 * viewport.scale, groundA.y, groundA.x, groundA.y);
   r.drawLine(groundA.x, groundA.y, groundB.x, groundB.y);
+  r.drawLine(groundB.x, groundB.y, groundB.x + 0.2 * viewport.scale, groundB.y);
+}
+
+// ---------------------------------------------------------------------------
+// 1b. Líneas de nivel
+// ---------------------------------------------------------------------------
+
+/**
+ * Cada nivel del proyecto como una línea de trazos a lo ancho de la vista,
+ * con su nombre: es lo que deja leer a qué nivel se ata cada extremo.
+ */
+function drawLevelLines(r: ICanvasRenderer, scene: ElevationScene): void {
+  const lines = scene.levelLines ?? [];
+  if (lines.length === 0) return;
+  const { viewport, wallLength } = scene;
+  r.setLineWidth(1);
+  for (const line of lines) {
+    const a = cslToScreen({ x: -0.6, y: line.y }, viewport);
+    const b = cslToScreen({ x: wallLength + 0.6, y: line.y }, viewport);
+    r.setStrokeStyle(colors.info);
+    const dash = 8;
+    for (let x = a.x; x < b.x; x += dash * 2) r.drawLine(x, a.y, Math.min(x + dash, b.x), a.y);
+    r.setFillStyle(colors.info);
+    r.drawText(line.name, b.x - 2, a.y - 4, 10, 'right');
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -111,8 +146,8 @@ function drawWallSilhouette(r: ICanvasRenderer, scene: ElevationScene): void {
   // invisible la culata, que es justamente lo que se está levantando.
   const outline = hasHeightProfile(levels)
     ? [
-        { x: 0, y: 0 },
-        { x: wallLength, y: 0 },
+        { x: 0, y: levels.leftBase ?? 0 },
+        { x: wallLength, y: levels.rightBase ?? 0 },
         { x: wallLength, y: effectiveRightHeight(levels) },
         { x: 0, y: effectiveLeftHeight(levels) },
       ]
@@ -237,12 +272,16 @@ function drawElevationLabels(r: ICanvasRenderer, scene: ElevationScene): void {
   const base = cslToScreen({ x: wallLength / 2, y: 0 }, viewport);
   r.drawText(`${wallLength.toFixed(2)} m`, base.x, base.y + 18, 11, 'center');
 
-  // Alturas de los extremos: dos etiquetas si hay culata, una si no.
+  // Alturas de los extremos: dos etiquetas si el perfil no es rectangular
+  // (altura neta de cada extremo), una si lo es.
   if (hasHeightProfile(elevation.levels)) {
-    const left = cslToScreen({ x: 0, y: effectiveLeftHeight(elevation.levels) }, viewport);
-    const right = cslToScreen({ x: wallLength, y: effectiveRightHeight(elevation.levels) }, viewport);
-    r.drawText(`${effectiveLeftHeight(elevation.levels).toFixed(2)} m`, left.x + 4, left.y - 6, 11, 'left');
-    r.drawText(`${effectiveRightHeight(elevation.levels).toFixed(2)} m`, right.x - 4, right.y - 6, 11, 'center');
+    const lv = elevation.levels;
+    const lh = effectiveLeftHeight(lv) - baseAt(lv, 0, wallLength);
+    const rh = effectiveRightHeight(lv) - baseAt(lv, wallLength, wallLength);
+    const left = cslToScreen({ x: 0, y: effectiveLeftHeight(lv) }, viewport);
+    const right = cslToScreen({ x: wallLength, y: effectiveRightHeight(lv) }, viewport);
+    r.drawText(`${lh.toFixed(2)} m`, left.x + 4, left.y - 6, 11, 'left');
+    r.drawText(`${rh.toFixed(2)} m`, right.x - 4, right.y - 6, 11, 'right');
   } else {
     const top = cslToScreen({ x: wallLength / 2, y: elevation.levels.coronacion }, viewport);
     r.drawText(`${elevation.levels.coronacion.toFixed(2)} m`, top.x, top.y - 6, 11, 'center');

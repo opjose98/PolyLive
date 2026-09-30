@@ -12,6 +12,7 @@ import {
   WallId,
   RevitObjectId,
   generateId,
+  ObjectProperties,
 } from '../../domain/objects';
 import { CommandStack } from '../state/CommandStack';
 import { CreateDoorCommand } from '../commands/CreateDoorCommand';
@@ -27,6 +28,8 @@ export interface CreateDoorInput {
   height: Meters;
   doorType?: string;
   material?: string;
+  /** Propiedades libres con que nace (nivel y fase activos, p. ej.). */
+  properties?: ObjectProperties;
 }
 
 export interface CreateDoorOutput {
@@ -60,6 +63,7 @@ export class CreateDoorUseCase {
       height: input.height,
       doorType: input.doorType,
       material: input.material,
+      properties: input.properties,
     });
 
     // 3. Validar

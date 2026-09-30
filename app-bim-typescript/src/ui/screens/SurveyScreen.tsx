@@ -24,7 +24,7 @@
 //     y geolocalización cuando hay señal
 // =============================================================================
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -61,6 +61,17 @@ import { RangeEditHandlers, RangeSelectors } from '../workspace/RangeSelector';
 import { itemAt, RangeState } from '../../application/workspace/rangeModel';
 import { MarkerKind, ProjectMarker } from '../../domain/objects/marker';
 import { DEFAULT_EDITOR_DEFAULTS } from '../../application/editor/EditorController';
+import { ConstraintSelector } from '../workspace/ConstraintSelector';
+import {
+  ConstraintEdit,
+  ConstraintLevel,
+  defaultExtent,
+  describeExtent,
+  sortLevels,
+} from '../../application/workspace/constraintModel';
+import { isUniformWall, sameExtent } from '../../domain/objects/vertical';
+import { saveTextToUserFolder } from '../../native/export/saveToUserFolder';
+import { ValidationError } from '../../application/use-cases/types';
 import { sizes as chromeSizes, spacing as chromeSpacing } from '../design/tokens';
 import { useStore } from 'zustand';
 import { CameraCaptureView } from '../components/CameraCaptureView';
@@ -263,15 +274,15 @@ export function SurveyScreen({
     loadMarkers().catch(() => toast('No se pudieron leer los niveles del proyecto.', { kind: 'error' }));
   }, [loadMarkers]);
 
-  // Nivel activo = donde nace lo que se crea; el tramo nivel → superior es la
-  // altura por defecto de muros y columnas; [inferior, superior] lo visible.
+  // Selector de la VISTA: el nivel activo es la planta que se ve y se edita;
+  // [inferior, superior], lo que se calca debajo. A qué niveles se atan los
+  // muros y columnas lo decide su propio selector (base/tope), más abajo.
   const levelInfo = useMemo(() => {
     const finite = (st: RangeState) => st.items.filter((it) => Number.isFinite(it.value));
     const nivel = itemAt(levelsState, 'nivel');
     const sup = itemAt(levelsState, 'superior');
     const inf = itemAt(levelsState, 'inferior');
-    const height = Number.isFinite(sup.value) && sup.value > nivel.value ? sup.value - nivel.value : null;
-    return { finite: finite(levelsState), nivel, sup, inf, height, phases: finite(phasesState), fase: itemAt(phasesState, 'nivel') };
+    return { finite: finite(levelsState), nivel, sup, inf, phases: finite(phasesState), fase: itemAt(phasesState, 'nivel') };
   }, [levelsState, phasesState]);
 
   useEffect(() => {
@@ -283,6 +294,7 @@ export function SurveyScreen({
         base: finite.find((i) => i.base)?.id ?? nivel.id,
         all: new Set(finite.map((i) => i.id)),
         underlay: new Set(finite.filter((i) => i.id !== nivel.id && i.value >= inf.value && i.value <= sup.value).map((i) => i.id)),
+        elevations: new Map(finite.map((i) => [i.id, i.value] as [string, number])),
       },
       {
         active: fase.id,
@@ -293,10 +305,60 @@ export function SurveyScreen({
     );
   }, [editor, markersLoaded, levelInfo]);
 
+  // --- Selector de base y tope (muros y columnas) ---
+  const constraintLevels = useMemo<ConstraintLevel[]>(
+    () => sortLevels(levelInfo.finite.map((i) => ({ id: i.id, name: i.name, value: i.value }))),
+    [levelInfo.finite],
+  );
+  const levelsKey = constraintLevels.map((l) => `${l.id}:${l.value}`).join('|');
+  const unconnectedDefault = DEFAULT_EDITOR_DEFAULTS.wallHeight as number;
+  const [creationEdit, setCreationEdit] = useState<ConstraintEdit | null>(null);
+
+  // Por defecto siempre desde el nivel en que se está trabajando hasta el de
+  // arriba; cambiar de planta (o la lista de niveles) lo reinicia.
   useEffect(() => {
-    const h = levelInfo.height !== null ? meters(levelInfo.height) : DEFAULT_EDITOR_DEFAULTS.wallHeight;
-    editor.setDefaults({ wallHeight: h, columnHeight: h });
-  }, [editor, levelInfo.height]);
+    if (!markersLoaded || constraintLevels.length === 0) return;
+    const e = defaultExtent(constraintLevels, levelInfo.nivel.id, unconnectedDefault);
+    setCreationEdit({ a: e, b: e, linked: true, editing: 'a' });
+  }, [markersLoaded, levelInfo.nivel.id, levelsKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const wallMethod = activeTool?.toolId === 'muro' ? ((activeTool.methodId as 'drag' | 'points' | undefined) ?? 'drag') : null;
+  const isColumnTool = !!activeTool?.toolId.startsWith('columna');
+
+  // Punto a punto: cada punto tiene su selector. Al fijar el primero, el
+  // segundo arranca con sus mismos niveles y el selector pasa a editarlo.
+  const draftStarted = !!state.wallDraft?.start;
+  const prevDraftStarted = useRef(false);
+  useEffect(() => {
+    if (wallMethod !== 'points') {
+      prevDraftStarted.current = draftStarted;
+      return;
+    }
+    if (draftStarted !== prevDraftStarted.current) {
+      setCreationEdit((ed) =>
+        ed ? (draftStarted ? { ...ed, linked: false, b: ed.a, editing: 'b' } : { ...ed, linked: false, editing: 'a' }) : ed,
+      );
+      haptic.select();
+    }
+    prevDraftStarted.current = draftStarted;
+  }, [draftStarted, wallMethod]);
+
+  // Arrastre libre: un solo par base/tope para todo el muro.
+  useEffect(() => {
+    if (wallMethod === 'drag') setCreationEdit((ed) => (ed && !ed.linked ? { ...ed, linked: true, b: ed.a, editing: 'a' } : ed));
+    if (wallMethod === 'points') setCreationEdit((ed) => (ed && ed.linked ? { ...ed, linked: false } : ed));
+  }, [wallMethod]);
+
+  useEffect(() => {
+    if (!creationEdit) {
+      editor.setCreationVertical({ wall: null, column: null });
+      return;
+    }
+    editor.setCreationVertical({
+      wall: { start: creationEdit.a, end: creationEdit.linked ? creationEdit.a : creationEdit.b },
+      column: creationEdit.a,
+    });
+  }, [editor, creationEdit]);
 
   const makeMarkerHandlers = useCallback(
     (kind: MarkerKind, label: string): RangeEditHandlers => ({
@@ -616,16 +678,102 @@ export function SurveyScreen({
     () => (markersLoaded ? editor.underlayObjects : []),
     [editor, markersLoaded, state.objects, levelInfo],
   );
+  const existingIds = useMemo(
+    () => (markersLoaded ? editor.existingIds : new Set<string>()),
+    [editor, markersLoaded, state.objects, levelInfo],
+  );
   const sceneForCanvas = useMemo(
     () => ({
       ...canvasScene,
       underlay,
+      existingIds,
       objects: visibleObjects,
       showLabels: filters.cotas,
       photoMarkers: filters.fotos ? canvasScene.photoMarkers : [],
     }),
-    [canvasScene, underlay, visibleObjects, filters.cotas, filters.fotos],
+    [canvasScene, underlay, existingIds, visibleObjects, filters.cotas, filters.fotos],
   );
+
+  // --- Selector de base y tope: qué edita ---
+  // Con Muro o Columna activos, los que se van a crear; sin herramienta, el
+  // muro o columna seleccionado (confirmar = un paso de deshacer).
+  const [selEdit, setSelEdit] = useState<ConstraintEdit | null>(null);
+  const selectedVerticalEdit = useMemo((): ConstraintEdit | null => {
+    if (!markersLoaded) return null;
+    if (selected instanceof Wall) {
+      const v = editor.wallVertical(selected);
+      return { a: v.start, b: v.end, linked: isUniformWall(v), editing: 'a' };
+    }
+    if (selected instanceof Column) {
+      const e = editor.columnVertical(selected);
+      return { a: e, b: e, linked: true, editing: 'a' };
+    }
+    return null;
+  }, [editor, selected, markersLoaded, state.objects]);
+  useEffect(() => setSelEdit(null), [state.selectedId, state.objects]);
+
+  const constraintTarget: 'creation' | 'selection' | null =
+    creationEdit && (wallMethod || isColumnTool)
+      ? 'creation'
+      : !activeTool && selectedVerticalEdit && (selected instanceof Wall || selected instanceof Column)
+        ? 'selection'
+        : null;
+  const constraintEdit = constraintTarget === 'creation' ? creationEdit : constraintTarget === 'selection' ? (selEdit ?? selectedVerticalEdit) : null;
+
+  const handleConstraintChange = useCallback(
+    (next: ConstraintEdit, commit: boolean) => {
+      if (constraintTarget === 'creation') {
+        setCreationEdit(next);
+        return;
+      }
+      setSelEdit(next);
+      if (!commit) return;
+      const sel = editor.selected;
+      const same = selectedVerticalEdit && sameExtent(next.a, selectedVerticalEdit.a) && sameExtent(next.b, selectedVerticalEdit.b);
+      if (same && next.linked === selectedVerticalEdit?.linked) return;
+      const done =
+        sel instanceof Column
+          ? editor.updateSelectedVertical(next.a)
+          : editor.updateSelectedVertical({ start: next.a, end: next.linked ? next.a : next.b });
+      void done.then((ok) => {
+        if (ok) toast('Niveles del elemento actualizados', { kind: 'success', durationMs: 1400 });
+        else setSelEdit(null);
+      });
+    },
+    [constraintTarget, editor, selectedVerticalEdit],
+  );
+
+  const constraintElement =
+    constraintEdit && constraintLevels.length > 0 ? (
+      <ConstraintSelector
+        levels={constraintLevels}
+        edit={constraintEdit}
+        kind={isColumnTool || (constraintTarget === 'selection' && selected instanceof Column) ? 'column' : 'wall'}
+        canUnlink={constraintTarget === 'selection' ? selected instanceof Wall : wallMethod === 'points'}
+        caption={
+          constraintTarget === 'selection'
+            ? 'Sel.'
+            : wallMethod === 'points'
+              ? constraintEdit.editing === 'a'
+                ? 'Punto 1'
+                : 'Punto 2'
+              : isColumnTool
+                ? 'Col.'
+                : 'Muro'
+        }
+        endNames={
+          constraintTarget === 'selection' ? { a: 'Extremo A (inicio)', b: 'Extremo B (fin)' } : { a: 'Punto 1', b: 'Punto 2' }
+        }
+        onChange={handleConstraintChange}
+      />
+    ) : null;
+
+  const constraintSummary = (ed: ConstraintEdit | null) =>
+    ed
+      ? ed.linked || sameExtent(ed.a, ed.b)
+        ? describeExtent(constraintLevels, ed.a)
+        : `A ${describeExtent(constraintLevels, ed.a)} · B ${describeExtent(constraintLevels, ed.b)}`
+      : undefined;
 
   // --- BPC: contexto, píldoras y acciones ---
   const selectionSummary = useMemo((): SelectionSummary | null => {
@@ -633,9 +781,11 @@ export function SurveyScreen({
     if (!sel) return null;
     const cm = (m: unknown) => Math.round(Number(m) * 100);
     if (sel instanceof Wall) {
+      const p = editor.wallProfile(sel);
+      const h = Math.max(p.start.top, p.end.top) - Math.min(p.start.base, p.end.base);
       return {
         typeLabel: 'Muro',
-        detail: `${Number(sel.length).toFixed(2)} m · ${sel.isStructural ? 'portante' : 'tabique'}`,
+        detail: `${Number(sel.length).toFixed(2)} m · h ${h.toFixed(2)} m · ${sel.isStructural ? 'portante' : 'tabique'}`,
         props: { thickness: cm(sel.thickness) },
       };
     }
@@ -648,7 +798,7 @@ export function SurveyScreen({
       return { typeLabel: 'Recinto', detail: state.rooms[0] ? `${state.rooms[0].area.toFixed(2)} m²` : 'abierto', props: {} };
     }
     return { typeLabel: sel.type, props: {} };
-  }, [selected, state.rooms]);
+  }, [editor, selected, state.rooms, levelInfo]);
 
   const zoomPercent = (state.transform.scale / DEFAULT_SCALE) * 100;
   const bpcContext = resolveBpcContext({
@@ -728,12 +878,66 @@ export function SurveyScreen({
     }),
     [projectName, projectCode, roomName, operatorName, wallCount, state.objects.length, areaLabel],
   );
+  // --- Exportar a IFC (Revit): niveles, fases y antepechos del proyecto ---
+  const handleExportIfc = useCallback(async () => {
+    toast('Generando IFC…', { kind: 'info', durationMs: 1200 });
+    try {
+      const [lv, ph, elevs] = await Promise.all([
+        projectId ? services.markers.list(projectId, 'level') : Promise.resolve([] as ProjectMarker[]),
+        projectId ? services.markers.list(projectId, 'phase') : Promise.resolve([] as ProjectMarker[]),
+        services.elevations.listElevations(roomId),
+      ]);
+      const sills = new Map<string, number>();
+      for (const e of elevs) for (const o of e.openings) if (o.vanoId) sills.set(o.vanoId, o.sillHeight);
+      const out = await services.useCases.exportRoomIfc.execute({
+        roomId,
+        levels: lv.map((m) => ({ id: m.id, name: m.name, elevation: m.value, isBase: m.isBase })),
+        phaseNames: new Map(ph.map((m) => [m.id, m.name] as [string, string])),
+        openingSills: sills,
+        projectName,
+        projectKey: projectId,
+        author: operatorName,
+      });
+      const slug = (s: string) =>
+        s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'x';
+      // Hora local (la del operador), no UTC: es la que reconoce al buscar el archivo.
+      const d = new Date();
+      const two = (n: number) => String(n).padStart(2, '0');
+      const stamp = `${d.getFullYear()}${two(d.getMonth() + 1)}${two(d.getDate())}-${two(d.getHours())}${two(d.getMinutes())}`;
+      const saved = await saveTextToUserFolder(`${slug(projectName)}-${slug(roomName ?? 'espacio')}-${stamp}.ifc`, out.ifcContent);
+      if (saved.ok) {
+        haptic.commit();
+        toast(`IFC guardado en ${saved.folderLabel}`, { kind: 'success' });
+      } else if (saved.reason !== 'cancelled') {
+        console.warn('[export-ifc]', saved);
+        toast(
+          saved.reason === 'unsupported'
+            ? 'Guardar en carpeta solo está disponible en Android'
+            : `No se pudo escribir el archivo${saved.detail ? `: ${saved.detail}` : ''}`,
+          { kind: 'error' },
+        );
+      } else {
+        toast('Exportación cancelada: no se eligió carpeta', { kind: 'info' });
+      }
+    } catch (err) {
+      console.warn('[export-ifc]', err);
+      const msg =
+        err instanceof ValidationError
+          ? `No se puede exportar: ${err.warnings.map((w) => w.message).join(' · ')}`
+          : err instanceof AppError
+            ? err.userMessage
+            : 'No se pudo exportar el IFC.';
+      toast(msg, { kind: 'error' });
+    }
+  }, [services, projectId, roomId, projectName, operatorName, roomName]);
+
   const menuItems = useMemo(
     () => [
       ...(onExit ? [{ icon: 'arrow-left', label: 'Volver a los espacios', onPress: onExit }] : []),
       { icon: 'fit-to-screen-outline', label: 'Encuadrar todo', onPress: () => handleZoom('zoomFit') },
+      { icon: 'file-export-outline', label: 'Exportar IFC (Revit)', onPress: () => void handleExportIfc() },
     ],
-    [onExit, handleZoom],
+    [onExit, handleZoom, handleExportIfc],
   );
 
   const chromeTop = chromeSpacing.sm;
@@ -795,13 +999,7 @@ export function SurveyScreen({
 
         <Bpc
           context={bpcContext}
-          toolDetail={
-            activeTool && (activeTool.toolId === 'muro' || activeTool.toolId.startsWith('columna'))
-              ? `${levelInfo.nivel.name} → ${Number.isFinite(levelInfo.sup.value) ? levelInfo.sup.name : '∞'} · h ${(
-                  levelInfo.height ?? (DEFAULT_EDITOR_DEFAULTS.wallHeight as number)
-                ).toFixed(2)} m`
-              : undefined
-          }
+          toolDetail={constraintTarget === 'creation' ? constraintSummary(creationEdit) : undefined}
           pills={bpcPills}
           actions={bpcActions}
           onExitTool={() => workspaceStore.getState().clearTool()}
@@ -809,7 +1007,7 @@ export function SurveyScreen({
           right={chromeSpacing.lg + chromeSizes.fabView + chromeSpacing.sm}
         />
         <LevelChip top={belowBpc} />
-        {projectId ? <RangeSelectors levels={levelHandlers} phases={phaseHandlers} /> : null}
+        {projectId ? <RangeSelectors levels={levelHandlers} phases={phaseHandlers} extra={constraintElement} /> : null}
         <FabView top={chromeTop} />
         <CornerTools onZoom={handleZoom} />
         <FabCreate onToolActivated={handleToolActivated} />

@@ -19,6 +19,7 @@ import {
   ObjectProperties,
   AuditPhotoId,
 } from './base';
+import type { WallVertical } from './vertical';
 
 /**
  * Un muro es un elemento semántico con propiedades físicas (espesor, alto,
@@ -62,6 +63,13 @@ export class Wall extends RevitObjectBase {
   /** Portante (participa en la detección de recintos) o partición ligera. */
   isStructural: boolean;
 
+  /**
+   * Niveles a los que se atan la base y el tope de cada extremo (ver
+   * vertical.ts). Sin ella, el muro va de su nivel a `height` por encima.
+   * `height` se mantiene como resumen: la altura total del alzado.
+   */
+  vertical?: WallVertical;
+
   constructor(params: {
     id: RevitObjectId;
     roomId: RoomId;
@@ -74,6 +82,7 @@ export class Wall extends RevitObjectBase {
     height: Meters;
     material?: string;
     isStructural?: boolean;
+    vertical?: WallVertical;
     notes?: string;
     properties?: ObjectProperties;
     geometry_json?: string;
@@ -100,6 +109,7 @@ export class Wall extends RevitObjectBase {
     this.height = params.height;
     this.material = params.material;
     this.isStructural = params.isStructural ?? true;
+    this.vertical = params.vertical;
 
     // Serializar geometría. `startPoint`/`endPoint` se mantienen en la raíz del
     // JSON por compatibilidad: MoveObjectUseCase y ObjectStore los leen de ahí.

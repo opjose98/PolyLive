@@ -53,6 +53,8 @@ export interface PlanScene {
   readonly showLabels: boolean;
   /** Objetos de otros niveles/fases: se dibujan como calco atenuado, debajo de todo. */
   readonly underlay?: readonly RevitObjectBase[];
+  /** Ids de objetos de una fase anterior a la activa: se dibujan como existentes. */
+  readonly existingIds?: ReadonlySet<string>;
   /** Recintos cerrados detectados a partir de los muros. */
   readonly rooms?: readonly { polygon: readonly Point2D[]; area: number; centroid: Point2D }[];
   /** Nombre a mostrar en el recinto principal (el mayor). */
@@ -294,7 +296,8 @@ function drawWalls(ctx: Ctx): void {
     }
 
     const poly = outline.polygon.map(toScreen);
-    r.setFillStyle(wall.isStructural ? pal.wallFill : pal.partitionFill);
+    const existing = !!ctx.scene.existingIds?.has(wall.id as string);
+    r.setFillStyle(existing ? pal.existingFill : wall.isStructural ? pal.wallFill : pal.partitionFill);
     r.fillPolygon(poly);
 
     const gaps = gapsOf(ctx, wall);
@@ -307,7 +310,7 @@ function drawWalls(ctx: Ctx): void {
       );
     }
 
-    r.setStrokeStyle(pal.ink);
+    r.setStrokeStyle(existing ? pal.existingInk : pal.ink);
     r.setLineWidth(line);
     const [sL, eL, eR, sR] = outline.polygon;
     for (const [a, b] of [
@@ -355,8 +358,9 @@ function drawColumns({ r, scene, pal, toScreen, scale, line }: Ctx): void {
   for (const obj of scene.objects) {
     if (!(obj instanceof Column)) continue;
     const shape = columnShape(obj, toScreen, scale);
-    r.setFillStyle(pal.columnFill);
-    r.setStrokeStyle(pal.ink);
+    const existing = !!scene.existingIds?.has(obj.id as string);
+    r.setFillStyle(existing ? pal.existingFill : pal.columnFill);
+    r.setStrokeStyle(existing ? pal.existingInk : pal.ink);
     r.setLineWidth(line);
     if (shape.circle) {
       r.fillCircle(shape.circle.c.x, shape.circle.c.y, shape.circle.r);

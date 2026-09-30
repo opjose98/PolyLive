@@ -41,6 +41,20 @@ import { Window } from '../../domain/objects/window';
 import { distanceToSegment } from '../../domain/geometry/polygon-utils';
 import { lineShape } from '../../domain/geometry/shapes';
 import { LEVEL_PROP, PHASE_PROP } from '../../domain/objects/marker';
+import {
+  LevelElevations,
+  VerticalExtent,
+  WallProfile,
+  WallVertical,
+  columnVerticalOf,
+  hostLevelOf,
+  profileHeight,
+  profileProblem,
+  profileSpans,
+  resolveExtent,
+  resolveWallProfile,
+  wallVerticalOf,
+} from '../../domain/objects/vertical';
 import { projectPointToWall, isVanoWithinWall } from '../../domain/geometry/projections';
 import { AppError } from '../../shared/errors/AppError';
 import { CanvasManager } from '../canvas/CanvasManager';
@@ -145,6 +159,21 @@ export interface MarkerScope {
 export interface LevelScope extends MarkerScope {
   /** Otros niveles que se dibujan como calco atenuado. */
   readonly underlay: ReadonlySet<string>;
+  /** Cota de cada nivel: resuelve las restricciones de base y tope. */
+  readonly elevations: LevelElevations;
+}
+
+/**
+ * Altura del plano de corte sobre la cota del nivel (la de Revit por defecto):
+ * un muro o una columna aparece en la planta de todo nivel cuyo plano de corte
+ * atraviesa, no solo en la de su base.
+ */
+export const CUT_PLANE_HEIGHT = 1.2;
+
+/** Restricciones con que nacen los muros y columnas (el selector de base y tope). */
+export interface CreationVertical {
+  readonly wall: WallVertical | null;
+  readonly column: VerticalExtent | null;
 }
 
 export interface PhaseScope extends MarkerScope {
@@ -235,6 +264,9 @@ export class EditorController {
   private wallCommits: Promise<void> = Promise.resolve();
   private levelScope: LevelScope | null = null;
   private phaseScope: PhaseScope | null = null;
+  private creationVertical: CreationVertical = { wall: null, column: null };
+  /** Muros por id, recalculado solo cuando cambia la lista de objetos. */
+  private wallIndex: { objects: readonly RevitObjectBase[]; byId: Map<string, Wall> } | null = null;
 
   constructor(params: {
     services: AppServices;
@@ -328,8 +360,45 @@ export class EditorController {
     const lv = this.levelScope;
     if (!lv) return [];
     return this.state.objects.filter(
-      (o) => !(o instanceof Room) && !this.inScope(o) && this.phaseVisible(o) && lv.underlay.has(this.markerOf(o, LEVEL_PROP, lv)),
+      (o) => !(o instanceof Room) && !this.inScope(o) && this.phaseVisible(o) && lv.underlay.has(this.levelOf(o, lv)),
     );
+  }
+
+  /** Objetos visibles creados en una fase ANTERIOR a la activa: se dibujan como existentes. */
+  get existingIds(): ReadonlySet<string> {
+    const ph = this.phaseScope;
+    const out = new Set<string>();
+    if (!ph) return out;
+    const active = ph.order.get(ph.active) ?? 0;
+    for (const o of this.scopedObjects) {
+      if (o instanceof Room) continue;
+      if ((ph.order.get(this.markerOf(o, PHASE_PROP, ph)) ?? 0) < active) out.add(o.id as string);
+    }
+    return out;
+  }
+
+  /** Cotas de los niveles del proyecto (vacío sin niveles: todo a cota 0). */
+  get levelElevations(): LevelElevations {
+    return this.levelScope?.elevations ?? new Map();
+  }
+
+  /** Restricciones de un muro, con las de antes de existir niveles resueltas a su nivel. */
+  wallVertical(wall: Wall): WallVertical {
+    return wallVerticalOf(wall, this.levelScope?.base ?? '', LEVEL_PROP);
+  }
+
+  /** Alzado del muro en cotas absolutas. */
+  wallProfile(wall: Wall): WallProfile {
+    return resolveWallProfile(this.wallVertical(wall), this.levelElevations);
+  }
+
+  columnVertical(column: Column): VerticalExtent {
+    return columnVerticalOf(column, this.levelScope?.base ?? '', LEVEL_PROP);
+  }
+
+  /** Restricciones con que nacerán los próximos muros y columnas. `null` = altura por defecto. */
+  setCreationVertical(v: Partial<CreationVertical>): void {
+    this.creationVertical = { ...this.creationVertical, ...v };
   }
 
   /** Nivel y fase donde nace lo que se crea, y qué se ve. `null` = todo en la base. */
@@ -346,6 +415,49 @@ export class EditorController {
     return typeof id === 'string' && scope.all.has(id) ? id : scope.base;
   }
 
+  private wallById(id: string): Wall | undefined {
+    if (this.wallIndex?.objects !== this.state.objects) {
+      const byId = new Map<string, Wall>();
+      for (const o of this.state.objects) if (o instanceof Wall) byId.set(o.id as string, o);
+      this.wallIndex = { objects: this.state.objects, byId };
+    }
+    return this.wallIndex.byId.get(id);
+  }
+
+  /**
+   * Nivel al que pertenece un objeto: el de la base de un muro o columna (la
+   * más baja, si los extremos difieren), el guardado en los demás.
+   */
+  private levelOf(o: RevitObjectBase, lv: LevelScope): string {
+    const raw =
+      o instanceof Wall
+        ? hostLevelOf(this.wallVertical(o), lv.elevations)
+        : o instanceof Column
+          ? this.columnVertical(o).baseLevelId
+          : o.properties?.[LEVEL_PROP];
+    return typeof raw === 'string' && lv.all.has(raw) ? raw : lv.base;
+  }
+
+  /**
+   * ¿Se ve (y se edita) en la planta del nivel activo? Lo de su nivel, y los
+   * muros y columnas de otros niveles que atraviesan su plano de corte. Una
+   * puerta o ventana va con su muro.
+   */
+  private levelVisible(o: RevitObjectBase, lv: LevelScope): boolean {
+    if (o instanceof Door || o instanceof Window) {
+      const host = this.wallById(o.parentWallId as unknown as string);
+      if (host) return this.levelVisible(host, lv);
+    }
+    if (this.levelOf(o, lv) === lv.active) return true;
+    const cut = (lv.elevations.get(lv.active) ?? 0) + CUT_PLANE_HEIGHT;
+    if (o instanceof Wall) return profileSpans(this.wallProfile(o), cut);
+    if (o instanceof Column) {
+      const e = resolveExtent(this.columnVertical(o), lv.elevations);
+      return e.base <= cut && cut < e.top;
+    }
+    return false;
+  }
+
   private phaseVisible(o: RevitObjectBase): boolean {
     const ph = this.phaseScope;
     if (!ph) return true;
@@ -356,20 +468,20 @@ export class EditorController {
   private inScope(o: RevitObjectBase): boolean {
     if (o instanceof Room) return true;
     const lv = this.levelScope;
-    if (lv && this.markerOf(o, LEVEL_PROP, lv) !== lv.active) return false;
+    if (lv && !this.levelVisible(o, lv)) return false;
     return this.phaseVisible(o);
   }
 
-  /** Graba nivel y fase activos en un objeto recién creado. */
-  private async stampScope(obj: RevitObjectBase): Promise<void> {
-    if (!this.levelScope && !this.phaseScope) return;
-    await this.services.store.updateObject(obj.id, {
-      properties: {
-        ...obj.properties,
-        ...(this.levelScope && { [LEVEL_PROP]: this.levelScope.active }),
-        ...(this.phaseScope && { [PHASE_PROP]: this.phaseScope.active }),
-      },
-    } as Partial<RevitObjectBase>);
+  /**
+   * Propiedades con que nace un objeto: nivel y fase activos. Van en la misma
+   * escritura que lo crea, así Deshacer/Rehacer nunca ve un objeto sin ellas.
+   */
+  private scopeProps(level?: string): Record<string, string> {
+    const out: Record<string, string> = {};
+    const lv = level ?? this.levelScope?.active;
+    if (lv) out[LEVEL_PROP] = lv;
+    if (this.phaseScope) out[PHASE_PROP] = this.phaseScope.active;
+    return out;
   }
 
   get rooms(): Room[] {
@@ -453,7 +565,7 @@ export class EditorController {
     const baseRooms =
       !lv || lv.active === lv.base
         ? rooms
-        : detect(objects.filter((o): o is Wall => o instanceof Wall && this.markerOf(o, LEVEL_PROP, lv) === lv.base));
+        : detect(objects.filter((o): o is Wall => o instanceof Wall && this.levelOf(o, lv) === lv.base));
     if (await this.syncRoomGeometry(objects, baseRooms)) {
       objects = await this.services.store.listObjects(this.roomId);
     }
@@ -926,6 +1038,19 @@ export class EditorController {
   }
 
   private async persistWall(start: Point2D, end: Point2D): Promise<void> {
+    const vertical = this.creationVertical.wall;
+    let height = this.defaults.wallHeight;
+    let level: string | undefined;
+    if (vertical) {
+      const profile = resolveWallProfile(vertical, this.levelElevations);
+      const problem = profileProblem(profile);
+      if (problem) {
+        this.notify('error', `${problem} Ajusta la base y el tope en el selector del muro.`);
+        return;
+      }
+      height = meters(profileHeight(profile));
+      level = hostLevelOf(vertical, this.levelElevations);
+    }
     this.patch({ busy: true });
     try {
       const created = await this.services.useCases.createWall.execute({
@@ -933,10 +1058,11 @@ export class EditorController {
         startPoint: start,
         endPoint: end,
         thickness: this.defaults.wallThickness,
-        height: this.defaults.wallHeight,
+        height,
+        vertical: vertical ?? undefined,
+        properties: this.scopeProps(level),
       });
       this.warnOnAcuteMeeting(created.wall);
-      await this.stampScope(created.wall);
       await this.reload();
     } catch (err) {
       this.fail(err, 'No se pudo crear el muro. Verifica que sea válido.');
@@ -969,9 +1095,9 @@ export class EditorController {
         offsetPerpendicular: meters(0),
         width,
         height,
+        properties: this.scopeProps(this.levelScope ? this.levelOf(host, this.levelScope) : undefined),
       });
       const created = 'door' in result ? result.door : result.window;
-      await this.stampScope(created);
       await this.reload();
 
       this.patch({ selectedId: created.id });
@@ -986,6 +1112,16 @@ export class EditorController {
   }
 
   private async addColumn(world: Point2D): Promise<void> {
+    const vertical = this.creationVertical.column;
+    let height = this.defaults.columnHeight;
+    if (vertical) {
+      const e = resolveExtent(vertical, this.levelElevations);
+      if (e.top - e.base < 0.1) {
+        this.notify('error', 'El tope de la columna queda por debajo de su base. Ajusta el selector.');
+        return;
+      }
+      height = meters(e.top - e.base);
+    }
     this.patch({ busy: true });
     try {
       const result = await this.services.useCases.createColumn.execute({
@@ -993,9 +1129,10 @@ export class EditorController {
         position: world,
         diameter: this.defaults.columnDiameter,
         sectionShape: this.state.creation.column,
-        height: this.defaults.columnHeight,
+        height,
+        vertical: vertical ?? undefined,
+        properties: this.scopeProps(vertical?.baseLevelId),
       });
-      await this.stampScope(result.column);
       await this.reload();
       this.patch({ selectedId: result.column.id });
       if (result.warnings.length > 0) {
@@ -1065,6 +1202,50 @@ export class EditorController {
       }
     } catch (err) {
       this.fail(err, 'No se pudo actualizar la propiedad.');
+    } finally {
+      this.patch({ busy: false });
+    }
+  }
+
+  /**
+   * Cambia las restricciones de nivel del muro o columna seleccionado (y la
+   * altura que se deriva de ellas) en un solo paso de deshacer.
+   */
+  async updateSelectedVertical(vertical: WallVertical | VerticalExtent): Promise<boolean> {
+    const sel = this.selected;
+    if (!(sel instanceof Wall) && !(sel instanceof Column)) return false;
+    let height: number;
+    if (sel instanceof Wall) {
+      if (!('start' in vertical)) return false;
+      const profile = resolveWallProfile(vertical, this.levelElevations);
+      const problem = profileProblem(profile);
+      if (problem) {
+        this.notify('error', problem);
+        return false;
+      }
+      height = profileHeight(profile);
+    } else {
+      if ('start' in vertical) return false;
+      const e = resolveExtent(vertical, this.levelElevations);
+      if (e.top - e.base < 0.1) {
+        this.notify('error', 'El tope de la columna queda por debajo de su base.');
+        return false;
+      }
+      height = e.top - e.base;
+    }
+    this.patch({ busy: true });
+    try {
+      await this.services.useCases.updateObjectProperty.execute({
+        objectId: sel.id,
+        property: 'vertical',
+        newValue: vertical,
+        also: { height: meters(height) },
+      });
+      await this.reload();
+      return true;
+    } catch (err) {
+      this.fail(err, 'No se pudieron cambiar los niveles del elemento.');
+      return false;
     } finally {
       this.patch({ busy: false });
     }

@@ -267,6 +267,7 @@ export default function App() {
           services={services}
           roomId={activeRoomId}
           wallDbId={overlay.wallDbId}
+          projectId={project ? (project.id as unknown as string) : undefined}
           onClose={() => setOverlay({ kind: 'none' })}
         />
       </View>

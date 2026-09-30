@@ -34,6 +34,12 @@ export interface CanvasPalette {
   readonly label: string;
   /** Calco del nivel inferior (underlay). */
   readonly underlay: string;
+  /**
+   * Elementos de una fase ANTERIOR a la activa ("existente", como en Revit):
+   * relleno en medio tono y trazo gris. Lo nuevo de la fase se lee encima.
+   */
+  readonly existingFill: string;
+  readonly existingInk: string;
   /** Multiplicador de grosor de trazo (1 = normal). */
   readonly lineScale: number;
   /** Radio de los puntos de la rejilla, en px. */
@@ -62,6 +68,8 @@ export const CANVAS_PALETTES: Readonly<Record<CanvasThemeId, CanvasPalette>> = {
     photoMarker: '#8E24AA',
     label: '#424242',
     underlay: 'rgba(33, 33, 33, 0.18)',
+    existingFill: '#E0E0E0',
+    existingInk: '#9E9E9E',
     lineScale: 1,
     dotRadius: 1.4,
   },
@@ -86,6 +94,8 @@ export const CANVAS_PALETTES: Readonly<Record<CanvasThemeId, CanvasPalette>> = {
     photoMarker: '#CE93D8',
     label: '#E0E0E0',
     underlay: 'rgba(237, 237, 237, 0.16)',
+    existingFill: '#2E2E2E',
+    existingInk: '#757575',
     lineScale: 1,
     dotRadius: 1.4,
   },
@@ -110,6 +120,8 @@ export const CANVAS_PALETTES: Readonly<Record<CanvasThemeId, CanvasPalette>> = {
     photoMarker: '#D500F9',
     label: '#000000',
     underlay: 'rgba(0, 0, 0, 0.25)',
+    existingFill: '#D0D0D0',
+    existingInk: '#5A5A5A',
     lineScale: 2,
     dotRadius: 2.6,
   },

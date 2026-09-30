@@ -11,6 +11,7 @@ import {
   WallId,
   RevitObjectId,
   generateId,
+  ObjectProperties,
 } from '../../domain/objects';
 import { Window } from '../../domain/objects';
 import { CommandStack } from '../state/CommandStack';
@@ -28,6 +29,8 @@ export interface CreateWindowInput {
   windowType?: string;
   frameType?: string;
   glazing?: string;
+  /** Propiedades libres con que nace (nivel y fase activos, p. ej.). */
+  properties?: ObjectProperties;
 }
 
 export interface CreateWindowOutput {
@@ -62,6 +65,7 @@ export class CreateWindowUseCase {
       windowType: input.windowType,
       frameType: input.frameType,
       glazing: input.glazing,
+      properties: input.properties,
     });
 
     // 3. Validar

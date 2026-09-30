@@ -71,9 +71,12 @@ const fmt = (v: number, unit: string) => `${v > 0 ? '+' : ''}${Number(v.toFixed(
 export const RangeSelectors = React.memo(function RangeSelectors({
   levels,
   phases,
+  extra,
 }: {
   levels: RangeEditHandlers;
   phases: RangeEditHandlers;
+  /** Se muestra bajo los FABs mientras ningún selector está abierto (base/tope del elemento). */
+  extra?: React.ReactNode;
 }) {
   const panel = useStore(workspaceStore, (s) => s.currentPanel);
   const open: RangeKey | null = panel === 'range:levels' ? 'levels' : panel === 'range:phases' ? 'phases' : null;
@@ -96,6 +99,7 @@ export const RangeSelectors = React.memo(function RangeSelectors({
               haptic="select"
             />
           ))}
+          {extra}
         </Animated.View>
       )}
     </View>
@@ -290,7 +294,7 @@ function ConfigWindow({ cfg, handlers }: { cfg: Config; handlers: RangeEditHandl
 
 const styles = StyleSheet.create({
   side: { position: 'absolute', left: spacing.lg, top: 0, bottom: 0, justifyContent: 'center' },
-  fabs: { gap: spacing.md },
+  fabs: { gap: spacing.md, alignItems: 'flex-start' },
   panel: {
     height: '62%',
     minHeight: 280,
