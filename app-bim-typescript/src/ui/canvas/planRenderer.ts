@@ -39,6 +39,7 @@ import { Column } from '../../domain/objects/column';
 import { Door } from '../../domain/objects/door';
 import { Window } from '../../domain/objects/window';
 import { worldToScreen } from '../../domain/geometry/coordinates';
+import { isPointInPolygon } from '../../domain/geometry/polygon-utils';
 import type { Handle } from '../../application/canvas/SelectionService';
 import { CANVAS_PALETTES, CanvasPalette } from '../design/canvasThemes';
 import { sizes } from '../design/tokens';
@@ -723,8 +724,14 @@ function drawLabels(ctx: Ctx): void {
     const b = toScreen(wall.endPoint);
     const len = Math.hypot(b.x - a.x, b.y - a.y);
     if (len < 40) continue;
-    // Línea de cota fuera del muro, del lado izquierdo, a 12 px de la cara.
-    const side = (wall.thickness as number) / 2 + 12 / ctx.scale;
+    // Línea de cota a 12 px de la cara, del lado de AFUERA del recinto (si
+    // la izquierda cae dentro de un recinto, va a la derecha): las cotas no
+    // cruzan los espacios.
+    const off = (wall.thickness as number) / 2 + 12 / ctx.scale;
+    const probe = wallPoint(wall, (wall.length as number) / 2, off);
+    const inside = (scene.rooms ?? []).some((room) => room.polygon.length >= 3 && isPointInPolygon(probe, room.polygon));
+    const side = inside ? -off : off;
+    const textSide = inside ? -(off + 7 / ctx.scale) : off + 7 / ctx.scale;
     const p0 = toScreen(wallPoint(wall, 0, side));
     const p1 = toScreen(wallPoint(wall, wall.length as number, side));
     const ux = (p1.x - p0.x) / len;
@@ -737,7 +744,7 @@ function drawLabels(ctx: Ctx): void {
     const ty = (uy + ux) * TICK * Math.SQRT1_2;
     for (const p of [p0, p1]) r.drawLine(p.x - tx, p.y - ty, p.x + tx, p.y + ty);
     // El valor sobre la línea, del lado de afuera.
-    const m = toScreen(wallPoint(wall, (wall.length as number) / 2, side + 7 / ctx.scale));
+    const m = toScreen(wallPoint(wall, (wall.length as number) / 2, textSide));
     r.setFillStyle(pal.label);
     r.drawText(Number(wall.length).toFixed(2), m.x, m.y + 4, 10, 'center');
   }
