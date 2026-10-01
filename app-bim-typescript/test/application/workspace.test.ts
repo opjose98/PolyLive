@@ -25,6 +25,7 @@ import {
   renameItem,
   setItemValue,
   trackFractionOf,
+  withItems,
 } from '../../src/application/workspace/rangeModel';
 import { resolveBpcContext } from '../../src/application/workspace/bpcContext';
 import { createWorkspaceStore } from '../../src/state/workspaceStore';
@@ -175,6 +176,24 @@ describe('selector de rango', () => {
     const id = itemAt(s, 'nivel').id;
     s = removeItem(s, id);
     expect(itemAt(s, 'nivel').id).toBe('base');
+  });
+
+  it('withItems carga los elementos persistidos y conserva la selección por id', () => {
+    let s = createRangeState('Nivel 0');
+    s = withItems(s, [
+      { id: 'p:level:base', name: 'Planta baja', value: 0, base: true },
+      { id: 'L1', name: 'Piso 1', value: 3.2, base: false },
+    ]);
+    expect(itemAt(s, 'nivel').id).toBe('p:level:base'); // la base demo pasa a la real
+    s = moveThumb(s, 'nivel', 2);
+    s = withItems(s, [
+      { id: 'L-1', name: 'Sótano', value: -3, base: false },
+      { id: 'p:level:base', name: 'Planta baja', value: 0, base: true },
+      { id: 'L1', name: 'Piso 1', value: 3.2, base: false },
+    ]);
+    expect(itemAt(s, 'nivel').id).toBe('L1');
+    expect(s.pos.inferior).toBeLessThan(s.pos.nivel);
+    expect(s.pos.superior).toBeGreaterThan(s.pos.nivel);
   });
 
   it('valores altos arriba en el riel', () => {

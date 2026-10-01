@@ -11,6 +11,7 @@
 // de React que se perdía al desmontar el componente.
 // =============================================================================
 
+import { MarkerStore } from '../infrastructure/sqlite/MarkerStore';
 import { IDatabase } from '../infrastructure/sqlite/database';
 import { LevelId, levelId } from '../domain/objects/base';
 import { ObjectStore } from '../infrastructure/sqlite/ObjectStore';
@@ -65,6 +66,8 @@ export interface AppServices {
    * se modele de verdad.
    */
   defaultLevelId: LevelId;
+  /** Niveles y fases de cada proyecto. */
+  markers: MarkerStore;
   useCases: {
     createWall: CreateWallUseCase;
     createDoor: CreateDoorUseCase;
@@ -119,6 +122,7 @@ export function createAppServices(db: IDatabase): AppServices {
     projects: new ProjectService(projectStore, store, defaultLevelId),
     elevations: new WallElevationService(db, store, commandStack),
     defaultLevelId,
+    markers: new MarkerStore(db),
     useCases: {
       createWall: new CreateWallUseCase(store, commandStack, validationService),
       createDoor: new CreateDoorUseCase(store, commandStack, validationService),

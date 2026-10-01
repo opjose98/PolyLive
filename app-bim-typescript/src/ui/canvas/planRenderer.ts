@@ -51,6 +51,8 @@ export interface PlanScene {
   readonly showGrid: boolean;
   /** Cotas de muro y áreas de recinto. */
   readonly showLabels: boolean;
+  /** Objetos de otros niveles/fases: se dibujan como calco atenuado, debajo de todo. */
+  readonly underlay?: readonly RevitObjectBase[];
   /** Recintos cerrados detectados a partir de los muros. */
   readonly rooms?: readonly { polygon: readonly Point2D[]; area: number; centroid: Point2D }[];
   /** Nombre a mostrar en el recinto principal (el mayor). */
@@ -157,6 +159,7 @@ export function drawPlan(r: ICanvasRenderer, scene: PlanScene): void {
   };
 
   if (scene.showGrid) drawGrid(r, scene, pal);
+  if (scene.underlay?.length) drawUnderlay(r, scene.underlay, pal, ctx.toScreen, ctx.scale);
   drawRooms(ctx);
   drawWalls(ctx);
   drawColumns(ctx);
@@ -211,6 +214,31 @@ function drawGrid(r: ICanvasRenderer, scene: PlanScene, pal: CanvasPalette): voi
   r.setLineWidth(1 * pal.lineScale);
   if (transform.offsetX >= x0 && transform.offsetX <= x1) r.drawLine(transform.offsetX, y0, transform.offsetX, y1);
   if (transform.offsetY >= y0 && transform.offsetY <= y1) r.drawLine(x0, transform.offsetY, x1, transform.offsetY);
+}
+
+// ---------------------------------------------------------------------------
+// Calco de otros niveles (underlay)
+// ---------------------------------------------------------------------------
+
+function drawUnderlay(
+  r: ICanvasRenderer,
+  objects: readonly RevitObjectBase[],
+  pal: CanvasPalette,
+  toScreen: ToScreen,
+  scale: number,
+): void {
+  const walls = objects.filter((o): o is Wall => o instanceof Wall && o.isStraight);
+  const outlines = buildWallOutlines(
+    walls.map((w) => ({ id: w.id as string, start: w.startPoint, end: w.endPoint, thickness: w.thickness as number })),
+  );
+  r.setFillStyle(pal.underlay);
+  for (const o of outlines.values()) r.fillPolygon(o.polygon.map(toScreen));
+  for (const o of objects) {
+    if (!(o instanceof Column)) continue;
+    const shape = columnShape(o, toScreen, scale);
+    if (shape.circle) r.fillCircle(shape.circle.c.x, shape.circle.c.y, shape.circle.r);
+    else if (shape.poly) r.fillPolygon(shape.poly);
+  }
 }
 
 // ---------------------------------------------------------------------------

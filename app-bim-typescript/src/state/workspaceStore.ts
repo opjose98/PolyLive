@@ -40,6 +40,7 @@ import {
   renameItem,
   setItemValue,
   toggleSlotActive,
+  withItems,
   SetValueResult,
 } from '../application/workspace/rangeModel';
 
@@ -124,6 +125,8 @@ export interface WorkspaceActions {
 
   moveRangeThumb(key: RangeKey, slot: RangeSlot, idx: number): void;
   toggleRangeSlot(key: RangeKey, slot: RangeSlot): void;
+  /** Carga los niveles o fases persistidos del proyecto. */
+  setRangeItems(key: RangeKey, items: readonly { id: string; name: string; value: number; base: boolean }[]): void;
   addRangeItem(key: RangeKey): void;
   removeRangeItem(key: RangeKey, id: string): void;
   renameRangeItem(key: RangeKey, id: string, name: string): void;
@@ -255,6 +258,7 @@ export function createWorkspaceStore(initial: Partial<WorkspaceData> = {}) {
         if (get()[key].active[slot]) updateRange(key, (s) => moveThumb(s, slot, idx));
       },
       toggleRangeSlot: (key, slot) => updateRange(key, (s) => toggleSlotActive(s, slot)),
+      setRangeItems: (key, items) => updateRange(key, (s) => withItems(s, items)),
       addRangeItem: (key) => updateRange(key, (s) => addItem(s, RANGE_LABELS[key].item, key)),
       removeRangeItem: (key, id) => updateRange(key, (s) => removeItem(s, id)),
       renameRangeItem: (key, id, name) => updateRange(key, (s) => renameItem(s, id, name)),

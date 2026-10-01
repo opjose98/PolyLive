@@ -649,6 +649,77 @@ describe('EditorController', () => {
   });
 
   // -------------------------------------------------------------------------
+  // Niveles y fases
+  // -------------------------------------------------------------------------
+
+  describe('niveles y fases', () => {
+    const levels = (active: string, underlay: string[] = []) => ({
+      active,
+      base: 'L0',
+      all: new Set(['L0', 'L1']),
+      underlay: new Set(underlay),
+    });
+    const phases = (active: string) => ({
+      active,
+      base: 'F0',
+      all: new Set(['F0', 'F1']),
+      order: new Map([['F0', 0], ['F1', 1]]),
+    });
+
+    it('lo creado nace en el nivel y la fase activos', async () => {
+      editor.setScope(levels('L1'), phases('F1'));
+      editor.setSnapEnabled(false);
+      editor.setNodeSnapEnabled(false);
+      await drawWall(0, 0, 3, 0);
+      const stored = (await services.store.listObjects(ROOM_ID)).find((o): o is Wall => o instanceof Wall)!;
+      expect(stored.properties.levelMarkerId).toBe('L1');
+      expect(stored.properties.phaseId).toBe('F1');
+    });
+
+    it('solo se ve y se toca el nivel activo; otro nivel puede quedar como calco', async () => {
+      editor.setSnapEnabled(false);
+      editor.setNodeSnapEnabled(false);
+      editor.setScope(levels('L0'), null);
+      await drawWall(0, 0, 3, 0);
+      editor.setScope(levels('L1', ['L0']), null);
+      await editor.reload();
+
+      expect(editor.walls).toHaveLength(0);
+      expect(editor.underlayObjects).toHaveLength(1);
+      editor.setTool('select');
+      await editor.handleTap(px(1.5), px(0), TOL_PX);
+      expect(editor.getState().selectedId).toBeNull();
+    });
+
+    it('lo que no tiene nivel (levantado antes) pertenece a la base', async () => {
+      editor.setSnapEnabled(false);
+      editor.setNodeSnapEnabled(false);
+      await drawWall(0, 0, 3, 0); // sin alcance: sin levelId
+      editor.setScope(levels('L0'), null);
+      await editor.reload();
+      expect(editor.walls).toHaveLength(1);
+    });
+
+    it('lo creado en una fase posterior no se ve desde una anterior', async () => {
+      editor.setSnapEnabled(false);
+      editor.setNodeSnapEnabled(false);
+      editor.setScope(null, phases('F1'));
+      await drawWall(0, 0, 3, 0);
+      editor.setScope(null, phases('F0'));
+      await editor.reload();
+      expect(editor.walls).toHaveLength(0);
+    });
+
+    it('el recinto que se guarda es el de la base, aunque se esté trazando en otro nivel', async () => {
+      editor.setScope(levels('L1'), null);
+      await drawRectangle();
+      expect(editor.getState().rooms).toHaveLength(1); // se ve en el nivel activo
+      const room = (await services.store.readObject(ROOM_OBJECT_ID)) as Room;
+      expect(room.geometry).toHaveLength(0); // pero no reescribe el de la base
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // Medición
   // -------------------------------------------------------------------------
 

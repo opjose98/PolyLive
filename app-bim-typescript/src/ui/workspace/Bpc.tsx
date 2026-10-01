@@ -38,11 +38,13 @@ export interface BpcProps {
   pills: readonly BpcPill[];
   actions?: readonly BpcAction[];
   onExitTool?: () => void;
+  /** Dato extra de la herramienta (p. ej. restricción de altura del nivel). */
+  toolDetail?: string;
   top: number;
   right: number;
 }
 
-export const Bpc = React.memo(function Bpc({ context, pills, actions = [], onExitTool, top, right }: BpcProps) {
+export const Bpc = React.memo(function Bpc({ context, pills, actions = [], onExitTool, toolDetail, top, right }: BpcProps) {
   const key = context.kind === 'tool' ? `t-${context.tool.toolId}` : context.kind === 'selection' ? 's' : 'c';
   return (
     <Animated.View style={[styles.bar, { top, right }]} layout={LinearTransition.springify().damping(22)}>
@@ -52,6 +54,7 @@ export const Bpc = React.memo(function Bpc({ context, pills, actions = [], onExi
             <>
               <Text style={styles.strong}>{context.tool.label}</Text>
               <Text style={styles.muted}>{context.tool.methodLabel ?? context.tool.categoryLabel}</Text>
+              {toolDetail ? <Text style={styles.value}>{toolDetail}</Text> : null}
             </>
           ) : context.kind === 'selection' ? (
             <>
