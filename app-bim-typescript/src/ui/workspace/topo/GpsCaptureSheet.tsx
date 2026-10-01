@@ -8,18 +8,18 @@
 // =============================================================================
 
 import React, { useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { Canvas, Path, Skia } from '@shopify/react-native-skia';
 import { BottomSheet, ActionButton, Icon } from '../../primitives';
 import { GpsAverage, GPS_WARN_METERS } from '../../../domain/geo/gpsAverage';
 import { GpsProgress, GpsSession, startGpsAveraging } from '../../../native/location/GpsAverager';
 import { AppError } from '../../../shared/errors/AppError';
-import { colors, spacing } from '../../design/tokens';
+import { spacing } from '../../design/tokens';
 import { type } from '../../design/typography';
 import { haptic } from '../../design/haptics';
+import { themedStyles, useTheme } from '../../design/theme';
 
 const RING = 150;
-const TOPO = '#2E7D32';
 
 export function GpsCaptureSheet({
   open,
@@ -35,6 +35,8 @@ export function GpsCaptureSheet({
   onResult: (avg: GpsAverage) => void;
   onClose: () => void;
 }) {
+  const styles = useStyles();
+  const colors = useTheme();
   const [progress, setProgress] = useState<GpsProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const session = useRef<GpsSession | null>(null);
@@ -80,10 +82,10 @@ export function GpsCaptureSheet({
         <View style={styles.ringWrap}>
           <Canvas style={styles.ring}>
             <Path path={(() => { const b = Skia.Path.Make(); b.addCircle(RING / 2, RING / 2, RING / 2 - 10); return b; })()} color={colors.border} style="stroke" strokeWidth={8} />
-            <Path path={arc} color={TOPO} style="stroke" strokeWidth={8} strokeCap="round" />
+            <Path path={arc} color={colors.accentText} style="stroke" strokeWidth={8} strokeCap="round" />
           </Canvas>
           <View style={styles.ringText}>
-            <Icon name="crosshairs-gps" size={22} color={TOPO} />
+            <Icon name="crosshairs-gps" size={22} color={colors.accentText} />
             <Text style={styles.big}>{left}s</Text>
             <Text style={styles.small}>{progress?.samples ?? 0} lecturas</Text>
           </View>
@@ -107,7 +109,7 @@ export function GpsCaptureSheet({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   root: { padding: spacing.lg, gap: spacing.md, alignItems: 'center' },
   title: { ...type.title, color: colors.text, alignSelf: 'flex-start' },
   sub: { ...type.body, color: colors.textSecondary, alignSelf: 'flex-start' },
@@ -120,4 +122,4 @@ const styles = StyleSheet.create({
   warn: { color: colors.warning },
   error: { ...type.body, color: colors.error, textAlign: 'center' },
   row: { flexDirection: 'row', gap: spacing.sm, alignSelf: 'stretch' },
-});
+}));

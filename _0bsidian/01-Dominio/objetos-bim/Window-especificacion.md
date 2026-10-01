@@ -2,7 +2,7 @@
 name: Window-especificación
 description: Ventana — vano en muro, similar a Door pero propósito diferente.
 type: dominio
-depends-on: "[[RevitObjectBase]], [[Wall-especificación]], [[proyecciones-punto-muro]]"
+depends-on: "[[RevitObjectBase]], [[Wall-especificacion]], [[proyecciones-punto-muro]]"
 mentioned-in: "Maestro §6.3"
 tags: #objetos-bim #vano #window
 ---
@@ -43,21 +43,21 @@ class Window extends RevitObjectBase {
 
 ## Invariantes
 
-Idénticas a [[Door-especificación]]
+Idénticas a [[Door-especificacion]]
 
 ## Validación
 
-Idéntica a [[Door-especificación]] — ver [[DoorWindowValidationService]]
+Idéntica a [[Door-especificacion]] — ver [[DoorWindowValidationService]]
 
 ## Exportación IFC
 
-Similar a [[Door-especificación]], pero con atributos de vidriería.
+Similar a [[Door-especificacion]], pero con atributos de vidriería.
 
 ---
 
 ## Relacionado con
 
-- [[Door-especificación]] — gemela estructural
+- [[Door-especificacion]] — gemela estructural
 - Resto igual a Door
 
 ---

@@ -61,7 +61,7 @@ interface Polygon {
 }
 ```
 
-**Uso:** Contorno de un Recinto ([[Room-especificación]]).
+**Uso:** Contorno de un Recinto ([[Room-especificacion]]).
 
 ---
 
@@ -121,7 +121,7 @@ function degrees(value: number): Degrees {
 
 - [[sistema-coordenadas-6-capas]] — cómo estos tipos se transforman entre coordenadas
 - [[CDT-algoritmo]] — usa Triangle
-- [[Wall-especificación]], [[Room-especificación]] — usan Point2D/Point3D
+- [[Wall-especificacion]], [[Room-especificacion]] — usan Point2D/Point3D
 
 ---
 

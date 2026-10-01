@@ -139,7 +139,8 @@ function drawLevelLines({ r, scene, pal, toScreen }: Ctx): void {
     const y = toScreen({ x: 0, y: line.y }).y;
     if (y < -2 || y > scene.height + 2) continue;
     const dash = 7;
-    for (let x = 0; x < scene.width; x += dash * 2) r.drawLine(x, y, Math.min(x + dash, scene.width), y);
+    // Más allá de los bordes: al panear no deben verse los extremos de la línea.
+    for (let x = -scene.width; x < scene.width * 2; x += dash * 2) r.drawLine(x, y, x + dash, y);
   }
 }
 

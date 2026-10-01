@@ -14,11 +14,12 @@
 // =============================================================================
 
 import React, { useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { Canvas, Circle, Path, Skia } from '@shopify/react-native-skia';
 import { Tappable } from '../primitives';
 import { elevation, spacing } from '../design/tokens';
 import { type } from '../design/typography';
+import { themedStyles } from '../design/theme';
 
 const SIZE = 72;
 const C = SIZE / 2;
@@ -55,6 +56,7 @@ export interface AxisGizmoProps {
 }
 
 export const AxisGizmo = React.memo(function AxisGizmo({ kind, rotation = 0, mirrored, northAngle, bottom, onPress }: AxisGizmoProps) {
+  const styles = useStyles();
   const paths = useMemo(() => {
     if (kind === 'elevation') {
       return { x: arrow(mirrored ? -1 : 1, 0), y: null, z: arrow(0, -1), north: null };
@@ -108,18 +110,20 @@ export const AxisGizmo = React.memo(function AxisGizmo({ kind, rotation = 0, mir
   );
 });
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   box: {
     position: 'absolute',
     left: spacing.lg,
     width: SIZE,
     height: SIZE,
     borderRadius: SIZE / 2,
-    backgroundColor: 'rgba(255,255,255,0.86)',
+    backgroundColor: colors.glass,
+    borderWidth: colors.hairline,
+    borderColor: colors.border,
     ...elevation[1],
   },
   canvas: { width: SIZE, height: SIZE },
   label: { position: 'absolute', ...type.label, fontSize: 10 },
   north: { position: 'absolute', right: 2, top: 0, ...type.label, fontSize: 10, color: AXIS_COLORS.north },
-});
+}));
 

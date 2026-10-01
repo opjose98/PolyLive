@@ -8,12 +8,19 @@
 // Función pura sobre `ICanvasRenderer`: se verifica con un renderer que
 // registra llamadas, sin montar Skia.
 //
-// REPRESENTACIÓN DE PLANO (no de esquema):
-//   · muro = dos caras con relleno (poché) y esquinas a inglete; los vanos
-//     lo cortan y dejan jambas; los extremos sueltos se cierran con tapa;
-//   · puerta = hoja perpendicular al muro + arco de giro;
-//   · ventana = marco (dos líneas) + vidrio;
-//   · columna = su sección real (círculo o rectángulo) rellena;
+// REPRESENTACIÓN DE PLANO (convenciones de dibujo arquitectónico, ISO 128 /
+// NCS, y los filtros de fase de Revit):
+//   · JERARQUÍA DE TRAZOS: lo CORTADO por el plano (caras de muro, columnas)
+//     en trazo grueso; lo visible en medio; símbolos, tramas y cotas en fino.
+//   · muro = dos caras con esquinas a inglete; los vanos lo cortan y dejan
+//     jambas; los extremos sueltos se cierran con tapa. Relleno (poché) según
+//     material: concreto/portante sólido, mampostería con trama a 45°,
+//     tabique liviano (drywall) solo contorno;
+//   · fase anterior ("existente") en medio tono y sin poché, como en Revit;
+//   · puerta = hoja con espesor abierta a 90° + arco de giro fino;
+//   · ventana = caras del muro de jamba a jamba + vidrio doble fino;
+//   · columna = su sección real con poché sólido y trazo grueso;
+//   · cota = línea de cota fina con trazos a 45° y el valor encima;
 //   · recinto = solo los contornos CERRADOS que forman los muros.
 //
 // ORDEN DE CAPAS (de atrás hacia delante):
@@ -32,10 +39,11 @@ import { Column } from '../../domain/objects/column';
 import { Door } from '../../domain/objects/door';
 import { Window } from '../../domain/objects/window';
 import { worldToScreen } from '../../domain/geometry/coordinates';
+import { isPointInPolygon } from '../../domain/geometry/polygon-utils';
 import type { Handle } from '../../application/canvas/SelectionService';
 import { CANVAS_PALETTES, CanvasPalette } from '../design/canvasThemes';
 import { sizes } from '../design/tokens';
-import { buildWallOutlines, faceSegments, WallOutline } from './wallGeometry';
+import { buildWallOutlines, faceSegments, hatchSegments, WallOutline } from './wallGeometry';
 
 // ---------------------------------------------------------------------------
 // Entrada
@@ -109,6 +117,26 @@ export function gridStepMeters(scale: number): number {
 
 type ToScreen = (p: Point2D) => Point2D;
 
+/** Jerarquía de trazos (px, antes de `lineScale`). */
+const STROKE = { cut: 2, medium: 1.2, thin: 0.75 } as const;
+/** Paso de la trama de mampostería (px). */
+const HATCH_PX = 6;
+
+export type WallRendering = 'solid' | 'hatch' | 'outline';
+
+/**
+ * Cómo se rellena un muro cortado. El material escrito manda (concreto,
+ * ladrillo, bloque, drywall…); sin material, un portante se dibuja sólido y
+ * un tabique con trama.
+ */
+export function wallRendering(material: string | undefined, isStructural: boolean): WallRendering {
+  const m = (material ?? '').toLowerCase();
+  if (/drywall|yeso|panel|superboard|board|madera|vidrio/.test(m)) return 'outline';
+  if (/ladrillo|bloque|mamposter|adobe|piedra|tapia/.test(m)) return 'hatch';
+  if (/concreto|hormig|reforzad|acero/.test(m)) return 'solid';
+  return isStructural ? 'solid' : 'hatch';
+}
+
 interface Ctx {
   readonly r: ICanvasRenderer;
   readonly scene: PlanScene;
@@ -128,28 +156,23 @@ interface Ctx {
 // ---------------------------------------------------------------------------
 
 /**
- * Capa dinámica: solo el muro en curso y el anillo de snap. Se graba en un
- * Picture aparte para que trazar no obligue a regrabar toda la planta.
+ * Capa viva (se regraba con cada movimiento del dedo, la planta no): el muro
+ * en curso, el objeto que se arrastra con sus vanos y handles, y el anillo de
+ * snap. Es barata porque solo contiene eso.
  */
 export function drawPlanOverlay(r: ICanvasRenderer, scene: PlanScene): void {
-  const pal = scene.palette ?? CANVAS_PALETTES.claro;
-  const toScreen = (p: Point2D) => worldToScreen(p, scene.transform);
-  drawWallDraft({
-    r,
-    scene,
-    pal,
-    toScreen,
-    scale: scene.transform.scale,
-    line: 1.2 * pal.lineScale,
-    walls: [],
-    wallsById: new Map(),
-    outlines: new Map(),
-    vanosByWall: new Map(),
-  });
-  if (scene.snapIndicator) drawSnapIndicator(r, toScreen(scene.snapIndicator), pal);
+  const ctx = makeCtx(r, scene);
+  if (scene.objects.length) {
+    drawWalls(ctx);
+    drawColumns(ctx);
+    drawVanos(ctx);
+    drawSelection(ctx);
+  }
+  drawWallDraft(ctx);
+  if (scene.snapIndicator) drawSnapIndicator(r, ctx.toScreen(scene.snapIndicator), ctx.pal);
 }
 
-export function drawPlan(r: ICanvasRenderer, scene: PlanScene): void {
+function makeCtx(r: ICanvasRenderer, scene: PlanScene): Ctx {
   const pal = scene.palette ?? CANVAS_PALETTES.claro;
   const walls = scene.objects.filter((o): o is Wall => o instanceof Wall);
   const vanosByWall = new Map<string, (Door | Window)[]>();
@@ -158,14 +181,13 @@ export function drawPlan(r: ICanvasRenderer, scene: PlanScene): void {
     const key = o.parentWallId as unknown as string;
     vanosByWall.set(key, [...(vanosByWall.get(key) ?? []), o]);
   }
-
-  const ctx: Ctx = {
+  return {
     r,
     scene,
     pal,
     toScreen: (p) => worldToScreen(p, scene.transform),
     scale: scene.transform.scale,
-    line: 1.2 * pal.lineScale,
+    line: STROKE.thin * pal.lineScale,
     walls,
     wallsById: new Map(walls.map((w) => [w.id as string, w])),
     outlines: buildWallOutlines(
@@ -175,6 +197,11 @@ export function drawPlan(r: ICanvasRenderer, scene: PlanScene): void {
     ),
     vanosByWall,
   };
+}
+
+export function drawPlan(r: ICanvasRenderer, scene: PlanScene): void {
+  const ctx = makeCtx(r, scene);
+  const { pal } = ctx;
 
   if (scene.showGrid) drawGrid(r, scene, pal);
   if (scene.underlay?.length) drawUnderlay(r, scene.underlay, pal, ctx.toScreen, ctx.scale);
@@ -297,14 +324,16 @@ function wallPoint(wall: Wall, along: number, side: number): Point2D {
 }
 
 function drawWalls(ctx: Ctx): void {
-  const { r, pal, toScreen, line } = ctx;
+  const { r, pal, toScreen } = ctx;
+  const cut = STROKE.cut * pal.lineScale;
+  const thin = STROKE.thin * pal.lineScale;
 
   for (const wall of ctx.walls) {
     const outline = ctx.outlines.get(wall.id as string);
     const half = (wall.thickness as number) / 2;
 
     if (!outline) {
-      // Muro curvo o degenerado: eje con su espesor, como antes.
+      // Muro curvo o degenerado: eje con su espesor.
       const a = toScreen(wall.startPoint);
       const b = toScreen(wall.endPoint);
       r.setStrokeStyle(pal.ink);
@@ -315,8 +344,16 @@ function drawWalls(ctx: Ctx): void {
 
     const poly = outline.polygon.map(toScreen);
     const existing = !!ctx.scene.existingIds?.has(wall.id as string);
-    r.setFillStyle(existing ? pal.existingFill : wall.isStructural ? pal.wallFill : pal.partitionFill);
+    const kind = existing ? 'outline' : wallRendering(wall.material, wall.isStructural);
+
+    // Poché: sólido, o fondo + trama; lo existente, medio tono sin trama.
+    r.setFillStyle(existing ? pal.existingFill : kind === 'solid' ? pal.wallFill : pal.background);
     r.fillPolygon(poly);
+    if (kind === 'hatch') {
+      r.setStrokeStyle(pal.partition);
+      r.setLineWidth(thin);
+      for (const [a, b] of hatchSegments(poly, HATCH_PX * pal.lineScale)) r.drawLine(a.x, a.y, b.x, b.y);
+    }
 
     const gaps = gapsOf(ctx, wall);
     // Hueco de cada vano: se "borra" el poché dentro del espesor.
@@ -328,8 +365,9 @@ function drawWalls(ctx: Ctx): void {
       );
     }
 
+    // Caras cortadas: trazo grueso (medio tono si es existente).
     r.setStrokeStyle(existing ? pal.existingInk : pal.ink);
-    r.setLineWidth(line);
+    r.setLineWidth(existing ? STROKE.medium * pal.lineScale : cut);
     const [sL, eL, eR, sR] = outline.polygon;
     for (const [a, b] of [
       ...faceSegments(wall.startPoint, wall.endPoint, sL, eL, gaps),
@@ -372,14 +410,14 @@ function columnShape(col: Column, toScreen: ToScreen, scale: number): { circle?:
   return footprint ? { poly: footprint.map(toScreen) } : {};
 }
 
-function drawColumns({ r, scene, pal, toScreen, scale, line }: Ctx): void {
+function drawColumns({ r, scene, pal, toScreen, scale }: Ctx): void {
   for (const obj of scene.objects) {
     if (!(obj instanceof Column)) continue;
     const shape = columnShape(obj, toScreen, scale);
     const existing = !!scene.existingIds?.has(obj.id as string);
     r.setFillStyle(existing ? pal.existingFill : pal.columnFill);
     r.setStrokeStyle(existing ? pal.existingInk : pal.ink);
-    r.setLineWidth(line);
+    r.setLineWidth((existing ? STROKE.medium : STROKE.cut) * pal.lineScale);
     if (shape.circle) {
       r.fillCircle(shape.circle.c.x, shape.circle.c.y, shape.circle.r);
       r.strokeCircle(shape.circle.c.x, shape.circle.c.y, shape.circle.r);
@@ -411,17 +449,23 @@ function drawVanos(ctx: Ctx): void {
       const w = b - a;
       if (w <= 0) continue;
 
-      r.setStrokeStyle(pal.ink);
-      r.setLineWidth(line);
-
+      const medium = STROKE.medium * pal.lineScale;
       if (v instanceof Door) {
-        // Bisagra en el inicio del vano, sobre la cara izquierda; la hoja
-        // abierta a 90° y el arco que barre hasta la jamba opuesta.
-        const hinge = wallPoint(wall, a, half);
-        const leafEnd = wallPoint(wall, a, half + w);
-        const h = toScreen(hinge);
-        const le = toScreen(leafEnd);
-        r.drawLine(h.x, h.y, le.x, le.y);
+        // Hoja abierta a 90° con su espesor (≈4 cm, mínimo legible), con la
+        // bisagra en el inicio del vano sobre la cara izquierda; arco fino
+        // hasta la jamba opuesta.
+        const leafT = Math.max(0.04, 2 / ctx.scale);
+        const leaf = [
+          wallPoint(wall, a, half),
+          wallPoint(wall, a, half + w),
+          wallPoint(wall, a + leafT, half + w),
+          wallPoint(wall, a + leafT, half),
+        ].map(toScreen);
+        r.setFillStyle(pal.background);
+        r.fillPolygon(leaf);
+        r.setStrokeStyle(pal.ink);
+        r.setLineWidth(medium);
+        r.strokePolygon(leaf);
 
         const arc: Point2D[] = [];
         for (let i = 0; i <= ARC_STEPS; i++) {
@@ -429,21 +473,26 @@ function drawVanos(ctx: Ctx): void {
           arc.push(toScreen(wallPoint(wall, a + w * Math.sin(t), half + w * Math.cos(t))));
         }
         r.setStrokeStyle(pal.opening);
-        r.setLineWidth(line * 0.8);
+        r.setLineWidth(line);
         r.strokePolyline(arc);
       } else {
-        // Ventana: marco a ambos lados y el vidrio en el eje.
-        const f = half * 0.55;
-        for (const side of [f, -f]) {
+        // Ventana: las caras del muro siguen de jamba a jamba (antepecho) y
+        // el vidrio, doble y fino, en el eje.
+        r.setStrokeStyle(pal.ink);
+        r.setLineWidth(medium);
+        for (const side of [half, -half]) {
           const p0 = toScreen(wallPoint(wall, a, side));
           const p1 = toScreen(wallPoint(wall, b, side));
           r.drawLine(p0.x, p0.y, p1.x, p1.y);
         }
-        const g0 = toScreen(wallPoint(wall, a, 0));
-        const g1 = toScreen(wallPoint(wall, b, 0));
         r.setStrokeStyle(pal.opening);
-        r.setLineWidth(line * 1.4);
-        r.drawLine(g0.x, g0.y, g1.x, g1.y);
+        r.setLineWidth(line);
+        const g = Math.max(half * 0.18, 1.2 / ctx.scale);
+        for (const side of [g, -g]) {
+          const p0 = toScreen(wallPoint(wall, a, side));
+          const p1 = toScreen(wallPoint(wall, b, side));
+          r.drawLine(p0.x, p0.y, p1.x, p1.y);
+        }
       }
     }
   }
@@ -486,11 +535,13 @@ function drawWallDraft(ctx: Ctx): void {
       r.setLineWidth(1.5 * pal.lineScale);
       r.strokePolygon(poly);
     }
-    // Cota en vivo: el operador ve la longitud mientras traza.
+    // Cota y ángulo en vivo: longitud y dirección (0° = +X, antihorario con
+    // la Y arriba, como los ejes) mientras se traza.
     const length = Math.hypot(d.end.x - d.start.x, d.end.y - d.start.y);
     if (start && end) {
+      const deg = ((Math.atan2(-(d.end.y - d.start.y), d.end.x - d.start.x) * 180) / Math.PI + 360) % 360;
       r.setFillStyle(pal.preview);
-      r.drawText(`${length.toFixed(2)} m`, (start.x + end.x) / 2, (start.y + end.y) / 2 - 12, 13, 'center');
+      r.drawText(`${length.toFixed(2)} m · ${deg.toFixed(0)}°`, (start.x + end.x) / 2, (start.y + end.y) / 2 - 14, 13, 'center');
     }
   }
 
@@ -664,20 +715,41 @@ function drawSnapIndicator(r: ICanvasRenderer, p: Point2D, pal: CanvasPalette): 
 
 function drawLabels(ctx: Ctx): void {
   const { r, scene, pal, toScreen } = ctx;
-  r.setFillStyle(pal.label);
+  const thin = STROKE.thin * pal.lineScale;
+  const TICK = 4;
 
   for (const wall of ctx.walls) {
     // Por debajo de 40 px de muro en pantalla la cota se solaparía con la vecina.
     const a = toScreen(wall.startPoint);
     const b = toScreen(wall.endPoint);
-    if (Math.hypot(b.x - a.x, b.y - a.y) < 40) continue;
-    // Fuera del muro, del lado izquierdo, a 10 px de la cara.
-    const along = (wall.length as number) / 2;
-    const side = (wall.thickness as number) / 2 + 10 / ctx.scale;
-    const p = toScreen(wallPoint(wall, along, side));
-    r.drawText(`${Number(wall.length).toFixed(2)} m`, p.x, p.y + 4, 11, 'center');
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (len < 40) continue;
+    // Línea de cota a 12 px de la cara, del lado de AFUERA del recinto (si
+    // la izquierda cae dentro de un recinto, va a la derecha): las cotas no
+    // cruzan los espacios.
+    const off = (wall.thickness as number) / 2 + 12 / ctx.scale;
+    const probe = wallPoint(wall, (wall.length as number) / 2, off);
+    const inside = (scene.rooms ?? []).some((room) => room.polygon.length >= 3 && isPointInPolygon(probe, room.polygon));
+    const side = inside ? -off : off;
+    const textSide = inside ? -(off + 7 / ctx.scale) : off + 7 / ctx.scale;
+    const p0 = toScreen(wallPoint(wall, 0, side));
+    const p1 = toScreen(wallPoint(wall, wall.length as number, side));
+    const ux = (p1.x - p0.x) / len;
+    const uy = (p1.y - p0.y) / len;
+    r.setStrokeStyle(pal.label);
+    r.setLineWidth(thin);
+    r.drawLine(p0.x, p0.y, p1.x, p1.y);
+    // Trazos a 45° en los extremos (cota arquitectónica).
+    const tx = (ux - uy) * TICK * Math.SQRT1_2;
+    const ty = (uy + ux) * TICK * Math.SQRT1_2;
+    for (const p of [p0, p1]) r.drawLine(p.x - tx, p.y - ty, p.x + tx, p.y + ty);
+    // El valor sobre la línea, del lado de afuera.
+    const m = toScreen(wallPoint(wall, (wall.length as number) / 2, textSide));
+    r.setFillStyle(pal.label);
+    r.drawText(Number(wall.length).toFixed(2), m.x, m.y + 4, 10, 'center');
   }
 
+  r.setFillStyle(pal.label);
   const rooms = scene.rooms ?? [];
   rooms.forEach((room, i) => {
     const c = toScreen(room.centroid);

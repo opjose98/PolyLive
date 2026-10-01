@@ -574,7 +574,7 @@ describe('IFC Compatibility Gate', () => {
 
   test('SiteCoordinateSystem ausente genera warning (criterio 6)', () => {
     const room = makeRoom();
-    const result = validate8Criteria(room, [], { hasSiteCoordinateSystem: false });
+    const result = validate8Criteria(room, [], { hasGeoreference: false });
 
     const siteWarning = result.entries.find((e) => e.criterion === 6);
     expect(siteWarning).toBeDefined();

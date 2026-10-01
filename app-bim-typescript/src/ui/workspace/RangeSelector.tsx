@@ -16,7 +16,7 @@
 // =============================================================================
 
 import React, { useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { Text, TextInput, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useStore } from 'zustand';
@@ -33,10 +33,11 @@ import {
   trackFractionOf,
 } from '../../application/workspace/rangeModel';
 import { FloatWindow, Icon, IconButton, Tappable, toast } from '../primitives';
-import { colors, elevation, radius, sizes, spacing } from '../design/tokens';
+import { elevation, radius, sizes, spacing } from '../design/tokens';
 import { type } from '../design/typography';
 import { spring } from '../design/motion';
 import { haptic } from '../design/haptics';
+import { themedStyles, useTheme } from '../design/theme';
 
 export interface RangeEditHandlers {
   onAdd: () => void;
@@ -81,6 +82,7 @@ export const RangeSelectors = React.memo(function RangeSelectors({
   /** Se muestra bajo los FABs mientras ningún selector está abierto (base/tope del elemento). */
   extra?: React.ReactNode;
 }) {
+  const styles = useStyles();
   const panel = useStore(workspaceStore, (s) => s.currentPanel);
   const open: RangeKey | null = panel === 'range:levels' ? 'levels' : panel === 'range:phases' ? 'phases' : null;
   const ws = workspaceStore.getState;
@@ -118,6 +120,7 @@ export const RangeSelectors = React.memo(function RangeSelectors({
 // ---------------------------------------------------------------------------
 
 function RangePanel({ cfg }: { cfg: Config; handlers: RangeEditHandlers }) {
+  const styles = useStyles();
   const state = useStore(workspaceStore, (s) => s[cfg.key]);
   const ws = workspaceStore.getState;
   const [trackH, setTrackH] = useState(0);
@@ -169,6 +172,7 @@ function RangePanel({ cfg }: { cfg: Config; handlers: RangeEditHandlers }) {
 }
 
 function Thumb({ cfg, slot, state, trackH }: { cfg: Config; slot: RangeSlot; state: RangeState; trackH: number }) {
+  const styles = useStyles();
   const idx = state.pos[slot];
   const item = itemAt(state, slot);
   const enabled = state.active[slot];
@@ -245,6 +249,8 @@ function Thumb({ cfg, slot, state, trackH }: { cfg: Config; slot: RangeSlot; sta
 // ---------------------------------------------------------------------------
 
 function ConfigWindow({ cfg, handlers }: { cfg: Config; handlers: RangeEditHandlers }) {
+  const styles = useStyles();
+  const colors = useTheme();
   const items = useStore(workspaceStore, useShallow((s) => editableItems(s[cfg.key])));
   return (
     <FloatWindow id={`${cfg.key}Cfg`} title={cfg.title} style={styles.cfgWindow}>
@@ -288,14 +294,14 @@ function ConfigWindow({ cfg, handlers }: { cfg: Config; handlers: RangeEditHandl
         </View>
       ))}
       <Tappable style={styles.cfgAdd} onPress={handlers.onAdd} accessibilityLabel={`Agregar a ${cfg.title}`}>
-        <Icon name="plus" size={16} color={colors.amberDark} />
+        <Icon name="plus" size={16} color={colors.accentText} />
         <Text style={styles.cfgAddText}>Agregar</Text>
       </Tappable>
     </FloatWindow>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   side: { position: 'absolute', left: spacing.lg, top: 0, bottom: 0, justifyContent: 'center' },
   fabs: { gap: spacing.md, alignItems: 'flex-start' },
   panel: {
@@ -318,7 +324,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  letterOn: { backgroundColor: colors.amber, borderColor: colors.amber },
+  letterOn: { backgroundColor: colors.accent, borderColor: colors.accent },
   letterText: { ...type.label, color: colors.textSecondary },
   letterTextOn: { color: colors.textOnAccent },
   inf: { ...type.bodyStrong, color: colors.textSecondary, marginVertical: THUMB / 2 },
@@ -334,7 +340,7 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: colors.textSecondary,
   },
-  thumbNivel: { borderColor: colors.amber, backgroundColor: colors.amber },
+  thumbNivel: { borderColor: colors.accent, backgroundColor: colors.accent },
   thumbDim: { opacity: 0.45 },
   thumbDrag: { transform: [{ scale: 1.2 }] },
   tip: {
@@ -346,8 +352,8 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     maxWidth: 200,
   },
-  tipDrag: { backgroundColor: colors.amberDark },
-  tipText: { ...type.caption, color: colors.textOnAccent },
+  tipDrag: { backgroundColor: colors.accentText },
+  tipText: { ...type.caption, color: colors.tooltipText },
   actions: { gap: spacing.xs, marginTop: spacing.xs },
   cfgWindow: { right: spacing.lg, bottom: 96, width: 260 },
   cfgHead: { flexDirection: 'row', gap: spacing.sm },
@@ -368,5 +374,5 @@ const styles = StyleSheet.create({
   cfgDisabled: { backgroundColor: colors.background, color: colors.textSecondary },
   cfgDel: { width: 24, alignItems: 'center' },
   cfgAdd: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 36 },
-  cfgAddText: { ...type.label, color: colors.amberDark },
-});
+  cfgAddText: { ...type.label, color: colors.accentText },
+}));

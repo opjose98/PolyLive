@@ -2,7 +2,7 @@
 name: snap-angular
 description: Snap a ángulos específicos — fuerza Wall vs Wall a ángulos predefinidos (0°, 90°, 45°, etc).
 type: dominio
-depends-on: "[[tipos-geométricos]]"
+depends-on: "[[tipos-geometricos]]"
 mentioned-in: "Maestro §11.1/11.2, tabla-decisiones-36.md H-3"
 tags: #geometría #interacción #ui
 ---
@@ -81,7 +81,7 @@ function snapToNearestAngle(wallAngle: Degrees, tolerance: Degrees): Degrees {
 
 ## Relacionado con
 
-- [[tipos-geométricos]] — usa Degrees
+- [[tipos-geometricos]] — usa Degrees
 - [[miter-encuentros]] — Snap se aplica después
 - [[tabla-decisiones-36.md]] — decisión de UI de invisibilidad
 - [[Canvas2D-interacción]] — aplica snap durante el trazo

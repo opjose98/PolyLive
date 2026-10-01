@@ -2,7 +2,7 @@
 name: CreateWallUseCase
 description: UseCase para crear un muro — orquesta validación, persistencia, emisión de comando.
 type: aplicación
-depends-on: "[[Wall-especificación]], [[WallValidationService]], [[CreateWallCommand]]"
+depends-on: "[[Wall-especificacion]], [[WallValidationService]], [[CreateWallCommand]]"
 mentioned-in: "Maestro §14, arquitectura-aplicacion-v1.md §2-3"
 tags: #usecase #wall #core
 ---
@@ -85,7 +85,7 @@ async execute(input: CreateWallInput): Promise<CreateWallOutput> {
 
 ## Relacionado con
 
-- [[Wall-especificación]] — objeto que crea
+- [[Wall-especificacion]] — objeto que crea
 - [[WallValidationService]] — validación
 - [[CreateWallCommand]] — comando para undo/redo
 - [[IObjectStore]] — persistencia

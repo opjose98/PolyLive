@@ -19,18 +19,8 @@
 // =============================================================================
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  Image,
-  TouchableOpacity,
-  SafeAreaView,
-  RefreshControl,
-  Dimensions,
-  Modal,
-} from 'react-native';
+import { View, Text, FlatList, Image, TouchableOpacity, SafeAreaView, RefreshControl, Dimensions, Modal } from 'react-native';
+import { themedStyles } from '../design/theme';
 import { ExpoFileSystem, type StoredPhoto } from '../../native/filesystem/ExpoFileSystem';
 import { ExpoPhotoCapture, type PhotoResult } from '../../native/camera/ExpoPhotoCapture';
 import { CameraCaptureView } from '../components/CameraCaptureView';
@@ -86,6 +76,7 @@ export interface GalleryScreenProps {
 // ---------------------------------------------------------------------------
 
 export function GalleryScreen({ services, roomId, objectId, photoId }: GalleryScreenProps) {
+  const styles = useStyles();
   const [photos, setPhotos] = useState<StoredPhoto[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -464,10 +455,10 @@ export function GalleryScreen({ services, roomId, objectId, photoId }: GallerySc
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
   },
   header: {
     flexDirection: 'row',
@@ -476,16 +467,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    borderBottomColor: colors.border,
   },
   title: {
     fontSize: 18,
     fontFamily: 'Roboto_700Bold',
-    color: '#212121',
+    color: colors.text,
   },
   count: {
     fontSize: 14,
-    color: '#757575',
+    color: colors.textSecondary,
   },
   grid: {
     padding: GAP,
@@ -497,11 +488,11 @@ const styles = StyleSheet.create({
     width: THUMB_SIZE,
     height: THUMB_SIZE,
     borderRadius: 4,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: colors.background,
   },
   photoLabel: {
     fontSize: 10,
-    color: '#757575',
+    color: colors.textSecondary,
     marginTop: 2,
     width: THUMB_SIZE,
   },
@@ -514,11 +505,11 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 18,
     fontFamily: 'Roboto_500Medium',
-    color: '#BDBDBD',
+    color: colors.textDisabled,
   },
   emptySubtext: {
     fontSize: 14,
-    color: '#BDBDBD',
+    color: colors.textDisabled,
     marginTop: 8,
     textAlign: 'center',
   },
@@ -529,7 +520,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#FF8F00',
+    backgroundColor: colors.accent,
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 4,
@@ -543,15 +534,15 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
     borderWidth: 3,
-    borderColor: '#FFFFFF',
+    borderColor: colors.textOnAccent,
   },
   linkModalOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: colors.scrim,
   },
   linkModalSheet: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     padding: 16,
@@ -560,21 +551,21 @@ const styles = StyleSheet.create({
   linkModalTitle: {
     fontSize: 16,
     fontFamily: 'Roboto_700Bold',
-    color: '#212121',
+    color: colors.text,
   },
   linkModalSubtitle: {
     fontSize: 12,
-    color: '#757575',
+    color: colors.textSecondary,
     marginBottom: 12,
   },
   linkObjectRow: {
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#EEEEEE',
+    borderBottomColor: colors.border,
   },
   linkObjectLabel: {
     fontSize: 14,
-    color: '#212121',
+    color: colors.text,
   },
   linkCancelButton: {
     marginTop: 12,
@@ -584,8 +575,8 @@ const styles = StyleSheet.create({
   linkCancelText: {
     fontSize: 14,
     fontFamily: 'Roboto_500Medium',
-    color: '#D32F2F',
+    color: colors.error,
   },
-});
+}));
 
 export default GalleryScreen;

@@ -2,7 +2,7 @@
 name: transformaciones-coordenadas
 description: Fórmulas exactas de transformación entre capas de coordenadas — matemática precisa.
 type: dominio
-depends-on: "[[tipos-geométricos]], [[sistema-coordenadas-6-capas]]"
+depends-on: "[[tipos-geometricos]], [[sistema-coordenadas-6-capas]]"
 mentioned-in: "sistema-coordenadas-y-transformaciones.md §2-4"
 tags: #geometría #matemática #core
 ---
@@ -136,7 +136,7 @@ function pointsEqual(p1: Point2D, p2: Point2D, tolerance: Meters = meters(EPSILO
 ## Relacionado con
 
 - [[sistema-coordenadas-6-capas]] — aplicación de estas fórmulas
-- [[tipos-geométricos]] — usa Meters, Degrees, Point2D, Point3D
+- [[tipos-geometricos]] — usa Meters, Degrees, Point2D, Point3D
 - [[miter-encuentros]] — usa projectPointToLine
 
 ---

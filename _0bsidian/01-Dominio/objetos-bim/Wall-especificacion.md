@@ -2,7 +2,7 @@
 name: Wall-especificación
 description: Muro — propiedades, geometría, validación. Objeto BIM fundamental.
 type: dominio
-depends-on: "[[RevitObjectBase]], [[tipos-geométricos]]"
+depends-on: "[[RevitObjectBase]], [[tipos-geometricos]]"
 mentioned-in: "Maestro §6.2, [[miter-encuentros]], [[proyecciones-punto-muro]]"
 tags: #objetos-bim #core #wall
 ---
@@ -81,12 +81,12 @@ Ver [[pseudocodigo-step-ifc.md]] §4.1: `writeWall()` genera `IfcWall` con:
 ## Relacionado con
 
 - [[RevitObjectBase]] — clase padre
-- [[Door-especificación]], [[Window-especificación]] — vanos dependientes
+- [[Door-especificacion]], [[Window-especificacion]] — vanos dependientes
 - [[Column-especificación]] — puede estar embebida (sin validación)
 - [[WallValidationService]] — validación de muros
 - [[miter-encuentros]] — cálculo de encuentros limpios
 - [[proyecciones-punto-muro]] — posicionamiento de vanos
-- [[Room-especificación]] — contiene muros
+- [[Room-especificacion]] — contiene muros
 
 ---
 

@@ -2,7 +2,7 @@
 name: MoveObjectUseCase
 description: UseCase para mover un muro o columna — recalcula vanos hijos.
 type: aplicación
-depends-on: "[[Wall-especificación]], [[Column-especificación]], [[CreateWallUseCase]]"
+depends-on: "[[Wall-especificacion]], [[Column-especificación]], [[CreateWallUseCase]]"
 mentioned-in: "Maestro §14, arquitectura-aplicacion-v1.md §2-3"
 tags: #usecase #move #spatial
 ---

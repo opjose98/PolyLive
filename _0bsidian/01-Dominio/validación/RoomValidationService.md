@@ -2,7 +2,7 @@
 name: RoomValidationService
 description: Validación de Recintos — área, límite de objetos, polígono válido.
 type: dominio
-depends-on: "[[Room-especificación]], [[CDT-algoritmo]], [[matriz-reglas-de-negocio]]"
+depends-on: "[[Room-especificacion]], [[CDT-algoritmo]], [[matriz-reglas-de-negocio]]"
 mentioned-in: "Maestro §5.7, [[CloseRoomUseCase]]"
 tags: #validación #core #room
 ---
@@ -132,7 +132,7 @@ class RoomValidationService {
 
 ## Relacionado con
 
-- [[Room-especificación]] — valida esta clase
+- [[Room-especificacion]] — valida esta clase
 - [[CDT-algoritmo]] — triangulación que produce área
 - [[CloseRoomUseCase]] — orquesta esta validación
 - [[matriz-reglas-de-negocio]] — define límites y criterios

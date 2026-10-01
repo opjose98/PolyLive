@@ -15,12 +15,12 @@
 // =============================================================================
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Dimensions, Modal, BackHandler } from 'react-native';
+import { View, Text, Dimensions, Modal, BackHandler } from 'react-native';
 
 import { PlanCanvas } from '../canvas/PlanCanvas';
 import { BottomSheet, toast, alertDialog } from '../primitives';
 import { sizes } from '../design/tokens';
-import { CANVAS_PALETTES } from '../design/canvasThemes';
+import { themedStyles, useCanvasPalette } from '../design/theme';
 import { haptic } from '../design/haptics';
 import { workspaceStore } from '../../state/workspaceStore';
 import { ZoomAction, categoriesFor, findTool, PropKey, workModeDef } from '../../application/workspace/catalog';
@@ -33,6 +33,7 @@ import { Room } from '../../domain/objects/room';
 import { WorkspaceStatusBar } from '../workspace/WorkspaceStatusBar';
 import { Bpc, BpcAction, BpcPill } from '../workspace/Bpc';
 import { FabCreate } from '../workspace/FabCreate';
+import { ThumbUndo } from '../workspace/ThumbUndo';
 import { FabView } from '../workspace/FabView';
 import { CornerTools } from '../workspace/CornerTools';
 import { LevelChip } from '../workspace/LevelChip';
@@ -51,6 +52,7 @@ import {
 import { isUniformWall, sameExtent } from '../../domain/objects/vertical';
 import { exportRevitIfc } from '../workspace/exportActions';
 import { useProjectLevels } from '../workspace/useProjectLevels';
+import { createLiveSource, draggedIds, isDragging, sameStructure } from '../canvas/liveOverlay';
 import { uniqueVertices, useTopography } from '../workspace/topo/useTopography';
 import { TopographySheets } from '../workspace/topo/TopographySheets';
 import { TopographyPanel } from '../workspace/topo/TopographyPanel';
@@ -79,7 +81,7 @@ import { Measurement } from '../../domain/objects/measurement';
 import { RoomId, revitObjectId, wallId } from '../../domain/objects/base';
 import { AppError } from '../../shared/errors/AppError';
 import { meters } from '../../domain/geometry/types';
-import { colors, radius, spacing } from '../design/tokens';
+import { radius, spacing } from '../design/tokens';
 import { type } from '../design/typography';
 
 const CANVAS_TOUCH_TOLERANCE_PX = sizes.canvasTouchTolerance;
@@ -153,7 +155,6 @@ export function SurveyScreen({
   const wsState = useStore(
     workspaceStore,
     useShallow((s) => ({
-      canvasTheme: s.canvasTheme,
       gridLines: s.grid.lines,
       gridDots: s.grid.dots,
       snapNode: s.snap.node,
@@ -165,7 +166,12 @@ export function SurveyScreen({
       denominator: s.scale.denominator,
     })),
   );
-  const { canvasTheme, gridLines, gridDots } = wsState;
+  const { gridLines, gridDots } = wsState;
+  // Las herramientas de esquina se despliegan sobre los ejes: mientras estén abiertas, los ejes se ocultan.
+  const cornerOpen = useStore(workspaceStore, (s) => s.currentPanel === 'cornerTools');
+  const fabOpen = useStore(workspaceStore, (s) => s.fab.level !== 'closed');
+  const styles = useStyles();
+  const canvasPalette = useCanvasPalette();
 
   // El lienzo ocupa todo el alto disponible; se mide al montar.
   const [canvasSize, setCanvasSize] = useState({ w: screenWidth, h: canvasHeight });
@@ -179,7 +185,10 @@ export function SurveyScreen({
   // Suscripción al controlador
   // -----------------------------------------------------------------------
 
-  useEffect(() => editor.subscribe(setState), [editor]);
+  // La pantalla solo se entera de cambios ESTRUCTURALES; el trazo y el
+  // arrastre en vivo van directo al lienzo (ver canvas/liveOverlay.ts).
+  useEffect(() => editor.subscribe((next) => setState((prev) => (sameStructure(prev, next) ? prev : next))), [editor]);
+  const live = useMemo(() => createLiveSource(editor), [editor]);
 
   useEffect(() => {
     editor.init().catch(() => toast('No se pudo abrir el levantamiento.', { kind: 'error' }));
@@ -347,7 +356,7 @@ export function SurveyScreen({
       ws.closeWindow();
       ws.setMode('elevation');
       haptic.select();
-      setTimeout(() => setElevWallId(wallDbId), 280);
+      setTimeout(() => setElevWallId(wallDbId), 170);
     },
     [editor, canvasSize, elevWallId],
   );
@@ -538,39 +547,34 @@ export function SurveyScreen({
   // -----------------------------------------------------------------------
 
   const selected = editor.selected;
-  const displayObjects = useMemo(() => editor.displayObjects, [editor, state.objects, state.dragPreview]);
+  // Mientras se arrastra, el objeto (y sus vanos) se dibujan en la capa viva:
+  // la planta no cambia con cada movimiento del dedo.
+  const dragging = isDragging(state);
+  const displayObjects = useMemo(() => {
+    const hidden = draggedIds(state);
+    return hidden.size ? editor.scopedObjects.filter((o) => !hidden.has(o.id as string)) : editor.scopedObjects;
+  }, [editor, state.objects, dragging, levelInfo]); // eslint-disable-line react-hooks/exhaustive-deps
   // Los handles invitan a arrastrar: solo donde se puede (Levantamiento).
   const handles = useMemo(
-    () => (editable ? editor.selectedHandles : []),
-    [editor, editable, state.objects, state.selectedId, state.dragPreview],
+    () => (editable && !dragging ? editor.selectedHandles : []),
+    [editor, editable, dragging, state.objects, state.selectedId],
   );
   const roomName = useMemo(() => {
     const room = state.objects.find((o) => o.type === 'Room');
     return (room?.properties.name as string | undefined) || undefined;
   }, [state.objects]);
-  const snapIndicator = useMemo(() => {
-    const p = state.dragPreview;
-    if (!state.dragSnappedToNode || !(p instanceof Wall) || !state.draggingHandle) return null;
-    return state.draggingHandle.kind === 'start' ? p.startPoint : p.endPoint;
-  }, [state.dragPreview, state.dragSnappedToNode, state.draggingHandle]);
   const canvasScene = useMemo(
     () => ({
       objects: displayObjects,
-      selectedId: state.selectedId,
+      selectedId: dragging ? null : state.selectedId,
       handles,
       rooms: state.rooms,
       roomName,
-      wallDraft: state.wallDraft,
-      draftThickness: 0.15,
       showNodes: state.tool === 'wall',
       measureTargetId: state.measureTargetId as unknown as string | null,
       photoMarkers: state.photoMarkers,
-      snapIndicator,
     }),
-    [
-      displayObjects, state.selectedId, handles, state.rooms, roomName, state.wallDraft,
-      state.tool, state.measureTargetId, state.photoMarkers, snapIndicator,
-    ],
+    [displayObjects, dragging, state.selectedId, handles, state.rooms, roomName, state.tool, state.measureTargetId, state.photoMarkers],
   );
   const parentWallLength = useMemo(() => {
     if (!(selected instanceof Door) && !(selected instanceof Window)) return undefined;
@@ -887,14 +891,15 @@ export function SurveyScreen({
           height={canvasSize.h}
           scene={sceneForCanvas}
           transform={state.transform}
-          palette={CANVAS_PALETTES[canvasTheme]}
+          palette={canvasPalette}
           grid={{ show: gridLines || gridDots, lines: gridLines, dots: gridDots }}
           dragEnabled={editable && state.tool === 'select' && !state.busy}
           drawEnabled={editable && state.tool === 'wall'}
           doubleTapEnabled={state.tool === 'select' && wsState.workMode !== 'topografia'}
           rotationSnaps={topo.rotationSnaps}
           longPressEnabled
-          snapped={state.dragSnappedToNode || !!state.wallDraft?.snappedToNode}
+          live={live}
+          draftThickness={(activeTool?.props?.thickness ?? 15) / 100}
           onTap={handleTap}
           onDoubleTap={handleDoubleTap}
           onLongPress={handleLongPress}
@@ -938,14 +943,22 @@ export function SurveyScreen({
             <LevelChip top={belowBpc} />
             {projectId ? <RangeSelectors levels={levelHandlers} phases={phaseHandlers} extra={constraintElement} /> : null}
             <FabView top={chromeTop} hasObjects={hasObjects} />
-            <AxisGizmo
+            {cornerOpen ? null : <AxisGizmo
               kind="plan"
               rotation={state.transform.rotation ?? 0}
               northAngle={topo.northAngle}
               bottom={chromeSpacing.xl + chromeSizes.fabCreate + chromeSpacing.md}
               onPress={() => editor.setRotation(0, canvasSize.w / 2, canvasSize.h / 2)}
-            />
+            />}
             <CornerTools onZoom={handleZoom} />
+            {editable && !fabOpen ? (
+              <ThumbUndo
+                canUndo={state.canUndo && !state.busy}
+                canRedo={state.canRedo && !state.busy}
+                onUndo={handleUndo}
+                onRedo={handleRedo}
+              />
+            ) : null}
             <FabCreate onToolActivated={handleToolActivated} />
           </>
         )}
@@ -1067,7 +1080,7 @@ export function SurveyScreen({
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   container: { flex: 1, backgroundColor: colors.surface },
   stage: { flex: 1, overflow: 'hidden' },
   dialogScrim: { flex: 1, backgroundColor: colors.scrim, justifyContent: 'center', padding: spacing.xl },
@@ -1075,6 +1088,6 @@ const styles = StyleSheet.create({
   dialogTitle: { ...type.title, color: colors.text },
   dialogBody: { ...type.body, color: colors.textSecondary },
   dialogActions: { flexDirection: 'row', gap: spacing.sm },
-});
+}));
 
 export default SurveyScreen;

@@ -2,7 +2,7 @@
 name: Room-especificación
 description: Recinto/Espacio — contenedor de muros, columnas, puertas, ventanas. Entidad central del Levantamiento.
 type: dominio
-depends-on: "[[RevitObjectBase]], [[tipos-geométricos]], [[CDT-algoritmo]]"
+depends-on: "[[RevitObjectBase]], [[tipos-geometricos]], [[CDT-algoritmo]]"
 mentioned-in: "Maestro §6.7 (CORREGIDO §4.1), [[CloseRoomUseCase]], [[sistema-coordenadas-6-capas]]"
 tags: #objetos-bim #core #room #contenedor
 ---
@@ -103,8 +103,8 @@ Ver [[pseudocodigo-step-ifc.md]] §5: genera `IfcSpace` (Room en IFC) que contie
 ## Relacionado con
 
 - [[RevitObjectBase]] — clase padre
-- [[Wall-especificación]], [[Door-especificación]], [[Window-especificación]], [[Column-especificación]] — contenidas en Room
-- [[Floor-especificación]] — materialización implícita
+- [[Wall-especificacion]], [[Door-especificacion]], [[Window-especificacion]], [[Column-especificación]] — contenidas en Room
+- [[Floor-especificacion]] — materialización implícita
 - [[CDT-algoritmo]] — triangulación al cerrar
 - [[RoomValidationService]] — validación
 - [[CloseRoomUseCase]] — orquesta cierre

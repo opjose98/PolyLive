@@ -2,7 +2,7 @@
 name: CreateWindowUseCase
 description: UseCase para crear una ventana — idéntico a CreateDoorUseCase.
 type: aplicación
-depends-on: "[[Window-especificación]], [[CreateDoorUseCase]]"
+depends-on: "[[Window-especificacion]], [[CreateDoorUseCase]]"
 mentioned-in: "Maestro §14"
 tags: #usecase #window #vano
 ---

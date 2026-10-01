@@ -12,6 +12,18 @@
 //     depende de con qué cámara se grabó. No hay fotograma "viejo desplazado".
 // La rejilla la dibuja la GPU con un shader que lee la misma cámara.
 //
+// LA CÁMARA NO VIAJA A REACT DURANTE EL GESTO. Pan, pinch y giro solo mueven
+// los shared values; al controlador (y con él a toda la pantalla) se le
+// entrega la cámara UNA vez, al soltar. Antes se entregaba cada 50 ms: la
+// pantalla entera se volvía a renderizar a 20 Hz y, en un pinch, la planta se
+// regrababa en cada entrega — era el lag y el parpadeo. El Picture solo se
+// regraba durante un pinch si el zoom cambió más de ×1,5 (para que el texto y
+// los trazos no se vean ni diminutos ni gruesos), y ese regrabado es local.
+//
+// CAPA VIVA. El muro en curso, el objeto arrastrado y el snap llegan por
+// `live` (ver liveOverlay.ts): el lienzo se suscribe solo, la pantalla no se
+// entera de cada movimiento del dedo.
+//
 // GESTOS EN EL HILO JS (`runOnJS(true)`). Con los callbacks como worklets, en
 // Expo Go (SDK 51) el aviso de FIN de un gesto hacia JS quedaba retenido hasta
 // el siguiente toque: el trazo de un muro no se cerraba al levantar el dedo y
@@ -28,7 +40,7 @@
 // hacen zoom (como LevON).
 // =============================================================================
 
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Canvas, Circle, Fill, Group, Path, Picture, Shader, Skia, createPicture } from '@shopify/react-native-skia';
 import type { SkCanvas } from '@shopify/react-native-skia';
@@ -47,6 +59,7 @@ import { SkiaCanvasAdapter } from '../../native/canvas/SkiaCanvasAdapter';
 import type { CanvasTransform } from '../../domain/geometry/types';
 import { MAX_SCALE, MIN_SCALE } from '../../application/canvas/types';
 import { drawPlan, drawPlanOverlay, PlanScene } from './planRenderer';
+import type { LiveSource } from './liveOverlay';
 import { CANVAS_PALETTES, CanvasPalette } from '../design/canvasThemes';
 import { sizes } from '../design/tokens';
 import { duration, LONG_PRESS_MS } from '../design/motion';
@@ -76,8 +89,10 @@ export interface PlanCanvasProps {
   /** El doble toque está disponible (solo con Seleccionar, para no retrasar el trazo). */
   doubleTapEnabled: boolean;
   longPressEnabled: boolean;
-  /** Un arrastre o trazo está enganchado a un nodo: háptica al entrar. */
-  snapped?: boolean;
+  /** Trazo en curso, objeto arrastrado y snap: cambian con cada movimiento del dedo. */
+  live: LiveSource;
+  /** Espesor (m) con que se previsualiza el muro en curso. */
+  draftThickness?: number;
   /**
    * Ángulos (rad) a los que se engancha el giro con dos dedos, además de los
    * múltiplos de 90°: p. ej. el que deja el norte arriba.
@@ -100,8 +115,8 @@ export interface PlanCanvasProps {
 
 /** Movimiento máximo (px) que sigue contando como toque. Con guantes, 0 sería inusable. */
 const TAP_SLOP_PX = 8;
-/** Cada cuánto se entrega la cámara al controlador durante un gesto. */
-const COMMIT_INTERVAL_MS = 50;
+/** Durante un pinch, se regraba la planta si el zoom se alejó más que esto del grabado. */
+const RERECORD_RATIO = 1.5;
 /** Intervalo mínimo entre movimientos de trazo/arrastre entregados al controlador. */
 const MOVE_INTERVAL_MS = 33;
 /** Inercia del paneo: cuánto sigue deslizando y en cuánto tiempo. */
@@ -215,7 +230,6 @@ export function PlanCanvas(props: PlanCanvasProps) {
     drawing: false,
     panActive: false,
     decaying: false,
-    lastCommit: 0,
     pinchStart: { s: 1, x: 0, y: 0, fx: 0, fy: 0, wx: 0, wy: 0 },
     /** Último foco de los dos dedos (para girar alrededor de él). */
     focal: { x: 0, y: 0 },
@@ -251,10 +265,18 @@ export function PlanCanvas(props: PlanCanvasProps) {
   // curso (barata, cambia en cada movimiento del dedo). Si el trazo viviera en
   // la misma capa, cada movimiento regrabaría toda la planta y el hilo JS se
   // saturaría hasta retrasar el fin del gesto varios segundos.
-  const recScale = transform.scale;
+  // Escala a la que se graba la planta. Sigue a la del controlador y, durante
+  // un pinch largo, a la viva (solo este componente se vuelve a renderizar).
+  const [recScale, setRecScale] = useState(transform.scale);
+  useEffect(() => setRecScale(transform.scale), [transform.scale]);
+  const recRef = useRef(recScale);
+  recRef.current = recScale;
+
+  const liveState = useSyncExternalStore(props.live.subscribe, props.live.get);
+  const draftThickness = props.draftThickness ?? 0.15;
   const {
     objects, selectedId, handles, showLabels, rooms, roomName, showNodes,
-    measureTargetId, photoMarkers, selectedPhotoMarkerId, wallDraft, draftThickness, snapIndicator, underlay,
+    measureTargetId, photoMarkers, selectedPhotoMarkerId, underlay,
     existingIds, benchmarks, selectedBenchmarkId, coordLabels,
   } = scene;
   const picture = useMemo(
@@ -280,8 +302,14 @@ export function PlanCanvas(props: PlanCanvasProps) {
       createPicture((canvas: SkCanvas) => {
         canvas.scale(1 / recScale, 1 / recScale);
         drawPlanOverlay(new SkiaCanvasAdapter(canvas), {
-          objects: [], selectedId: null, handles: [], showLabels: false,
-          wallDraft, draftThickness, snapIndicator,
+          objects: liveState.objects,
+          selectedId: liveState.selectedId,
+          handles: liveState.handles,
+          showLabels: false,
+          wallDraft: liveState.wallDraft,
+          draftThickness,
+          snapIndicator: liveState.snapIndicator,
+          existingIds,
           transform: { scale: recScale, offsetX: 0, offsetY: 0 },
           width,
           height,
@@ -289,7 +317,7 @@ export function PlanCanvas(props: PlanCanvasProps) {
           showGrid: false,
         });
       }, WORLD_BOUNDS),
-    [wallDraft, draftThickness, snapIndicator, recScale, width, height, palette],
+    [liveState, draftThickness, existingIds, recScale, width, height, palette],
   );
 
   const camera = useDerivedValue(() => [
@@ -327,9 +355,9 @@ export function PlanCanvas(props: PlanCanvasProps) {
   // --- Háptica de snap: al ENTRAR en el nodo, no en cada frame dentro de él.
   const wasSnapped = useRef(false);
   useEffect(() => {
-    if (props.snapped && !wasSnapped.current) haptic.snap();
-    wasSnapped.current = !!props.snapped;
-  }, [props.snapped]);
+    if (liveState.snapped && !wasSnapped.current) haptic.snap();
+    wasSnapped.current = liveState.snapped;
+  }, [liveState.snapped]);
 
   // --- Pulso de selección -------------------------------------------------------
   const pulse = useSharedValue(0);
@@ -377,11 +405,10 @@ export function PlanCanvas(props: PlanCanvasProps) {
       cam.x = fx - (wx * c - wy * sn) * cam.s;
       cam.y = fy - (wx * sn + wy * c) * cam.s;
     };
-    const commitThrottled = () => {
-      const now = Date.now();
-      if (now - g.lastCommit < COMMIT_INTERVAL_MS) return;
-      g.lastCommit = now;
-      commit();
+    /** Pinch largo: regraba la planta (solo aquí) si el zoom se alejó mucho del grabado. */
+    const maybeRerecord = () => {
+      const k = cam.s / recRef.current;
+      if (k > RERECORD_RATIO || k < 1 / RERECORD_RATIO) setRecScale(cam.s);
     };
     const finishCamera = () => {
       g.gesturing = false;
@@ -465,7 +492,6 @@ export function PlanCanvas(props: PlanCanvasProps) {
         cam.x += e.changeX;
         cam.y += e.changeY;
         publish();
-        commitThrottled();
       })
       .onEnd((e) => {
         if (g.grabbing) {
@@ -541,7 +567,7 @@ export function PlanCanvas(props: PlanCanvasProps) {
         g.focal = { x: e.focalX, y: e.focalY };
         anchor(p.wx, p.wy, e.focalX, e.focalY);
         publish();
-        commitThrottled();
+        maybeRerecord();
       })
       .onFinalize(() => {
         if (!g.pinching) return;
@@ -619,13 +645,15 @@ export function PlanCanvas(props: PlanCanvasProps) {
         const p = g.pinchStart;
         if (g.pinching) anchor(p.wx, p.wy, g.focal.x, g.focal.y);
         publish();
-        commitThrottled();
       })
       .onFinalize(() => {
         if (!g.pinching) finishCamera();
       });
 
-    return Gesture.Simultaneous(Gesture.Exclusive(longPress, doubleTap, tap), pan, pinch, rotation);
+    // El toque responde AL INSTANTE: no espera a descartar un doble toque
+    // (eso sumaba ~300 ms a cada selección). El doble toque se reconoce en
+    // paralelo; el primer toque solo selecciona, que es inofensivo.
+    return Gesture.Simultaneous(Gesture.Exclusive(longPress, Gesture.Simultaneous(tap, doubleTap)), pan, pinch, rotation);
     // Los gestos solo se reconstruyen cuando cambia qué está habilitado.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.doubleTapEnabled, props.longPressEnabled, !!props.onDoubleTap, !!props.onLongPress]);

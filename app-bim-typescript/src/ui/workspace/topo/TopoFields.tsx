@@ -3,9 +3,10 @@
 // =============================================================================
 
 import React from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
-import { colors, radius, spacing } from '../../design/tokens';
+import { Text, TextInput, View } from 'react-native';
+import { radius, spacing } from '../../design/tokens';
 import { type } from '../../design/typography';
+import { themedStyles, useTheme } from '../../design/theme';
 
 /** Campo controlado (texto). `numeric` abre el teclado numérico y acepta coma. */
 export function Field({
@@ -28,6 +29,8 @@ export function Field({
   /** Al salir del campo: para guardar una vez, no en cada tecla. */
   onBlur?: () => void;
 }) {
+  const styles = useStyles();
+  const colors = useTheme();
   return (
     <View style={[styles.field, flex && styles.flex]}>
       <Text style={styles.label}>{label}</Text>
@@ -60,10 +63,12 @@ export function parseNum(v: string): number | null {
 }
 
 export function Row({ children }: { children: React.ReactNode }) {
+  const styles = useStyles();
   return <View style={styles.row}>{children}</View>;
 }
 
 export function Kv({ k, v }: { k: string; v: string }) {
+  const styles = useStyles();
   return (
     <View style={styles.kv}>
       <Text style={styles.k}>{k}</Text>
@@ -74,7 +79,7 @@ export function Kv({ k, v }: { k: string; v: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   field: { gap: 4 },
   flex: { flex: 1 },
   label: { ...type.label, color: colors.textSecondary },
@@ -95,4 +100,4 @@ const styles = StyleSheet.create({
   kv: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4, gap: spacing.md },
   k: { ...type.label, color: colors.textSecondary },
   v: { ...type.bodyStrong, color: colors.text, flexShrink: 1, textAlign: 'right' },
-});
+}));

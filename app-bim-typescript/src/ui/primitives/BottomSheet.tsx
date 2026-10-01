@@ -11,8 +11,9 @@ import { KeyboardAvoidingView, Platform, StyleSheet, useWindowDimensions, View }
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, elevation, radius, spacing } from '../design/tokens';
+import { elevation, radius, spacing } from '../design/tokens';
 import { duration, spring } from '../design/motion';
+import { themedStyles } from '../design/theme';
 
 export interface BottomSheetProps {
   open: boolean;
@@ -23,6 +24,7 @@ export interface BottomSheetProps {
 }
 
 export function BottomSheet({ open, onClose, heightRatio = 0.62, children }: BottomSheetProps) {
+  const styles = useStyles();
   const { height: screenH } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const sheetH = Math.round(screenH * heightRatio);
@@ -85,7 +87,7 @@ export function BottomSheet({ open, onClose, heightRatio = 0.62, children }: Bot
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   scrim: { backgroundColor: colors.scrim },
   anchor: { flex: 1, justifyContent: 'flex-end' },
   sheet: {
@@ -97,4 +99,4 @@ const styles = StyleSheet.create({
   grabArea: { alignItems: 'center', paddingVertical: spacing.sm },
   grabber: { width: 40, height: 5, borderRadius: 3, backgroundColor: colors.border },
   content: { flex: 1 },
-});
+}));

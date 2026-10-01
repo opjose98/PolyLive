@@ -26,8 +26,14 @@ Si una fila no tiene test, es una decisión consciente y está dicho.
 | **[[Project-especificacion]]** | `domain/objects/project.ts` | `test/projects/ProjectService.test.ts` |
 | **[[WallElevation-MEM]]** | `domain/objects/wall-elevation.ts` | `test/elevation/WallElevationService.test.ts` |
 | **[[PhotoMarker-SPDS]]** | `domain/objects/audit-photo.ts` | `test/editor/EditorController.test.ts` |
-| [[SurveyControlPoint]] | `domain/objects/survey.ts` | `test/sqlite/SurveyObjectStore.test.ts` |
-| [[SiteCoordinateSystem]] | `domain/objects/survey.ts` | `test/sqlite/SurveyObjectStore.test.ts` |
+| ~~[[SurveyControlPoint]]~~ | eliminado ([[auditoria-post-M2]]) | — |
+| ~~[[SiteCoordinateSystem]]~~ | eliminado ([[auditoria-post-M2]]) | — |
+| **[[Georreferencia-proyecto]]** | `domain/geo/georeference.ts` | `test/geo/georeference.test.ts` |
+| **[[CRS-MAGNA-SIRGAS]]** | `domain/geo/crs.ts` | `test/geo/georeference.test.ts` |
+| **[[Mojones-biblioteca]]** | `domain/geo/benchmark.ts`, `infrastructure/sqlite/GeoStore.ts` | `test/infrastructure/GeoStore.test.ts` |
+| **[[GPS-promediado]]** | `domain/geo/gpsAverage.ts`, `native/location/GpsAverager.ts` | `test/geo/georeference.test.ts` |
+| **[[Restricciones-verticales]]** | `domain/objects/vertical.ts` | `test/domain/vertical.test.ts` |
+| **[[Niveles-y-fases]]** | `domain/objects/marker.ts`, `infrastructure/sqlite/MarkerStore.ts` | `test/application/workspace.test.ts` |
 
 ## Geometría
 
@@ -108,3 +114,18 @@ de una hora) y uno requiere una capa de red que no existe.
 > Había un quinto, obsoleto: afirmaba que `shared/errors/AppError.ts` "no existe todavía en src/".
 > Sí existía. Se convirtió en un test real en `test/integration/CrashRecovery.test.ts`. Ver
 > [[bugs-corregidos-unificacion]] sobre otros comentarios que describían gaps ya cerrados.
+
+## Espacio de trabajo, alzado y lienzo (F0–PR #11)
+
+| Nota | Código | Test |
+|---|---|---|
+| [[EditorController]] | `application/editor/EditorController.ts` | `test/editor/EditorController.test.ts` |
+| [[ElevationEditor]] | `application/elevation/ElevationEditor.ts` | `test/elevation/` |
+| [[TopographyService]] | `application/geo/TopographyService.ts`, `application/geo/coordinateText.ts` | `test/geo/TopographyService.test.ts`, `test/geo/coordinateText.test.ts` |
+| [[modos-de-trabajo]] · [[catalogo-herramientas]] | `application/workspace/catalog.ts` | `test/application/workspace.test.ts` |
+| [[alcance-nivel-fase]] | `application/workspace/levelScope.ts` | `test/application/levelScope.test.ts` |
+| [[capa-viva-y-camara]] | `ui/canvas/PlanCanvas.tsx`, `ui/canvas/liveOverlay.ts`, `ui/canvas/ElevationCanvas.tsx` | teléfono (no hay tests de render) |
+| [[convenciones-de-dibujo]] | `ui/canvas/planRenderer.ts`, `ui/canvas/wallGeometry.ts` | `test/ui/planRenderer.test.ts`, `test/ui/wallGeometry.test.ts` |
+| [[sistema-de-diseño]] | `ui/design/theme.ts` | teléfono |
+| [[uso-a-una-mano]] | `ui/workspace/ThumbUndo.tsx` | teléfono |
+

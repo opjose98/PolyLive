@@ -9,17 +9,21 @@
 // =============================================================================
 
 import React, { useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, ZoomIn } from 'react-native-reanimated';
 import { Canvas, Path, Skia } from '@shopify/react-native-skia';
 import { useStore } from 'zustand';
 import type { Point2D } from '../../domain/geometry/types';
 import { workspaceStore } from '../../state/workspaceStore';
 import { IconButton, Tappable } from '../primitives';
-import { colors, elevation, radius, spacing } from '../design/tokens';
+import { elevation, radius, spacing } from '../design/tokens';
 import { type } from '../design/typography';
+import { ChromeColors, themedStyles, useTheme } from '../design/theme';
 
-export const SIDE_COLORS = { A: colors.amber, B: '#42A5F5' } as const;
+/** Color de cada lado del muro: A en el acento del modo, B en el suyo propio. */
+export function sideColors(colors: ChromeColors): Record<'A' | 'B', string> {
+  return { A: colors.accentText, B: colors.sideB };
+}
 
 const W = 104;
 const H = 72;
@@ -40,6 +44,8 @@ export const Minimap = React.memo(function Minimap({
   activeId: string;
   top: number;
 }) {
+  const styles = useStyles();
+  const colors = useTheme();
   const expanded = useStore(workspaceStore, (s) => s.minimapExpanded);
   const side = useStore(workspaceStore, (s) => s.elevationSide);
   const toggle = () => workspaceStore.getState().toggleMinimap();
@@ -99,14 +105,14 @@ export const Minimap = React.memo(function Minimap({
           {paths ? (
             <>
               <Path path={paths.others} color={colors.textDisabled} style="stroke" strokeWidth={2.5} strokeCap="round" />
-              <Path path={paths.active} color={SIDE_COLORS[side]} style="stroke" strokeWidth={4} strokeCap="round" />
-              <Path path={paths.marker} color={SIDE_COLORS[side]} opacity={0.85} />
+              <Path path={paths.active} color={sideColors(colors)[side]} style="stroke" strokeWidth={4} strokeCap="round" />
+              <Path path={paths.marker} color={sideColors(colors)[side]} opacity={0.85} />
             </>
           ) : null}
         </Canvas>
         <View style={styles.sides}>
           {(['A', 'B'] as const).map((s) => (
-            <Text key={s} style={[styles.side, { color: SIDE_COLORS[s] }, side !== s && styles.sideOff]}>
+            <Text key={s} style={[styles.side, { color: sideColors(colors)[s] }, side !== s && styles.sideOff]}>
               {s}
             </Text>
           ))}
@@ -116,7 +122,7 @@ export const Minimap = React.memo(function Minimap({
   );
 });
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   box: {
     position: 'absolute',
     left: spacing.lg,
@@ -132,4 +138,4 @@ const styles = StyleSheet.create({
   sides: { flexDirection: 'row', justifyContent: 'space-between', width: W - 16, marginTop: -4 },
   side: { ...type.label, fontWeight: '700' },
   sideOff: { opacity: 0.3 },
-});
+}));

@@ -30,16 +30,16 @@ import { ProjectMarker } from '../../domain/objects/marker';
 import { openingTypeLabel } from '../../domain/objects/wall-elevation';
 import { Bpc, BpcAction, BpcPill } from '../workspace/Bpc';
 import { LevelChip } from '../workspace/LevelChip';
-import { Minimap, MinimapWall, SIDE_COLORS } from '../workspace/Minimap';
+import { Minimap, MinimapWall, sideColors } from '../workspace/Minimap';
 import { RangeEditHandlers, RangeSelectors } from '../workspace/RangeSelector';
 import { FabView } from '../workspace/FabView';
 import { FabCreate } from '../workspace/FabCreate';
 import { CornerTools } from '../workspace/CornerTools';
 import { ElevationDetails } from '../workspace/ElevationDetails';
 import { BottomSheet, Icon, Tappable, toast } from '../primitives';
-import { CANVAS_PALETTES } from '../design/canvasThemes';
-import { colors, elevation as shadow, sizes, spacing } from '../design/tokens';
+import { elevation as shadow, sizes, spacing } from '../design/tokens';
 import { haptic } from '../design/haptics';
+import { themedStyles, useCanvasPalette, useTheme } from '../design/theme';
 
 const TOUCH_TOL = sizes.canvasTouchTolerance;
 const cm = (m: number) => Math.round(m * 100);
@@ -57,6 +57,8 @@ export interface ElevationViewProps {
 }
 
 export function ElevationView(props: ElevationViewProps) {
+  const styles = useStyles();
+  const colors = useTheme();
   const { editor, width, height, levels, chromeTop } = props;
   const [st, setSt] = useState<ElevationEditorState>(() => editor.getState());
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -116,7 +118,7 @@ export function ElevationView(props: ElevationViewProps) {
     if (ws.filters.ventanas) s.add('window');
     return s;
   }, [ws.filters]);
-  const palette = CANVAS_PALETTES[ws.theme];
+  const palette = useCanvasPalette();
   const severity = useMemo(() => editor.severityByOpening, [editor, st.elevation]);
   const scene = useMemo(
     () =>
@@ -244,8 +246,8 @@ export function ElevationView(props: ElevationViewProps) {
   const belowBpc = chromeTop + sizes.bpcHeight + spacing.sm;
 
   return (
-    <Animated.View entering={FadeIn.duration(220)} exiting={FadeOut.duration(160)} style={StyleSheet.absoluteFill}>
-      <Animated.View entering={ZoomIn.duration(260)} style={StyleSheet.absoluteFill}>
+    <Animated.View entering={FadeIn.duration(140)} exiting={FadeOut.duration(110)} style={StyleSheet.absoluteFill}>
+      <Animated.View entering={ZoomIn.duration(180)} style={StyleSheet.absoluteFill}>
         {scene ? (
           <ElevationCanvas
             scene={scene}
@@ -256,8 +258,7 @@ export function ElevationView(props: ElevationViewProps) {
             onDragMove={(x, y) => editor.updateDrag(x, y, TOUCH_TOL)}
             onDragEnd={() => void editor.endDrag()}
             onDragCancel={() => editor.cancelDrag()}
-            onPan={(dx, dy) => editor.panBy(dx, dy)}
-            onPinch={(fx, fy, k) => editor.zoomAround(fx, fy, k)}
+            onViewDelta={(k, dx, dy) => editor.applyViewDelta(k, dx, dy)}
           />
         ) : (
           <View style={[StyleSheet.absoluteFill, { backgroundColor: palette.background }]} />
@@ -285,12 +286,12 @@ export function ElevationView(props: ElevationViewProps) {
       {ws.fabOpen ? null : (
       <>
       <Tappable
-        style={[styles.sideBtn, { borderColor: SIDE_COLORS[st.side] }]}
+        style={[styles.sideBtn, { borderColor: sideColors(colors)[st.side] }]}
         onPress={() => workspaceStore.getState().toggleElevationSide()}
         haptic="select"
         accessibilityLabel={`Cambiar al lado ${st.side === 'A' ? 'B' : 'A'}`}
       >
-        <Animated.Text key={st.side} entering={ZoomIn.duration(160)} style={[styles.sideText, { color: SIDE_COLORS[st.side] }]}>
+        <Animated.Text key={st.side} entering={ZoomIn.duration(160)} style={[styles.sideText, { color: sideColors(colors)[st.side] }]}>
           {st.side}
         </Animated.Text>
       </Tappable>
@@ -308,7 +309,7 @@ export function ElevationView(props: ElevationViewProps) {
 }
 
 const FAB = sizes.fabCreate;
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   sideBtn: {
     position: 'absolute',
     right: spacing.lg + (FAB - 44) / 2,
@@ -337,4 +338,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...shadow[1],
   },
-});
+}));

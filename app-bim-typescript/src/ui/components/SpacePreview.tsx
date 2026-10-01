@@ -15,13 +15,14 @@
 // =============================================================================
 
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text } from 'react-native';
 import { SkiaCanvas } from './SkiaCanvas';
 import type { ICanvasRenderer } from '../../native/canvas/SkiaCanvasAdapter';
 import type { Point2D, CanvasTransform } from '../../domain/geometry/types';
-import { colors, radius } from '../design/tokens';
+import { radius } from '../design/tokens';
 import { type } from '../design/typography';
 import { CANVAS_PALETTES } from '../design/canvasThemes';
+import { themedStyles } from '../design/theme';
 
 export interface SpacePreviewProps {
   geometry: readonly Point2D[];
@@ -69,6 +70,7 @@ export function fitTransform(
 }
 
 export function SpacePreview({ geometry, width, height }: SpacePreviewProps) {
+  const styles = useStyles();
   const transform = useMemo(() => fitTransform(geometry, width, height), [geometry, width, height]);
 
   const draw = useMemo(
@@ -114,7 +116,7 @@ export function SpacePreview({ geometry, width, height }: SpacePreviewProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   frame: {
     borderRadius: radius.md,
     overflow: 'hidden',
@@ -130,6 +132,6 @@ const styles = StyleSheet.create({
     ...type.caption,
     color: colors.textDisabled,
   },
-});
+}));
 
 export default SpacePreview;

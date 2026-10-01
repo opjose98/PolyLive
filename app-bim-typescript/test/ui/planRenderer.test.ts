@@ -9,7 +9,7 @@
 // que las cotas aparecen y que la rejilla no se descontrola al alejar.
 // =============================================================================
 
-import { drawPlan, gridStepMeters, PlanScene } from '../../src/ui/canvas/planRenderer';
+import { wallRendering, drawPlan, gridStepMeters, PlanScene } from '../../src/ui/canvas/planRenderer';
 import type { ICanvasRenderer } from '../../src/native/canvas/SkiaCanvasAdapter';
 import { Wall } from '../../src/domain/objects/wall';
 import { Room } from '../../src/domain/objects/room';
@@ -208,11 +208,23 @@ describe('drawPlan — muros (representación de plano)', () => {
     expect(inkLines(r)).toHaveLength(6);
   });
 
-  it('distingue un muro portante de una partición por su relleno', () => {
+  it('portante con poché sólido; tabique con trama a 45° (mampostería)', () => {
     const r = new RecordingRenderer();
     drawPlan(r, scene({ objects: [makeWall('w1', 0, 0, 4, 0, true), makeWall('w2', 0, 2, 4, 2, false)] }));
     expect(fills(r, wallFill)).toHaveLength(1);
-    expect(fills(r, CANVAS_PALETTES.claro.partitionFill)).toHaveLength(1);
+    const hatch = r.ops('drawLine').filter((c) => (c.args[4] as { stroke: string }).stroke === CANVAS_PALETTES.claro.partition);
+    expect(hatch.length).toBeGreaterThan(10);
+    // La trama va a 45°.
+    const [x1, y1, x2, y2] = hatch[0].args as number[];
+    expect(Math.abs(Math.abs(x2 - x1) - Math.abs(y2 - y1))).toBeLessThan(1e-6);
+  });
+
+  it('el material escrito manda sobre portante/tabique', () => {
+    expect(wallRendering('Bloque de concreto', false)).toBe('hatch');
+    expect(wallRendering('Concreto reforzado', false)).toBe('solid');
+    expect(wallRendering('Drywall', true)).toBe('outline');
+    expect(wallRendering(undefined, true)).toBe('solid');
+    expect(wallRendering(undefined, false)).toBe('hatch');
   });
 
   it('subraya el muro elegido como destino de medición', () => {
@@ -291,14 +303,15 @@ describe('drawPlan — vanos', () => {
     // El arco es una polilínea; la hoja mide lo que el vano (90 px).
     expect(r.ops('strokePolyline')).toHaveLength(1);
     expect(r.ops('strokeCircle')).toHaveLength(0);
-    const leaf = r.ops('drawLine').find((c) => {
-      const [x1, y1, x2, y2] = c.args as number[];
-      return Math.abs(x1 - 100) < 1e-6 && Math.abs(x2 - 100) < 1e-6 && Math.abs(Math.abs(y2 - y1) - 90) < 1e-6;
+    // La hoja es un rectángulo con espesor, del largo del vano (90 px).
+    const leaf = r.ops('strokePolygon').find((c) => {
+      const ys = (c.args[0] as { y: number }[]).map((q) => q.y);
+      return Math.abs(Math.max(...ys) - Math.min(...ys) - 90) < 1e-6;
     });
     expect(leaf).toBeDefined();
   });
 
-  it('una ventana dibuja marco a ambos lados y el vidrio en el eje', () => {
+  it('una ventana sigue las caras del muro y dibuja el vidrio doble en el eje', () => {
     const win = new Window({
       id: revitObjectId('win1'),
       roomId: ROOM_ID,
@@ -311,8 +324,13 @@ describe('drawPlan — vanos', () => {
     const r = new RecordingRenderer();
     drawPlan(r, scene({ objects: [wall, win] }));
     const glass = r.ops('drawLine').filter((c) => (c.args[4] as { stroke: string }).stroke === CANVAS_PALETTES.claro.opening);
-    expect(glass).toHaveLength(1);
-    expect(glass[0].args.slice(0, 4)).toEqual([200, 0, 320, 0]);
+    expect(glass).toHaveLength(2);
+    for (const g of glass) {
+      const [x1, y1, x2, y2] = g.args as number[];
+      expect([x1, x2]).toEqual([200, 320]);
+      expect(y1).toBeCloseTo(y2);
+      expect(Math.abs(y1)).toBeLessThan(3); // cerca del eje
+    }
   });
 
   it('no dibuja un vano cuyo muro padre ya no existe', () => {
@@ -366,11 +384,15 @@ describe('drawPlan — columnas', () => {
 // ---------------------------------------------------------------------------
 
 describe('drawPlan — muro en curso', () => {
-  it('previsualiza el muro con su espesor y rotula su longitud en vivo', () => {
+  it('previsualiza el muro con su espesor y rotula su longitud y su ángulo en vivo', () => {
     const r = new RecordingRenderer();
     drawPlan(r, scene({ wallDraft: { start: { x: 0, y: 0 }, end: { x: 3, y: 0 }, snappedToNode: false }, draftThickness: 0.2 }));
     expect(r.ops('strokePolygon')).toHaveLength(1);
-    expect(r.texts()).toContain('3.00 m');
+    expect(r.texts()).toContain('3.00 m · 0°');
+    // Hacia la pantalla arriba (Y del modelo negativa) = 90°, como el eje Y.
+    const up = new RecordingRenderer();
+    drawPlan(up, scene({ wallDraft: { start: { x: 0, y: 0 }, end: { x: 0, y: -2 }, snappedToNode: false } }));
+    expect(up.texts()).toContain('2.00 m · 90°');
   });
 
   it('con solo el primer punto fijado muestra el punto, sin muro', () => {
@@ -414,7 +436,8 @@ describe('drawPlan — selección', () => {
     const r = new RecordingRenderer();
     drawPlan(r, scene({ objects: [wall, door], selectedId: door.id }));
     expect(r.ops('strokeCircle')).toHaveLength(0);
-    expect(r.ops('strokePolygon')).toHaveLength(1);
+    const sel = r.ops('strokePolygon').filter((c) => (c.args[1] as { stroke: string }).stroke === CANVAS_PALETTES.claro.selection);
+    expect(sel).toHaveLength(1);
   });
 
   it('dibuja los handles del objeto seleccionado como círculos con borde', () => {
@@ -452,7 +475,8 @@ describe('drawPlan — etiquetas', () => {
   it('rotula la longitud de cada muro cuando showLabels está activo', () => {
     const r = new RecordingRenderer();
     drawPlan(r, scene({ objects: [makeWall('w1', 0, 0, 4, 0)], showLabels: true }));
-    expect(r.texts()).toContain('4.00 m');
+    // Cota arquitectónica: el valor (en metros, sin unidad) sobre la línea de cota.
+    expect(r.texts()).toContain('4.00');
   });
 
   it('no rotula nada si showLabels está apagado', () => {

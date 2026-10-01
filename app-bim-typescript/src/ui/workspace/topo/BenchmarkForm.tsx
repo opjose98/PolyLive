@@ -10,12 +10,13 @@
 // =============================================================================
 
 import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { ActionButton, BottomSheet, Chip, toast } from '../../primitives';
 import { CrsId, GridPoint, LatLon, crsDef, workingCrs } from '../../../domain/geo/crs';
 import { Field, Kv, Row, parseNum } from './TopoFields';
-import { colors, spacing } from '../../design/tokens';
+import { spacing } from '../../design/tokens';
 import { type } from '../../design/typography';
+import { themedStyles } from '../../design/theme';
 
 export interface BenchmarkFormResult {
   name: string;
@@ -43,6 +44,7 @@ export function BenchmarkForm({
   onSubmit: (r: BenchmarkFormResult) => void;
   onClose: () => void;
 }) {
+  const styles = useStyles();
   const [name, setName] = useState(defaultName);
   const [desc, setDesc] = useState('');
   const [geographic, setGeographic] = useState(crsDef(crs).kind === 'geographic');
@@ -123,9 +125,9 @@ export function BenchmarkForm({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   root: { padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl },
   title: { ...type.title, color: colors.text },
   preview: { backgroundColor: colors.background, borderRadius: 8, padding: spacing.md },
   hint: { ...type.caption, color: colors.textSecondary },
-});
+}));

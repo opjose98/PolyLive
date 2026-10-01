@@ -11,16 +11,16 @@
 // =============================================================================
 
 import React, { useEffect, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { ActionButton, BottomSheet, Chip, Icon, Tappable, toast } from '../../primitives';
 import { CRS_LIST, CrsId, GridPoint, LatLon, crsDef, suggestGaussKruger } from '../../../domain/geo/crs';
 import { Georeference } from '../../../domain/geo/georeference';
 import { ExpoGpsProvider } from '../../../native/location/ExpoGpsProvider';
 import { Field, Row, parseNum } from './TopoFields';
-import { colors, radius, spacing } from '../../design/tokens';
+import { radius, spacing } from '../../design/tokens';
 import { type } from '../../design/typography';
+import { themedStyles, useTheme } from '../../design/theme';
 
-const TOPO = '#2E7D32';
 const deg2rad = (d: number) => (d * Math.PI) / 180;
 
 type Method = 'origin' | 'gps' | 'control';
@@ -47,6 +47,8 @@ export interface TopographySetupProps {
 }
 
 export function TopographySetup(props: TopographySetupProps) {
+  const styles = useStyles();
+  const colors = useTheme();
   const { open, geo } = props;
   const [step, setStep] = useState<'crs' | 'method'>('crs');
   const [crs, setCrs] = useState<CrsId>(geo?.crs ?? 'EPSG:9377');
@@ -112,7 +114,7 @@ export function TopographySetup(props: TopographySetupProps) {
     <BottomSheet open={open} onClose={props.onClose} heightRatio={0.86}>
       <ScrollView contentContainerStyle={styles.root} keyboardShouldPersistTaps="handled">
         <View style={styles.head}>
-          <Icon name="map-marker-radius" size={24} color={TOPO} />
+          <Icon name="map-marker-radius" size={24} color={colors.accentText} />
           <Text style={styles.title}>{step === 'crs' ? 'Sistema de coordenadas' : 'Amarre del dibujo'}</Text>
           <Text style={styles.step}>{step === 'crs' ? '1/2' : '2/2'}</Text>
         </View>
@@ -226,7 +228,7 @@ export function TopographySetup(props: TopographySetupProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   root: { padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl },
   head: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   title: { ...type.title, color: colors.text, flex: 1 },
@@ -235,8 +237,8 @@ const styles = StyleSheet.create({
   hint: { ...type.caption, color: colors.textSecondary },
   section: { ...type.heading, color: colors.text },
   card: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.md, gap: 2 },
-  cardOn: { borderColor: TOPO, backgroundColor: 'rgba(46,125,50,0.08)' },
+  cardOn: { borderColor: colors.accentText, backgroundColor: colors.accentSoft },
   cardTitle: { ...type.bodyStrong, color: colors.text },
-  on: { color: TOPO },
+  on: { color: colors.accentText },
   cardSub: { ...type.caption, color: colors.textSecondary },
-});
+}));

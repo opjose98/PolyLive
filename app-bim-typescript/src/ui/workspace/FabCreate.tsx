@@ -10,7 +10,7 @@
 // =============================================================================
 
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import Animated, { FadeOut, ZoomIn } from 'react-native-reanimated';
 import { useStore } from 'zustand';
 import { workspaceStore } from '../../state/workspaceStore';
@@ -18,9 +18,10 @@ import { categoriesFor, isToolEnabled } from '../../application/workspace/catalo
 import { fabMainIcon } from '../../application/workspace/fabMachine';
 import type { ActiveTool } from '../../application/workspace/bpcContext';
 import { IconButton, Icon, Tappable, toast } from '../primitives';
-import { colors, elevation, radius, sizes, spacing } from '../design/tokens';
+import { elevation, radius, sizes, spacing } from '../design/tokens';
 import { type } from '../design/typography';
 import { STAGGER_MS } from '../design/motion';
+import { themedStyles, useTheme } from '../design/theme';
 
 interface MiniItem {
   key: string;
@@ -37,6 +38,8 @@ export interface FabCreateProps {
 }
 
 export const FabCreate = React.memo(function FabCreate({ onToolActivated }: FabCreateProps) {
+  const styles = useStyles();
+  const colors = useTheme();
   const fab = useStore(workspaceStore, (s) => s.fab);
   const mode = useStore(workspaceStore, (s) => s.mode);
   const workMode = useStore(workspaceStore, (s) => s.workMode);
@@ -133,7 +136,7 @@ export const FabCreate = React.memo(function FabCreate({ onToolActivated }: FabC
   );
 });
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   wrap: { position: 'absolute', right: spacing.lg, bottom: spacing.xl, alignItems: 'flex-end' },
   minis: {
     position: 'absolute',
@@ -146,7 +149,7 @@ const styles = StyleSheet.create({
   mini: {},
   miniRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   tip: { backgroundColor: colors.tooltip, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 4 },
-  tipText: { ...type.label, color: colors.textOnAccent },
+  tipText: { ...type.label, color: colors.tooltipText },
   miniBtn: {
     width: sizes.fabMini,
     height: sizes.fabMini,
@@ -161,4 +164,4 @@ const styles = StyleSheet.create({
   miniBtnOff: { backgroundColor: colors.background },
   levelTag: { paddingHorizontal: spacing.sm, paddingVertical: 2, backgroundColor: colors.surface, borderRadius: radius.sm, ...elevation[1] },
   levelText: { ...type.caption, color: colors.textSecondary, textTransform: 'uppercase' },
-});
+}));

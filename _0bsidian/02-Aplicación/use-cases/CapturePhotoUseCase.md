@@ -2,7 +2,7 @@
 name: CapturePhotoUseCase
 description: UseCase para capturar foto y guardar en filesystem con rollback en SQLite.
 type: aplicación
-depends-on: "[[Room-especificación]], [[PhotoRepository]]"
+depends-on: "[[Room-especificacion]], [[PhotoRepository]]"
 mentioned-in: "Maestro §12, arquitectura-aplicacion-v1.md §6"
 tags: #usecase #photo #audit
 ---

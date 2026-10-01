@@ -17,9 +17,10 @@
 // =============================================================================
 
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity } from 'react-native';
-import { colors, spacing, radius, sizes } from '../design/tokens';
+import { View, Text, TextInput, TouchableOpacity } from 'react-native';
+import { spacing, radius, sizes } from '../design/tokens';
 import { type } from '../design/typography';
+import { themedStyles, useTheme } from '../design/theme';
 
 // ---------------------------------------------------------------------------
 // NumberField
@@ -52,6 +53,7 @@ export function NumberField({
   onCommit,
   hint,
 }: NumberFieldProps) {
+  const styles = useStyles();
   const [text, setText] = useState(() => value.toFixed(decimals));
   const [error, setError] = useState<string | null>(null);
 
@@ -148,6 +150,8 @@ export function TextField({
   commitOn = 'change',
   onCommit,
 }: TextFieldProps) {
+  const styles = useStyles();
+  const colors = useTheme();
   const [draft, setDraft] = useState(value);
 
   // En modo `blur` el campo mantiene su propio borrador. Se resincroniza cuando
@@ -197,6 +201,7 @@ export function SegmentedField<T extends string>({
   disabled,
   onChange,
 }: SegmentedFieldProps<T>) {
+  const styles = useStyles();
   return (
     <View style={styles.fieldRow}>
       <Text style={styles.fieldLabel}>{label}</Text>
@@ -237,6 +242,7 @@ export function ToggleRow({
   description?: string;
   onChange: (value: boolean) => void;
 }) {
+  const styles = useStyles();
   return (
     <TouchableOpacity
       style={styles.toggleRow}
@@ -261,6 +267,7 @@ export function ToggleRow({
 // ---------------------------------------------------------------------------
 
 export function ReadonlyRow({ label, value }: { label: string; value: string }) {
+  const styles = useStyles();
   return (
     <View style={styles.readonlyRow}>
       <Text style={styles.readonlyLabel}>{label}</Text>
@@ -275,7 +282,7 @@ export function ReadonlyRow({ label, value }: { label: string; value: string }) 
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   fieldRow: {
     marginBottom: spacing.md,
   },
@@ -351,7 +358,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   segmentActive: {
-    backgroundColor: colors.amberDark,
+    backgroundColor: colors.accentText,
   },
   segmentDisabled: {
     opacity: 0.5,
@@ -392,7 +399,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   toggleTrackOn: {
-    backgroundColor: colors.amberDark,
+    backgroundColor: colors.accentText,
   },
   toggleKnob: {
     width: 22,
@@ -420,4 +427,4 @@ const styles = StyleSheet.create({
     color: colors.text,
     maxWidth: '60%',
   },
-});
+}));

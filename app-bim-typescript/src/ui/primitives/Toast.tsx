@@ -8,16 +8,17 @@
 // =============================================================================
 
 import React, { useEffect } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import Animated, { FadeInDown, FadeOutDown, LinearTransition } from 'react-native-reanimated';
 import { createStore } from 'zustand/vanilla';
 import { useStore } from 'zustand';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, elevation, radius, spacing } from '../design/tokens';
+import { elevation, radius, spacing } from '../design/tokens';
 import { type } from '../design/typography';
 import { Icon } from './Icon';
 import { Tappable } from './Tappable';
 import { haptic } from '../design/haptics';
+import { themedStyles, useTheme } from '../design/theme';
 
 export type ToastKind = 'info' | 'success' | 'warning' | 'error';
 
@@ -56,14 +57,16 @@ export function toast(message: string, options: ToastOptions = {}): void {
   toastStore.setState((s) => ({ items: [...s.items, item].slice(-MAX_VISIBLE) }));
 }
 
-const KIND_ICON: Record<ToastKind, { name: string; color: string } | null> = {
+const KIND_ICON: Record<ToastKind, { name: string; light: string; dark: string } | null> = {
   info: null,
-  success: { name: 'check-circle-outline', color: '#81C784' },
-  warning: { name: 'alert-circle-outline', color: '#FFD54F' },
-  error: { name: 'alert-circle-outline', color: '#E57373' },
+  success: { name: 'check-circle-outline', light: '#81C784', dark: '#2E7D32' },
+  warning: { name: 'alert-circle-outline', light: '#FFD54F', dark: '#8A5A00' },
+  error: { name: 'alert-circle-outline', light: '#E57373', dark: '#C62828' },
 };
 
 function ToastRow({ item }: { item: ToastItem }) {
+  const styles = useStyles();
+  const colors = useTheme();
   useEffect(() => {
     const t = setTimeout(() => dismiss(item.id), item.durationMs);
     return () => clearTimeout(t);
@@ -78,7 +81,7 @@ function ToastRow({ item }: { item: ToastItem }) {
       style={styles.toast}
       accessibilityLiveRegion="polite"
     >
-      {icon && <Icon name={icon.name} size={18} color={icon.color} />}
+      {icon && <Icon name={icon.name} size={18} color={colors.isDark ? icon.dark : icon.light} />}
       <Text style={styles.message}>{item.message}</Text>
       {item.action && (
         <Tappable
@@ -97,6 +100,7 @@ function ToastRow({ item }: { item: ToastItem }) {
 }
 
 export function ToastHost() {
+  const styles = useStyles();
   const items = useStore(toastStore, (s) => s.items);
   const insets = useSafeAreaInsets();
   return (
@@ -108,7 +112,7 @@ export function ToastHost() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   host: {
     position: 'absolute',
     left: spacing.lg,
@@ -127,7 +131,7 @@ const styles = StyleSheet.create({
     maxWidth: 420,
     ...elevation[2],
   },
-  message: { ...type.body, color: colors.textOnAccent, flexShrink: 1 },
+  message: { ...type.body, color: colors.tooltipText, flexShrink: 1 },
   action: { paddingHorizontal: spacing.xs },
-  actionText: { ...type.label, color: colors.amber, textTransform: 'uppercase' },
-});
+  actionText: { ...type.label, color: colors.tooltipAccent, textTransform: 'uppercase' },
+}));

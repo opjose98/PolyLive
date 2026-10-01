@@ -2,10 +2,14 @@
 name: CloseRoomUseCase
 description: UseCase para cerrar un Recinto — ejecuta triangulación CDT, calcula área, materializa Floor implícito.
 type: aplicación
-depends-on: "[[Room-especificación]], [[CDT-algoritmo]], [[Floor-especificación]], [[CreateWallUseCase]]"
+depends-on: "[[Room-especificacion]], [[CDT-algoritmo]], [[Floor-especificacion]], [[CreateWallUseCase]]"
 mentioned-in: "Maestro §14, [[RoomValidationService]]"
 tags: #usecase #room #close #triangulation
 ---
+
+> **ESTADO — la app no lo usa.** Los recintos se detectan solos al cerrar muros (`DetectRoomsUseCase` +
+> `syncRoomGeometry` en [[EditorController]]). Candidato a reutilizarse en F6a Suelo. Ver [[auditoria-post-M2]].
+
 
 # CloseRoomUseCase
 

@@ -14,12 +14,13 @@ import { coordinateRows, gridName } from '../../../application/geo/coordinateTex
 import type { Point2D } from '../../../domain/geometry/types';
 import type { Topography } from './useTopography';
 import { Row } from './TopoFields';
-import { colors, radius, spacing } from '../../design/tokens';
+import { radius, spacing } from '../../design/tokens';
 import { type } from '../../design/typography';
+import { themedStyles } from '../../design/theme';
 
-const TOPO = '#2E7D32';
 
 export function CoordinatesSheet({ topo, vertices }: { topo: Topography; vertices: readonly Point2D[] }) {
+  const styles = useStyles();
   const { geo, display } = topo;
   return (
     <BottomSheet open={topo.coordsOpen} onClose={topo.closeCoords} heightRatio={0.8}>
@@ -109,22 +110,22 @@ export function CoordinatesSheet({ topo, vertices }: { topo: Topography; vertice
 
 const sourceLabel = (s: string) => ({ tap: 'Tocado en el dibujo', typed: 'Digitado', gps: 'GPS promediado', import: 'Importado' })[s] ?? s;
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   root: { padding: spacing.lg, gap: spacing.sm, paddingBottom: spacing.xxl },
   title: { ...type.title, color: colors.text },
   section: { ...type.heading, color: colors.text, marginTop: spacing.md },
   hint: { ...type.caption, color: colors.textSecondary },
   card: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.lg, padding: spacing.md, gap: 2 },
-  cardOn: { borderColor: TOPO },
+  cardOn: { borderColor: colors.accentText },
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   name: { ...type.bodyStrong, color: colors.text },
   badge: { ...type.caption, color: colors.textSecondary, flex: 1 },
-  badgeOn: { color: TOPO },
+  badgeOn: { color: colors.accentText },
   kv: { flexDirection: 'row', justifyContent: 'space-between' },
   k: { ...type.label, color: colors.textSecondary },
   v: { ...type.bodyStrong, color: colors.text },
   meta: { ...type.caption, color: colors.textSecondary },
   vertex: { flexDirection: 'row', gap: spacing.sm, paddingVertical: 4, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
-  vName: { ...type.label, color: TOPO, width: 32 },
+  vName: { ...type.label, color: colors.accentText, width: 32 },
   vText: { ...type.caption, color: colors.text, flex: 1 },
-});
+}));

@@ -2,7 +2,7 @@
 name: matriz-casos-criticos
 description: Matriz de casos críticos (qué pasa si...) y qué testea cada uno.
 type: testing
-depends-on: "[[estrategia-unit-testing]], [[flujos-integración-documentados]]"
+depends-on: "[[estrategia-unit-testing]], [[flujos-integracion-documentados]]"
 mentioned-in: "Spike #2-5"
 tags: #testing #critical #edge-cases
 ---

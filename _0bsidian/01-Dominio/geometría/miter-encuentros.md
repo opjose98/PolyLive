@@ -2,7 +2,7 @@
 name: miter-encuentros
 description: Algoritmo de encuentros limpios Wall vs Wall — cálculo de ángulos y líneas de encuentro.
 type: dominio
-depends-on: "[[tipos-geométricos]], [[snap-angular]]"
+depends-on: "[[tipos-geometricos]], [[snap-angular]]"
 mentioned-in: "Maestro §5.2, pseudocodigo-cdt.md"
 tags: #geometría #core #validation
 ---
@@ -78,11 +78,11 @@ interface MiterResult {
 
 ## Relacionado con
 
-- [[tipos-geométricos]] — usa Point2D, Degrees
+- [[tipos-geometricos]] — usa Point2D, Degrees
 - [[snap-angular]] — ajusta el resultado a snap si aplica
 - [[CDT-algoritmo]] — Miter se aplica **antes** de triangular
 - [[matriz-reglas-de-negocio]] — define qué ángulos son warning vs bloqueo
-- [[Wall-especificación]] — propiedades del muro
+- [[Wall-especificacion]] — propiedades del muro
 
 ---
 

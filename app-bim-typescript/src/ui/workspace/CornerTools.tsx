@@ -8,16 +8,17 @@
 // =============================================================================
 
 import React, { useState } from 'react';
-import { StyleSheet, TextInput, View } from 'react-native';
+import { TextInput, View } from 'react-native';
 import Animated, { FadeOut, SlideInLeft, ZoomIn } from 'react-native-reanimated';
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 import { workspaceStore } from '../../state/workspaceStore';
 import { CORNER_TOOLS, CornerItem, CornerRow, ZoomAction } from '../../application/workspace/catalog';
 import { IconButton, toast } from '../primitives';
-import { colors, radius, sizes, spacing } from '../design/tokens';
+import { radius, sizes, spacing } from '../design/tokens';
 import { type } from '../design/typography';
 import { STAGGER_MS } from '../design/motion';
+import { themedStyles } from '../design/theme';
 
 /** Opciones que el motor todavía no implementa: se muestran y lo explican. */
 const NOT_YET: Readonly<Record<string, string>> = {
@@ -31,6 +32,7 @@ export interface CornerToolsProps {
 }
 
 export const CornerTools = React.memo(function CornerTools({ onZoom }: CornerToolsProps) {
+  const styles = useStyles();
   const { open, snap, grid, theme, scale } = useStore(
     workspaceStore,
     useShallow((s) => ({
@@ -153,7 +155,7 @@ export const CornerTools = React.memo(function CornerTools({ onZoom }: CornerToo
   );
 });
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   wrap: { position: 'absolute', left: spacing.lg, bottom: spacing.xl },
   rows: {
     position: 'absolute',
@@ -185,4 +187,4 @@ const styles = StyleSheet.create({
     color: colors.text,
     paddingVertical: 0,
   },
-});
+}));

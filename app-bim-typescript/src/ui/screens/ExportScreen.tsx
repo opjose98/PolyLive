@@ -19,14 +19,15 @@
 // =============================================================================
 
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView } from 'react-native';
+import { View, Text, SafeAreaView, ScrollView } from 'react-native';
 import { AppServices } from '../../application/AppServices';
 import { exportPlanDxf, exportRevitIfc } from '../workspace/exportActions';
 import { Room, RoomId, revitObjectId } from '../../domain/objects';
 import { ActionButton, alertDialog } from '../primitives';
 import { ReadonlyRow } from '../components/fields';
-import { colors, spacing, radius } from '../design/tokens';
+import { spacing, radius } from '../design/tokens';
 import { type } from '../design/typography';
+import { themedStyles } from '../design/theme';
 
 // ---------------------------------------------------------------------------
 // Props y estado
@@ -52,6 +53,7 @@ type ExportStatus =
 // ---------------------------------------------------------------------------
 
 export function ExportScreen({ services, roomId, projectId, projectName = 'Proyecto', operatorName }: ExportScreenProps) {
+  const styles = useStyles();
   const [room, setRoom] = useState<Room | null>(null);
   const [status, setStatus] = useState<ExportStatus>({ phase: 'idle' });
 
@@ -200,7 +202,7 @@ export function ExportScreen({ services, roomId, projectId, projectName = 'Proye
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -246,6 +248,6 @@ const styles = StyleSheet.create({
     ...type.caption,
     color: colors.textSecondary,
   },
-});
+}));
 
 export default ExportScreen;

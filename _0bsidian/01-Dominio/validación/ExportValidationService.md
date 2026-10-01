@@ -2,7 +2,7 @@
 name: ExportValidationService
 description: Validación previa a exportación — verifica SiteCoordinateSystem, Room abierto, etc.
 type: dominio
-depends-on: "[[Room-especificación]], [[SiteCoordinateSystem]], [[matriz-reglas-de-negocio]]"
+depends-on: "[[Room-especificacion]], [[SiteCoordinateSystem]], [[matriz-reglas-de-negocio]]"
 mentioned-in: "Maestro §9.5, pseudocodigo-step-ifc.md §9"
 tags: #validación #export #ifc
 ---
@@ -104,7 +104,7 @@ class ExportValidationService {
 
 ## Relacionado con
 
-- [[Room-especificación]] — valida state
+- [[Room-especificacion]] — valida state
 - [[SiteCoordinateSystem]] — verificación de existencia
 - [[pseudocodigo-step-ifc.md]] — exportador que usa este servicio
 - [[ExportRoomIfcUseCase]], [[ExportSiteIfcUseCase]] — orquestadores

@@ -9,10 +9,11 @@
 import React, { useEffect } from 'react';
 import { StyleProp, StyleSheet, ViewStyle } from 'react-native';
 import Animated, { interpolateColor, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
-import { colors, elevation } from '../design/tokens';
+import { elevation } from '../design/tokens';
 import { duration } from '../design/motion';
 import { Tappable, HapticKind } from './Tappable';
 import { Icon } from './Icon';
+import { useTheme } from '../design/theme';
 
 export interface IconButtonProps {
   icon: string;
@@ -46,15 +47,16 @@ export function IconButton({
   style,
   raised = true,
 }: IconButtonProps) {
+  const colors = useTheme();
   const t = useSharedValue(on ? 1 : 0);
   useEffect(() => {
     t.value = withTiming(on ? 1 : 0, { duration: duration.fast });
   }, [on, t]);
 
-  const base = variant === 'filled' ? colors.amber : variant === 'plain' ? 'rgba(255,255,255,0)' : colors.surface;
+  const base = variant === 'filled' ? colors.accent : variant === 'plain' ? 'rgba(255,255,255,0)' : colors.surface;
   const bg = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(t.value, [0, 1], [base, colors.amber]),
-    borderColor: interpolateColor(t.value, [0, 1], [variant === 'outline' ? colors.border : base, colors.amber]),
+    backgroundColor: interpolateColor(t.value, [0, 1], [base, colors.accent]),
+    borderColor: interpolateColor(t.value, [0, 1], [variant === 'outline' ? colors.border : base, colors.accent]),
   }));
 
   const fg = variant === 'filled' || on ? colors.textOnAccent : colors.text;

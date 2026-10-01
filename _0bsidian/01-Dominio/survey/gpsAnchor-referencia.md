@@ -2,7 +2,7 @@
 name: gpsAnchor-referencia
 description: Captura de GPS — ubicación aproximada de Sede/Bloque/Recinto, solo referencial en MVP v0.1.
 type: dominio
-depends-on: "[[tipos-geométricos]], [[sistema-coordenadas-6-capas]]"
+depends-on: "[[tipos-geometricos]], [[sistema-coordenadas-6-capas]]"
 mentioned-in: "Maestro §4.3, sistema-coordenadas-y-transformaciones.md §5"
 tags: #survey #gps #referencia
 ---

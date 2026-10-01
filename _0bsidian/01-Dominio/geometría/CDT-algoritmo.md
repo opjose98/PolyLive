@@ -2,7 +2,7 @@
 name: CDT-algoritmo
 description: Constrained Delaunay Triangulation — algoritmo de triangulación de polígonos simples y con huecos.
 type: dominio
-depends-on: "[[tipos-geométricos]]"
+depends-on: "[[tipos-geometricos]]"
 mentioned-in: "pseudocodigo-cdt.md, Maestro §5.6, [[CDT-casos-prueba]]"
 tags: #geometría #core #triangulation #algorithm
 ---
@@ -79,7 +79,7 @@ Ver [[CDT-casos-prueba]] — 12 casos cubren rectángulos simples, formas cónca
 
 ## Relacionado con
 
-- [[tipos-geométricos]] — usa Point2D, Triangle, SquareMeters
+- [[tipos-geometricos]] — usa Point2D, Triangle, SquareMeters
 - [[CDT-casos-prueba]] — validación del algoritmo
 - [[miter-encuentros]] — qué pasa después de triangular (cálculo de encuentros limpios)
 - [[CloseRoomUseCase]] — orquesta la triangulación cuando el usuario cierra un Recinto
