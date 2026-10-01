@@ -18,9 +18,10 @@ import Animated, { FadeIn, FadeOut, ZoomIn } from 'react-native-reanimated';
 import { createStore } from 'zustand/vanilla';
 import { useStore } from 'zustand';
 import { Tappable } from './Tappable';
-import { colors, elevation, radius, spacing } from '../design/tokens';
+import { elevation, radius, spacing } from '../design/tokens';
 import { type } from '../design/typography';
 import { haptic } from '../design/haptics';
+import { themedStyles } from '../design/theme';
 
 export interface DialogButton {
   text: string;
@@ -66,6 +67,7 @@ function close(id: number) {
 }
 
 export function DialogHost() {
+  const styles = useStyles();
   const current = useStore(dialogStore, (s) => s.queue[0]);
   if (!current) return null;
 
@@ -115,7 +117,7 @@ export function DialogHost() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   scrim: { flex: 1, backgroundColor: colors.scrim, alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
   card: {
     width: '100%',
@@ -131,9 +133,9 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', justifyContent: 'flex-end', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm },
   actionsColumn: { flexDirection: 'column-reverse', alignItems: 'stretch' },
   btn: { minHeight: 44, paddingHorizontal: spacing.lg, borderRadius: radius.lg, alignItems: 'center', justifyContent: 'center' },
-  btnPrimary: { backgroundColor: colors.amber },
+  btnPrimary: { backgroundColor: colors.accent },
   btnDanger: { backgroundColor: colors.error },
   btnText: { ...type.bodyStrong, color: colors.text },
   btnTextCancel: { color: colors.textSecondary },
   btnTextOn: { color: colors.textOnAccent },
-});
+}));

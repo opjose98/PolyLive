@@ -17,11 +17,12 @@
 // =============================================================================
 
 import React, { useState } from 'react';
-import { View, Text, Image, StyleSheet, Modal, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, Image, Modal, ScrollView, TouchableOpacity } from 'react-native';
 import type { AuditPhoto } from '../../domain/objects/audit-photo';
 import { ActionButton, Chip } from '../primitives';
-import { colors, spacing, radius, sizes } from '../design/tokens';
+import { spacing, radius, sizes } from '../design/tokens';
 import { type } from '../design/typography';
+import { themedStyles } from '../design/theme';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -56,6 +57,7 @@ export function PhotoViewer({
   onDelete,
   onToggleMarkerVisible,
 }: PhotoViewerProps) {
+  const styles = useStyles();
   const [showOverlay, setShowOverlay] = useState(true);
   const [showDetails, setShowDetails] = useState(false);
 
@@ -177,6 +179,7 @@ export function PhotoViewer({
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {
+  const styles = useStyles();
   return (
     <View style={styles.detailRow}>
       <Text style={styles.detailLabel}>{label}</Text>
@@ -191,7 +194,7 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   root: {
     flex: 1,
     backgroundColor: colors.text,
@@ -225,7 +228,7 @@ const styles = StyleSheet.create({
   },
   overlayBadgeText: {
     ...type.caption,
-    color: colors.amberDark,
+    color: colors.accentText,
     fontFamily: 'Roboto_700Bold',
   },
   overlayLines: {
@@ -290,6 +293,6 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     backgroundColor: colors.surface,
   },
-});
+}));
 
 export default PhotoViewer;

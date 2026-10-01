@@ -12,7 +12,7 @@
 // =============================================================================
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, SafeAreaView, ScrollView, TouchableOpacity } from 'react-native';
 import { AppServices } from '../../application/AppServices';
 import { ExpoBackupDatabaseUseCase } from '../../native/backup/ExpoBackupDatabaseUseCase';
 import {
@@ -22,8 +22,9 @@ import {
 import { AppError } from '../../shared/errors/AppError';
 import { ActionButton, alertDialog } from '../primitives';
 import { ToggleRow, ReadonlyRow } from '../components/fields';
-import { colors, spacing, radius, sizes } from '../design/tokens';
+import { spacing, radius, sizes } from '../design/tokens';
 import { type } from '../design/typography';
+import { themedStyles } from '../design/theme';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -57,6 +58,7 @@ export function SettingsScreen({
   onOpenProfile,
   onRestored,
 }: SettingsScreenProps) {
+  const styles = useStyles();
   const [backups, setBackups] = useState<BackupEntry[]>([]);
   const [creating, setCreating] = useState(false);
   const [restoring, setRestoring] = useState(false);
@@ -248,7 +250,7 @@ function formatBytes(bytes: number): string {
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -307,8 +309,8 @@ const styles = StyleSheet.create({
   },
   backupAction: {
     ...type.label,
-    color: colors.amberDark,
+    color: colors.accentText,
   },
-});
+}));
 
 export default SettingsScreen;

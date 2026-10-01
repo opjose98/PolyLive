@@ -12,8 +12,9 @@ import { StyleSheet, Text, View } from 'react-native';
 import { useStore } from 'zustand';
 import { workspaceStore } from '../../state/workspaceStore';
 import { IconButton } from '../primitives';
-import { colors, sizes, spacing } from '../design/tokens';
+import { sizes, spacing } from '../design/tokens';
 import { type } from '../design/typography';
+import { themedStyles } from '../design/theme';
 
 export interface WorkspaceStatusBarProps {
   project: string;
@@ -25,6 +26,7 @@ export interface WorkspaceStatusBarProps {
 }
 
 export const WorkspaceStatusBar = React.memo(function WorkspaceStatusBar({ project, space, canUndo, canRedo, onUndo, onRedo }: WorkspaceStatusBarProps) {
+  const styles = useStyles();
   const panel = useStore(workspaceStore, (s) => s.currentPanel);
   const ws = workspaceStore.getState;
   return (
@@ -62,7 +64,7 @@ export const WorkspaceStatusBar = React.memo(function WorkspaceStatusBar({ proje
 
 export const STATUS_BAR_HEIGHT = 24 + sizes.statusBarRow + spacing.xs;
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   bar: {
     height: STATUS_BAR_HEIGHT,
     backgroundColor: colors.surface,
@@ -75,4 +77,4 @@ const styles = StyleSheet.create({
   titleStrong: { ...type.bodyStrong, color: colors.text },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: sizes.statusBarRow },
   right: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-});
+}));

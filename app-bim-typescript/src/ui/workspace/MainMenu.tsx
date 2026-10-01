@@ -12,8 +12,9 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useStore } from 'zustand';
 import { workspaceStore } from '../../state/workspaceStore';
 import { Icon, SideDrawer, Tappable } from '../primitives';
-import { colors, radius, spacing } from '../design/tokens';
+import { radius, spacing } from '../design/tokens';
 import { type } from '../design/typography';
+import { themedStyles, useTheme } from '../design/theme';
 
 export interface MainMenuItem {
   icon: string;
@@ -36,6 +37,8 @@ export const MainMenu = React.memo(function MainMenu({
   subtitle: string;
   items: MainMenuItem[];
 }) {
+  const styles = useStyles();
+  const colors = useTheme();
   const open = useStore(workspaceStore, (s) => s.currentPanel === 'mainMenu');
   const close = () => workspaceStore.getState().closePanels();
   return (
@@ -80,7 +83,7 @@ export const MainMenu = React.memo(function MainMenu({
   );
 });
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -93,7 +96,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: radius.lg,
-    backgroundColor: colors.amber,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -103,7 +106,7 @@ const styles = StyleSheet.create({
   list: { paddingBottom: spacing.xl },
   section: {
     ...type.label,
-    color: colors.amberDark,
+    color: colors.accentText,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
     paddingHorizontal: spacing.lg,
@@ -114,4 +117,4 @@ const styles = StyleSheet.create({
   itemText: { flex: 1 },
   label: { ...type.body, color: colors.text },
   detail: { ...type.caption, color: colors.textSecondary },
-});
+}));

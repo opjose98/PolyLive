@@ -8,7 +8,7 @@
 // =============================================================================
 
 import React from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ScrollView, Text, TextInput, View } from 'react-native';
 import { useStore } from 'zustand';
 import { workspaceStore } from '../../state/workspaceStore';
 import {
@@ -21,8 +21,9 @@ import {
 } from '../../application/workspace/catalog';
 import { selectWorkMode } from './FabView';
 import { Accordion, SideDrawer, TagToggle, Tappable, Icon } from '../primitives';
-import { colors, radius, spacing } from '../design/tokens';
+import { radius, spacing } from '../design/tokens';
 import { type } from '../design/typography';
+import { themedStyles, useTheme } from '../design/theme';
 
 export interface FileInfo {
   project: string;
@@ -49,6 +50,7 @@ export interface ConfigDrawerProps {
  * (M3 Avance, M4 Revisión). Topografía trae la suya (TopographyPanel). Levantamiento no la necesita.
  */
 function ModePlaceholder({ mode }: { mode: import('../../application/workspace/catalog').WorkModeId }) {
+  const styles = useStyles();
   if (mode === 'levantamiento') return null;
   const def = workModeDef(mode);
   const text: Record<string, string> = {
@@ -64,6 +66,7 @@ function ModePlaceholder({ mode }: { mode: import('../../application/workspace/c
 }
 
 export const ConfigDrawer = React.memo(function ConfigDrawer({ top, info, zoomPercent, onZoom, hasObjects = true, modeSection }: ConfigDrawerProps) {
+  const styles = useStyles();
   const s = useStore(workspaceStore);
   const open = s.currentPanel === 'configDrawer';
   const ws = workspaceStore.getState;
@@ -118,7 +121,7 @@ export const ConfigDrawer = React.memo(function ConfigDrawer({ top, info, zoomPe
           </View>
         </Accordion>
 
-        <Accordion title="Tema del lienzo" icon="theme-light-dark">
+        <Accordion title="Tema (claro · oscuro · alto contraste)" icon="theme-light-dark">
           <View style={styles.tags}>
             {CANVAS_THEMES.map((t) => (
               <TagToggle key={t.id} role="radio" icon={t.icon} label={t.label} on={s.canvasTheme === t.id} onPress={() => ws().setCanvasTheme(t.id)} />
@@ -155,6 +158,7 @@ export const ConfigDrawer = React.memo(function ConfigDrawer({ top, info, zoomPe
 });
 
 function Row({ label, value }: { label: string; value: string }) {
+  const styles = useStyles();
   return (
     <View style={styles.row}>
       <Text style={styles.label}>{label}</Text>
@@ -166,6 +170,7 @@ function Row({ label, value }: { label: string; value: string }) {
 }
 
 function Group({ label, children }: { label: string; children: React.ReactNode }) {
+  const styles = useStyles();
   return (
     <View style={styles.group}>
       <Text style={styles.label}>{label}</Text>
@@ -175,6 +180,8 @@ function Group({ label, children }: { label: string; children: React.ReactNode }
 }
 
 function Action({ icon, label, onPress }: { icon: string; label: string; onPress: () => void }) {
+  const styles = useStyles();
+  const colors = useTheme();
   return (
     <Tappable onPress={onPress} style={styles.action} accessibilityLabel={label}>
       <Icon name={icon} size={16} color={colors.text} />
@@ -183,7 +190,7 @@ function Action({ icon, label, onPress }: { icon: string; label: string; onPress
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   row: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md, paddingVertical: 2 },
   label: { ...type.label, color: colors.textSecondary },
   rowValue: { ...type.body, color: colors.text, flexShrink: 1, textAlign: 'right' },
@@ -212,4 +219,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     color: colors.text,
   },
-});
+}));

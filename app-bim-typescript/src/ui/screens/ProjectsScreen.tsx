@@ -19,7 +19,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   View,
   Text,
-  StyleSheet,
   SafeAreaView,
   FlatList,
   TouchableOpacity,
@@ -43,8 +42,9 @@ import type { Operator } from '../../domain/objects/operator';
 import { AppError } from '../../shared/errors/AppError';
 import { ActionButton, alertDialog } from '../primitives';
 import { TextField, SegmentedField } from '../components/fields';
-import { colors, spacing, radius, sizes } from '../design/tokens';
+import { spacing, radius, sizes } from '../design/tokens';
 import { type } from '../design/typography';
+import { themedStyles, useTheme } from '../design/theme';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -67,6 +67,8 @@ export function ProjectsScreen({
   onOpenProject,
   onOpenSettings,
 }: ProjectsScreenProps) {
+  const styles = useStyles();
+  const colors = useTheme();
   const [summaries, setSummaries] = useState<ProjectSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -137,7 +139,7 @@ export function ProjectsScreen({
   if (loading) {
     return (
       <SafeAreaView style={styles.center}>
-        <ActivityIndicator color={colors.amberDark} />
+        <ActivityIndicator color={colors.accentText} />
         <Text style={styles.muted}>Cargando proyectos...</Text>
       </SafeAreaView>
     );
@@ -264,6 +266,7 @@ function ProjectCard({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const styles = useStyles();
   const { project, spaceCount, totalAreaM2, openSpaceCount } = summary;
 
   return (
@@ -355,6 +358,7 @@ function ProjectDialog({
   onCancel: () => void;
   onSubmit: (values: ProjectFormValues) => void | Promise<void>;
 }) {
+  const styles = useStyles();
   const [values, setValues] = useState<ProjectFormValues>({
     name: '',
     bimCode: '',
@@ -465,7 +469,7 @@ function ProjectDialog({
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -506,7 +510,7 @@ const styles = StyleSheet.create({
   },
   headerActionText: {
     fontSize: 20,
-    color: colors.amberDark,
+    color: colors.accentText,
   },
   searchWrap: {
     padding: spacing.md,
@@ -556,7 +560,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
     borderRadius: radius.xs,
-    backgroundColor: colors.amberDark,
+    backgroundColor: colors.accentText,
   },
   codeBadgeText: {
     ...type.caption,
@@ -588,7 +592,7 @@ const styles = StyleSheet.create({
   },
   cardStat: {
     ...type.label,
-    color: colors.amberDark,
+    color: colors.accentText,
   },
   cardStatWarning: {
     color: colors.warning,
@@ -609,7 +613,7 @@ const styles = StyleSheet.create({
   },
   cardActionText: {
     ...type.label,
-    color: colors.amberDark,
+    color: colors.accentText,
   },
   cardActionDanger: {
     color: colors.error,
@@ -647,6 +651,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginTop: spacing.md,
   },
-});
+}));
 
 export default ProjectsScreen;

@@ -8,11 +8,12 @@
 // =============================================================================
 
 import React from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Text, View } from 'react-native';
 import { Tappable } from './Tappable';
 import { Icon } from './Icon';
-import { colors, radius, sizes, spacing } from '../design/tokens';
+import { radius, sizes, spacing } from '../design/tokens';
 import { type } from '../design/typography';
+import { themedStyles, useTheme } from '../design/theme';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'text';
 
@@ -31,8 +32,10 @@ export function ActionButton({
   icon?: string;
   loading?: boolean;
 }) {
+  const styles = useStyles();
+  const colors = useTheme();
   const fg =
-    variant === 'primary' || variant === 'danger' ? colors.textOnAccent : variant === 'text' ? colors.amberDark : colors.text;
+    variant === 'primary' || variant === 'danger' ? colors.textOnAccent : variant === 'text' ? colors.accentText : colors.text;
   return (
     <Tappable
       onPress={onPress}
@@ -67,6 +70,8 @@ export function Chip({
   hint?: string;
   onPress: () => void;
 }) {
+  const styles = useStyles();
+  const colors = useTheme();
   return (
     <Tappable
       onPress={onPress}
@@ -77,7 +82,7 @@ export function Chip({
       accessibilityLabel={label}
       accessibilityHint={hint}
     >
-      {active ? <Icon name="check" size={14} color={colors.amberDark} /> : null}
+      {active ? <Icon name="check" size={14} color={colors.accentText} /> : null}
       <Text style={[styles.chipText, active && styles.chipTextOn]}>{label}</Text>
     </Tappable>
   );
@@ -85,6 +90,7 @@ export function Chip({
 
 /** Tarjeta de contenido: agrupa un tema dentro de una pantalla. */
 export function Card({ title, children, right }: { title?: string; children: React.ReactNode; right?: React.ReactNode }) {
+  const styles = useStyles();
   return (
     <View style={styles.card}>
       {title ? (
@@ -98,7 +104,7 @@ export function Card({ title, children, right }: { title?: string; children: Rea
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   button: {
     // Como el botón anterior (ToolPalette): `flex: 1` reparte el ancho en una
     // fila de botones; `stretch` lo lleva al ancho de su columna.
@@ -112,7 +118,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.sm,
   },
-  primary: { backgroundColor: colors.amber },
+  primary: { backgroundColor: colors.accent },
   danger: { backgroundColor: colors.error },
   secondary: { backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.border },
   text: { backgroundColor: 'transparent', paddingHorizontal: spacing.sm },
@@ -129,10 +135,10 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  chipOn: { backgroundColor: colors.amberSoft, borderColor: colors.amber },
+  chipOn: { backgroundColor: colors.accentSoft, borderColor: colors.accent },
   chipText: { ...type.label, color: colors.textSecondary },
-  chipTextOn: { color: colors.amberDark },
+  chipTextOn: { color: colors.accentText },
   card: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.lg, gap: spacing.sm, borderWidth: 1, borderColor: colors.border },
   cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   cardTitle: { ...type.title, color: colors.text },
-});
+}));

@@ -15,12 +15,12 @@
 // =============================================================================
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Dimensions, Modal, BackHandler } from 'react-native';
+import { View, Text, Dimensions, Modal, BackHandler } from 'react-native';
 
 import { PlanCanvas } from '../canvas/PlanCanvas';
 import { BottomSheet, toast, alertDialog } from '../primitives';
 import { sizes } from '../design/tokens';
-import { CANVAS_PALETTES } from '../design/canvasThemes';
+import { themedStyles, useCanvasPalette } from '../design/theme';
 import { haptic } from '../design/haptics';
 import { workspaceStore } from '../../state/workspaceStore';
 import { ZoomAction, categoriesFor, findTool, PropKey, workModeDef } from '../../application/workspace/catalog';
@@ -80,7 +80,7 @@ import { Measurement } from '../../domain/objects/measurement';
 import { RoomId, revitObjectId, wallId } from '../../domain/objects/base';
 import { AppError } from '../../shared/errors/AppError';
 import { meters } from '../../domain/geometry/types';
-import { colors, radius, spacing } from '../design/tokens';
+import { radius, spacing } from '../design/tokens';
 import { type } from '../design/typography';
 
 const CANVAS_TOUCH_TOLERANCE_PX = sizes.canvasTouchTolerance;
@@ -154,7 +154,6 @@ export function SurveyScreen({
   const wsState = useStore(
     workspaceStore,
     useShallow((s) => ({
-      canvasTheme: s.canvasTheme,
       gridLines: s.grid.lines,
       gridDots: s.grid.dots,
       snapNode: s.snap.node,
@@ -166,7 +165,9 @@ export function SurveyScreen({
       denominator: s.scale.denominator,
     })),
   );
-  const { canvasTheme, gridLines, gridDots } = wsState;
+  const { gridLines, gridDots } = wsState;
+  const styles = useStyles();
+  const canvasPalette = useCanvasPalette();
 
   // El lienzo ocupa todo el alto disponible; se mide al montar.
   const [canvasSize, setCanvasSize] = useState({ w: screenWidth, h: canvasHeight });
@@ -886,7 +887,7 @@ export function SurveyScreen({
           height={canvasSize.h}
           scene={sceneForCanvas}
           transform={state.transform}
-          palette={CANVAS_PALETTES[canvasTheme]}
+          palette={canvasPalette}
           grid={{ show: gridLines || gridDots, lines: gridLines, dots: gridDots }}
           dragEnabled={editable && state.tool === 'select' && !state.busy}
           drawEnabled={editable && state.tool === 'wall'}
@@ -1067,7 +1068,7 @@ export function SurveyScreen({
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   container: { flex: 1, backgroundColor: colors.surface },
   stage: { flex: 1, overflow: 'hidden' },
   dialogScrim: { flex: 1, backgroundColor: colors.scrim, justifyContent: 'center', padding: spacing.xl },
@@ -1075,6 +1076,6 @@ const styles = StyleSheet.create({
   dialogTitle: { ...type.title, color: colors.text },
   dialogBody: { ...type.body, color: colors.textSecondary },
   dialogActions: { flexDirection: 'row', gap: spacing.sm },
-});
+}));
 
 export default SurveyScreen;

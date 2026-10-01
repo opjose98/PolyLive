@@ -4,7 +4,7 @@
 // =============================================================================
 
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, ZoomIn } from 'react-native-reanimated';
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
@@ -20,9 +20,10 @@ import {
   workModeDef,
 } from '../../application/workspace/catalog';
 import { FloatWindow, IconButton, Tappable, Icon, toast } from '../primitives';
-import { colors, radius, sizes, spacing } from '../design/tokens';
+import { radius, sizes, spacing } from '../design/tokens';
 import { type } from '../design/typography';
 import { STAGGER_MS } from '../design/motion';
+import { themedStyles, useTheme } from '../design/theme';
 
 /** Entra a un modo si se puede; si no, explica por qué (toast). */
 export function selectWorkMode(id: WorkModeId, hasObjects: boolean): boolean {
@@ -45,6 +46,8 @@ export function selectWorkMode(id: WorkModeId, hasObjects: boolean): boolean {
  * Debajo, sin desplegar, quedan Filtros y Capas (contextuales al modo).
  */
 export const FabView = React.memo(function FabView({ top, hasObjects = true }: { top: number; hasObjects?: boolean }) {
+  const styles = useStyles();
+  const colors = useTheme();
   const { open, workMode, mode, windowId } = useStore(
     workspaceStore,
     useShallow((s) => ({ open: s.currentPanel === 'fabView', workMode: s.workMode, mode: s.mode, windowId: s.currentWindow?.id })),
@@ -123,6 +126,8 @@ export const FabView = React.memo(function FabView({ top, hasObjects = true }: {
 });
 
 function Checks({ items, kind }: { items: readonly OptionDef[]; kind: 'filters' | 'layers' }) {
+  const styles = useStyles();
+  const colors = useTheme();
   const values = useStore(workspaceStore, (s) => (kind === 'filters' ? s.filters : s.layers)) as Record<string, boolean>;
   const ws = workspaceStore.getState;
   return (
@@ -148,7 +153,7 @@ function Checks({ items, kind }: { items: readonly OptionDef[]; kind: 'filters' 
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   wrap: { position: 'absolute', right: spacing.lg, alignItems: 'flex-end' },
   main: {
     width: sizes.fabView,
@@ -192,5 +197,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  checkOn: { backgroundColor: colors.amber, borderColor: colors.amber },
-});
+  checkOn: { backgroundColor: colors.accent, borderColor: colors.accent },
+}));

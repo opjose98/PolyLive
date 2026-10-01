@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, LinearTransition, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
-import { colors, spacing } from '../design/tokens';
+import { spacing } from '../design/tokens';
 import { type } from '../design/typography';
 import { spring } from '../design/motion';
 import { Tappable } from './Tappable';
 import { Icon } from './Icon';
+import { themedStyles, useTheme } from '../design/theme';
 
 export interface AccordionProps {
   title: string;
@@ -15,6 +16,8 @@ export interface AccordionProps {
 }
 
 export function Accordion({ title, icon, defaultOpen = false, children }: AccordionProps) {
+  const styles = useStyles();
+  const colors = useTheme();
   const [open, setOpen] = useState(defaultOpen);
   const rot = useSharedValue(defaultOpen ? 1 : 0);
   useEffect(() => {
@@ -47,9 +50,9 @@ export function Accordion({ title, icon, defaultOpen = false, children }: Accord
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   section: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, overflow: 'hidden' },
   header: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 48, paddingHorizontal: spacing.lg },
   title: { ...type.bodyStrong, color: colors.text, flex: 1 },
   body: { paddingHorizontal: spacing.lg, paddingBottom: spacing.lg, gap: spacing.sm },
-});
+}));

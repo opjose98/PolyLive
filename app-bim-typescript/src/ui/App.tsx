@@ -17,7 +17,7 @@
 // =============================================================================
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { StatusBar, Text, View, StyleSheet } from 'react-native';
+import { StatusBar, Text, View } from 'react-native';
 import * as Updates from 'expo-updates';
 
 import { OperatorSelectorScreen } from './screens/OperatorSelectorScreen';
@@ -37,8 +37,8 @@ import { Operator } from '../domain/objects/operator';
 import { Project } from '../domain/objects/project';
 import { AppError } from '../shared/errors/AppError';
 import { alertDialog, ScreenShell } from './primitives';
-import { colors } from './design/tokens';
 import { type } from './design/typography';
+import { themedStyles, useTheme } from './design/theme';
 
 const DB_NAME = 'polylive.db';
 
@@ -57,6 +57,8 @@ type BootStatus =
 // ---------------------------------------------------------------------------
 
 export default function App() {
+  const styles = useStyles();
+  const colors = useTheme();
   const [permissionsReady, setPermissionsReady] = useState(false);
   const [permManager] = useState(() => new PermissionsManager());
   const [boot, setBoot] = useState<BootStatus>({ phase: 'loading' });
@@ -326,7 +328,7 @@ export default function App() {
   // --- Paso 4: el levantamiento. Sin pestañas: todo lo demás está en ☰ ---
   return (
     <View style={styles.flex}>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.surface} />
+      <StatusBar barStyle={colors.isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.surface} />
       <SurveyScreen
         services={services}
         roomId={activeRoomId}
@@ -352,7 +354,7 @@ export default function App() {
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   flex: {
     flex: 1,
     backgroundColor: colors.background,
@@ -367,4 +369,4 @@ const styles = StyleSheet.create({
     ...type.body,
     color: colors.textSecondary,
   },
-});
+}));

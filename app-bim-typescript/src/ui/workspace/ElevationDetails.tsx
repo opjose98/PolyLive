@@ -9,7 +9,7 @@
 // =============================================================================
 
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { Tappable } from '../primitives';
 import { NumberField, TextField, SegmentedField, ToggleRow, ReadonlyRow } from '../components/fields';
 import { ActionButton } from '../primitives';
@@ -18,8 +18,9 @@ import { describeExtent } from '../../application/workspace/constraintModel';
 import { isRectangularProfile, VerticalExtent } from '../../domain/objects/vertical';
 import { ProjectMarker } from '../../domain/objects/marker';
 import { OpeningType, openingTop, openingTypeLabel } from '../../domain/objects/wall-elevation';
-import { colors, radius, spacing } from '../design/tokens';
+import { radius, spacing } from '../design/tokens';
 import { type } from '../design/typography';
+import { themedStyles } from '../design/theme';
 
 const TYPES: readonly { value: OpeningType; label: string }[] = [
   { value: 'door', label: 'Puerta' },
@@ -38,6 +39,7 @@ export function ElevationDetails({
   levels: readonly ProjectMarker[];
   onPropagate: () => void;
 }) {
+  const styles = useStyles();
   const { elevation, wall, vertical, profile, busy } = state;
   if (!elevation || !wall || !vertical) return null;
   const q = editor.quantification;
@@ -181,6 +183,7 @@ export function ElevationDetails({
 }
 
 function Quant({ label, value, highlight }: { label: string; value: number; highlight?: boolean }) {
+  const styles = useStyles();
   return (
     <View style={[styles.quant, highlight && styles.quantOn]}>
       <Text style={[styles.quantValue, highlight && styles.quantValueOn]}>{value.toFixed(2)}</Text>
@@ -189,21 +192,21 @@ function Quant({ label, value, highlight }: { label: string; value: number; high
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   root: { gap: spacing.md, paddingBottom: spacing.xl },
   card: { backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.md, gap: spacing.xs },
   title: { ...type.title, color: colors.text, marginBottom: spacing.xs },
   quantRow: { flexDirection: 'row', gap: spacing.sm },
   quant: { flex: 1, alignItems: 'center', paddingVertical: spacing.md, borderRadius: radius.sm, backgroundColor: colors.background },
-  quantOn: { backgroundColor: colors.amber },
+  quantOn: { backgroundColor: colors.accent },
   quantValue: { ...type.title, color: colors.text },
   quantValueOn: { color: colors.textOnAccent },
   quantLabel: { ...type.caption, color: colors.textSecondary },
   quantLabelOn: { color: colors.textOnAccent },
   note: { ...type.caption, color: colors.textSecondary },
   row: { paddingVertical: spacing.sm, paddingHorizontal: spacing.sm, borderRadius: radius.sm },
-  rowOn: { backgroundColor: colors.amberSoft },
+  rowOn: { backgroundColor: colors.accentSoft },
   rowTitle: { ...type.bodyStrong, color: colors.text },
   err: { color: colors.error },
   warn: { color: colors.warning },
-});
+}));

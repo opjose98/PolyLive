@@ -7,16 +7,17 @@
 // =============================================================================
 
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
 import { fontAssets } from './design/typography';
-import { colors } from './design/tokens';
 import { DialogHost, ToastHost } from './primitives';
 import App from './App';
+import { themedStyles } from './design/theme';
 
 export default function Root() {
+  const styles = useStyles();
   const [fontsLoaded, fontError] = useFonts(fontAssets);
 
   return (
@@ -36,8 +37,8 @@ export default function Root() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   fill: { flex: 1 },
   safe: { flex: 1, backgroundColor: colors.surface },
   splash: { flex: 1, backgroundColor: colors.surface },
-});
+}));

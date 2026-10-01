@@ -16,7 +16,7 @@
 // =============================================================================
 
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, ScrollView } from 'react-native';
 import type { RevitObjectBase } from '../../domain/objects/base';
 import { Wall } from '../../domain/objects/wall';
 import { Room } from '../../domain/objects/room';
@@ -26,8 +26,9 @@ import { Window } from '../../domain/objects/window';
 import type { Measurement } from '../../domain/objects/measurement';
 import { NumberField, TextField, SegmentedField, ReadonlyRow } from './fields';
 import { ActionButton } from '../primitives';
-import { colors, spacing, radius } from '../design/tokens';
+import { spacing, radius } from '../design/tokens';
 import { type } from '../design/typography';
+import { themedStyles } from '../design/theme';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -67,6 +68,7 @@ export function PropertiesPanel({
   onMeasure,
   onOpenPhotos,
 }: PropertiesPanelProps) {
+  const styles = useStyles();
   if (!object) {
     return (
       <View style={styles.empty}>
@@ -161,6 +163,7 @@ function WallFields({
   busy?: boolean;
   onCommit: (property: string, value: unknown) => void;
 }) {
+  const styles = useStyles();
   return (
     <>
       <ReadonlyRow label="Longitud" value={`${Number(wall.length).toFixed(3)} m`} />
@@ -371,6 +374,7 @@ function VanoFields({
 }
 
 function RoomFields({ room }: { room: Room }) {
+  const styles = useStyles();
   return (
     <>
       <ReadonlyRow label="Vértices" value={String(room.geometry.length)} />
@@ -391,6 +395,7 @@ function RoomFields({ room }: { room: Room }) {
 // ---------------------------------------------------------------------------
 
 function MeasurementsList({ measurements }: { measurements: readonly Measurement[] }) {
+  const styles = useStyles();
   return (
     <View style={styles.measurements}>
       <Text style={styles.sectionTitle}>Mediciones ({measurements.length})</Text>
@@ -433,7 +438,7 @@ function titleFor(object: RevitObjectBase): string {
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   panel: {
     flex: 1,
     backgroundColor: colors.surface,
@@ -499,4 +504,4 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     borderRadius: radius.md,
   },
-});
+}));

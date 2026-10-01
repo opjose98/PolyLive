@@ -1,7 +1,7 @@
 import React from 'react';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { StyleProp, TextStyle } from 'react-native';
-import { colors } from '../design/tokens';
+import { useTheme } from '../design/theme';
 
 export type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
 
@@ -13,6 +13,7 @@ export interface IconProps {
   style?: StyleProp<TextStyle>;
 }
 
-export function Icon({ name, size = 20, color = colors.text, style }: IconProps) {
-  return <MaterialCommunityIcons name={name as IconName} size={size} color={color} style={style} />;
+export function Icon({ name, size = 20, color, style }: IconProps) {
+  const colors = useTheme();
+  return <MaterialCommunityIcons name={name as IconName} size={size} color={color ?? colors.text} style={style} />;
 }

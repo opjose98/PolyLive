@@ -7,12 +7,13 @@
 // =============================================================================
 
 import React, { useState, useCallback } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { Text, TextInput, View } from 'react-native';
 import { ObjectStore } from '../../infrastructure/sqlite/ObjectStore';
 import { Operator } from '../../domain/objects/operator';
 import { ActionButton, Card, confirm, toast } from '../primitives';
-import { colors, radius, spacing } from '../design/tokens';
+import { radius, spacing } from '../design/tokens';
 import { type } from '../design/typography';
+import { themedStyles, useTheme } from '../design/theme';
 
 export interface OperatorProfileScreenProps {
   store: ObjectStore;
@@ -22,6 +23,8 @@ export interface OperatorProfileScreenProps {
 }
 
 export function OperatorProfileScreen({ store, operator, onUpdated, onSwitchOperator }: OperatorProfileScreenProps) {
+  const styles = useStyles();
+  const colors = useTheme();
   const [name, setName] = useState(operator.name);
   const [saving, setSaving] = useState(false);
   const dirty = name.trim() !== operator.name;
@@ -75,7 +78,7 @@ export function OperatorProfileScreen({ store, operator, onUpdated, onSwitchOper
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   label: { ...type.label, color: colors.textSecondary },
   input: {
     ...type.body,
@@ -89,4 +92,4 @@ const styles = StyleSheet.create({
   },
   hint: { ...type.caption, color: colors.textSecondary },
   gap: { height: spacing.xs },
-});
+}));

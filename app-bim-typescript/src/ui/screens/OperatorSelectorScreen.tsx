@@ -14,7 +14,8 @@
 // =============================================================================
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, FlatList, TextInput } from 'react-native';
+import { View, Text, SafeAreaView, TouchableOpacity, FlatList, TextInput } from 'react-native';
+import { themedStyles } from '../design/theme';
 import { ObjectStore } from '../../infrastructure/sqlite/ObjectStore';
 import { Operator } from '../../domain/objects/operator';
 import { operatorId } from '../../domain/objects/operator';
@@ -27,6 +28,7 @@ export interface OperatorSelectorScreenProps {
 }
 
 export function OperatorSelectorScreen({ store, onSelect }: OperatorSelectorScreenProps) {
+  const styles = useStyles();
   const [operators, setOperators] = useState<Operator[]>([]);
   const [newName, setNewName] = useState('');
   const [loading, setLoading] = useState(true);
@@ -105,16 +107,16 @@ export function OperatorSelectorScreen({ store, onSelect }: OperatorSelectorScre
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     padding: 16,
   },
   title: {
     fontSize: 20,
     fontFamily: 'Roboto_700Bold',
-    color: '#212121',
+    color: colors.text,
     marginBottom: 16,
   },
   list: {
@@ -126,28 +128,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#EEEEEE',
+    borderBottomColor: colors.border,
     gap: 12,
   },
   avatar: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#FF8F00',
+    backgroundColor: colors.accent,
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarText: {
-    color: '#FFFFFF',
+    color: colors.textOnAccent,
     fontFamily: 'Roboto_700Bold',
   },
   operatorName: {
     fontSize: 16,
-    color: '#212121',
+    color: colors.text,
   },
   emptyText: {
     fontSize: 14,
-    color: '#BDBDBD',
+    color: colors.textDisabled,
     marginBottom: 16,
   },
   createRow: {
@@ -158,22 +160,22 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: colors.border,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
   },
   createButton: {
-    backgroundColor: '#FF8F00',
+    backgroundColor: colors.accent,
     borderRadius: 8,
     paddingHorizontal: 20,
     justifyContent: 'center',
   },
   createButtonText: {
-    color: '#FFFFFF',
+    color: colors.textOnAccent,
     fontFamily: 'Roboto_700Bold',
   },
-});
+}));
 
 export default OperatorSelectorScreen;

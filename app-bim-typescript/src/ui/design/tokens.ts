@@ -3,7 +3,7 @@
 // Fuente: polylive-mockup/css/styles.css (:root)
 // =============================================================================
 //
-// ÚNICA fuente de colores, espacios, radios y tamaños del cromo. El antiguo
+// Espacios, radios, tamaños y sombras del cromo (los colores: theme.ts). El antiguo
 // `ui/theme/tokens.ts` (navy + amarillo de LevON) se eliminó en la auditoría
 // post-M2: todas las pantallas usan estos tokens y `typography.ts`.
 //
@@ -11,30 +11,8 @@
 // dependen del tema y viven en `canvasThemes.ts`.
 // =============================================================================
 
-export const colors = {
-  amber: '#FF8F00',
-  /** Acento sobre blanco (texto, borde del FAB de vista). */
-  amberDark: '#E65100',
-  amberSoft: 'rgba(255, 143, 0, 0.12)',
-  /** Lado B del muro en alzado. */
-  sideB: '#1E88E5',
-
-  surface: '#FFFFFF',
-  background: '#FAFAFA',
-  border: '#E0E0E0',
-  text: '#212121',
-  textSecondary: '#757575',
-  textDisabled: '#BDBDBD',
-  textOnAccent: '#FFFFFF',
-  /** Etiquetas oscuras: tooltips, rótulos de FAB, toasts. */
-  tooltip: '#424242',
-  scrim: 'rgba(0, 0, 0, 0.38)',
-
-  error: '#D32F2F',
-  warning: '#F9A825',
-  success: '#2E7D32',
-  info: '#1976D2',
-} as const;
+// Los COLORES no están aquí: dependen del modo y del tema (ver theme.ts,
+// `useTheme()` y `themedStyles`). Aquí solo lo que no cambia de color.
 
 export const spacing = { xxs: 2, xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 } as const;
 

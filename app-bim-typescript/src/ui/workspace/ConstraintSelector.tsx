@@ -17,7 +17,7 @@
 // =============================================================================
 
 import React, { useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { Text, TextInput, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, ZoomIn, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import {
@@ -35,10 +35,11 @@ import {
 import { VerticalExtent } from '../../domain/objects/vertical';
 import { workspaceStore } from '../../state/workspaceStore';
 import { FloatWindow, Icon, IconButton, Tappable } from '../primitives';
-import { colors, elevation, radius, spacing } from '../design/tokens';
+import { elevation, radius, spacing } from '../design/tokens';
 import { type } from '../design/typography';
 import { spring } from '../design/motion';
 import { haptic } from '../design/haptics';
+import { themedStyles, useTheme } from '../design/theme';
 
 export const CONSTRAINT_WINDOW_ID = 'constraintCfg';
 
@@ -61,6 +62,8 @@ const WIDTH = 52;
 const THUMB = 22;
 
 export const ConstraintSelector = React.memo(function ConstraintSelector(props: ConstraintSelectorProps) {
+  const styles = useStyles();
+  const colors = useTheme();
   const { levels, edit, kind, canUnlink, caption, onChange } = props;
   const [trackH, setTrackH] = useState(0);
   // Estado vivo durante el arrastre: los gestos leen de aquí, no de props
@@ -164,6 +167,7 @@ export const ConstraintSelector = React.memo(function ConstraintSelector(props: 
 
 /** Tramo del riel ocupado por el elemento, entre base y tope. */
 function RailSpan({ from, to }: { from: number; to: number }) {
+  const styles = useStyles();
   const top = useSharedValue(from);
   const bottom = useSharedValue(to);
   useEffect(() => {
@@ -193,6 +197,7 @@ function Thumb({
   fractionOf: (idx: number) => number;
   onChange: (edit: ConstraintEdit, commit: boolean) => void;
 }) {
+  const styles = useStyles();
   const y = useSharedValue(targetY);
   const [dragging, setDragging] = useState(false);
   const startY = useRef(0);
@@ -265,6 +270,7 @@ function Thumb({
 // ---------------------------------------------------------------------------
 
 function OffsetsWindow({ levels, edit, kind, endNames, onChange }: ConstraintSelectorProps) {
+  const styles = useStyles();
   const ends: ConstraintEnd[] = kind === 'wall' && !edit.linked ? ['a', 'b'] : ['a'];
   const set = (end: ConstraintEnd, patch: Partial<VerticalExtent>) => {
     const target = { ...edit, editing: end };
@@ -298,6 +304,7 @@ function OffsetsWindow({ levels, edit, kind, endNames, onChange }: ConstraintSel
 }
 
 function NumberRow({ label, value, min, onCommit }: { label: string; value: number; min?: number; onCommit: (v: number) => void }) {
+  const styles = useStyles();
   return (
     <View style={styles.cfgRow}>
       <Text style={styles.cfgLabel}>{label}</Text>
@@ -318,7 +325,7 @@ function NumberRow({ label, value, min, onCommit }: { label: string; value: numb
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   panel: {
     height: 300,
     width: WIDTH,
@@ -327,10 +334,10 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: colors.amber,
+    borderColor: colors.accent,
     ...elevation[2],
   },
-  caption: { ...type.caption, color: colors.amberDark, maxWidth: WIDTH - 6 },
+  caption: { ...type.caption, color: colors.accentText, maxWidth: WIDTH - 6 },
   ends: { gap: 3, marginTop: 2 },
   end: {
     width: 30,
@@ -341,21 +348,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  endOn: { backgroundColor: colors.amber, borderColor: colors.amber },
+  endOn: { backgroundColor: colors.accent, borderColor: colors.accent },
   endLinked: { opacity: 0.45 },
   endText: { ...type.label, color: colors.textSecondary },
   endTextOn: { color: colors.textOnAccent },
   inf: { ...type.bodyStrong, color: colors.textSecondary, marginTop: 2, marginBottom: THUMB / 2 },
   track: { flex: 1, width: '100%', alignItems: 'center', marginBottom: THUMB / 2 },
   rail: { position: 'absolute', top: 0, bottom: 0, width: 4, borderRadius: 2, backgroundColor: colors.border },
-  span: { position: 'absolute', width: 6, borderRadius: 3, backgroundColor: colors.amber },
+  span: { position: 'absolute', width: 6, borderRadius: 3, backgroundColor: colors.accent },
   tick: { position: 'absolute', width: 14, height: 2, borderRadius: 1, backgroundColor: colors.textDisabled },
   thumbWrap: { position: 'absolute', top: 0, left: (WIDTH - THUMB) / 2, flexDirection: 'row', alignItems: 'center' },
   thumbBase: {
     width: THUMB,
     height: THUMB,
     borderRadius: 5,
-    backgroundColor: colors.amberDark,
+    backgroundColor: colors.accentText,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -365,12 +372,12 @@ const styles = StyleSheet.create({
     borderRadius: THUMB / 2,
     backgroundColor: colors.surface,
     borderWidth: 3,
-    borderColor: colors.amber,
+    borderColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
   thumbLetter: { fontSize: 10, fontWeight: '700', color: colors.textOnAccent },
-  thumbLetterTop: { color: colors.amberDark },
+  thumbLetterTop: { color: colors.accentText },
   thumbDrag: { transform: [{ scale: 1.25 }] },
   tip: {
     position: 'absolute',
@@ -381,11 +388,11 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     maxWidth: 190,
   },
-  tipDrag: { backgroundColor: colors.amberDark },
+  tipDrag: { backgroundColor: colors.accentText },
   tipText: { ...type.caption, color: colors.textOnAccent },
   cfgWindow: { left: spacing.lg + WIDTH + spacing.md, bottom: 96, width: 250 },
   cfgBlock: { gap: spacing.xs, marginBottom: spacing.sm },
-  cfgEnd: { ...type.label, color: colors.amberDark },
+  cfgEnd: { ...type.label, color: colors.accentText },
   cfgRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   cfgLabel: { ...type.body, color: colors.text, flex: 1 },
   cfgInput: {
@@ -401,4 +408,4 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   cfgHint: { ...type.caption, color: colors.textSecondary },
-});
+}));

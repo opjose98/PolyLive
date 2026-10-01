@@ -47,6 +47,8 @@ export interface ChromeColors {
   readonly tooltip: string;
   readonly tooltipText: string;
   readonly scrim: string;
+  /** Superficie translúcida para rótulos que flotan sobre el lienzo. */
+  readonly glass: string;
 
   readonly error: string;
   readonly warning: string;
@@ -95,6 +97,7 @@ const BASES: Record<CanvasThemeId, Omit<ChromeColors, 'accent' | 'accentText' | 
     tooltip: '#424242',
     tooltipText: '#FFFFFF',
     scrim: 'rgba(0, 0, 0, 0.38)',
+    glass: 'rgba(255, 255, 255, 0.9)',
     error: '#D32F2F',
     warning: '#F9A825',
     success: '#2E7D32',
@@ -112,6 +115,7 @@ const BASES: Record<CanvasThemeId, Omit<ChromeColors, 'accent' | 'accentText' | 
     tooltip: '#E6E6E6',
     tooltipText: '#121212',
     scrim: 'rgba(0, 0, 0, 0.6)',
+    glass: 'rgba(30, 30, 30, 0.9)',
     error: '#EF5350',
     warning: '#FFCA28',
     success: '#66BB6A',
@@ -129,6 +133,7 @@ const BASES: Record<CanvasThemeId, Omit<ChromeColors, 'accent' | 'accentText' | 
     tooltip: '#000000',
     tooltipText: '#FFFFFF',
     scrim: 'rgba(0, 0, 0, 0.6)',
+    glass: '#FFFFFF',
     error: '#B71C1C',
     warning: '#8A5A00',
     success: '#1B5E20',

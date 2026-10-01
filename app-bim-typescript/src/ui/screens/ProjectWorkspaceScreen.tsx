@@ -14,7 +14,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   SafeAreaView,
   FlatList,
   TouchableOpacity,
@@ -34,8 +33,9 @@ import { AppError } from '../../shared/errors/AppError';
 import { ActionButton, alertDialog } from '../primitives';
 import { TextField } from '../components/fields';
 import { SpacePreview } from '../components/SpacePreview';
-import { colors, spacing, radius } from '../design/tokens';
+import { spacing, radius } from '../design/tokens';
 import { type } from '../design/typography';
+import { themedStyles, useTheme } from '../design/theme';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -61,6 +61,8 @@ export function ProjectWorkspaceScreen({
   onBack,
   onExportProject,
 }: ProjectWorkspaceScreenProps) {
+  const styles = useStyles();
+  const colors = useTheme();
   const [spaces, setSpaces] = useState<SpaceDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -164,7 +166,7 @@ export function ProjectWorkspaceScreen({
   if (loading) {
     return (
       <SafeAreaView style={styles.center}>
-        <ActivityIndicator color={colors.amberDark} />
+        <ActivityIndicator color={colors.accentText} />
         <Text style={styles.muted}>Cargando espacios...</Text>
       </SafeAreaView>
     );
@@ -319,6 +321,7 @@ function SpaceCard({
   onRename: () => void;
   onRemove: () => void;
 }) {
+  const styles = useStyles();
   const { space, room, areaM2, objectCount } = detail;
 
   // Un espacio cuya fila apunta a un Recinto inexistente se muestra en vez de
@@ -392,7 +395,7 @@ function SpaceCard({
 // Styles
 // ---------------------------------------------------------------------------
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -414,7 +417,7 @@ const styles = StyleSheet.create({
   },
   backText: {
     ...type.bodyStrong,
-    color: colors.amberDark,
+    color: colors.accentText,
   },
   projectHeader: {
     flexDirection: 'row',
@@ -433,7 +436,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
     borderRadius: radius.xs,
-    backgroundColor: colors.amberDark,
+    backgroundColor: colors.accentText,
   },
   codeBadgeText: {
     ...type.caption,
@@ -448,7 +451,7 @@ const styles = StyleSheet.create({
   },
   spaceBadgeText: {
     ...type.caption,
-    color: colors.amberDark,
+    color: colors.accentText,
     fontFamily: 'Roboto_700Bold',
   },
   title: {
@@ -529,7 +532,7 @@ const styles = StyleSheet.create({
   },
   cardActionText: {
     ...type.label,
-    color: colors.amberDark,
+    color: colors.accentText,
   },
   cardActionDanger: {
     color: colors.error,
@@ -565,6 +568,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm,
   },
-});
+}));
 
 export default ProjectWorkspaceScreen;

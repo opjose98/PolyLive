@@ -1,13 +1,15 @@
 import React from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { Text } from 'react-native';
 import { useStore } from 'zustand';
 import { workspaceStore } from '../../state/workspaceStore';
 import { itemAt } from '../../application/workspace/rangeModel';
-import { colors, spacing } from '../design/tokens';
+import { spacing } from '../design/tokens';
 import { type } from '../design/typography';
+import { themedStyles } from '../design/theme';
 
 /** Rótulo discreto bajo la BPC: el nivel activo, donde nace lo que se crea. */
 export const LevelChip = React.memo(function LevelChip({ top, wallName }: { top: number; wallName?: string }) {
+  const styles = useStyles();
   const level = useStore(workspaceStore, (s) => itemAt(s.levels, 'nivel').name);
   const phase = useStore(workspaceStore, (s) => itemAt(s.phases, 'nivel').name);
   // En alzado el chip nombra el muro que se detalla (el mockup lo llama así).
@@ -19,18 +21,18 @@ export const LevelChip = React.memo(function LevelChip({ top, wallName }: { top:
   );
 });
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   // Fondo propio: el chip flota sobre el lienzo, que puede ser oscuro.
   chip: {
     position: 'absolute',
     left: spacing.md,
     ...type.caption,
     color: colors.textSecondary,
-    backgroundColor: 'rgba(255,255,255,0.9)',
+    backgroundColor: colors.glass,
     borderRadius: 999,
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
     overflow: 'hidden',
   },
   strong: { ...type.label, color: colors.text },
-});
+}));

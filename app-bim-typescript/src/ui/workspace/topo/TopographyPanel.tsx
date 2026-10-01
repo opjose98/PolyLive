@@ -8,18 +8,20 @@
 // =============================================================================
 
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { Accordion, ActionButton } from '../../primitives';
 import { crsDef, formatMeters, meridianConvergence, workingCrs } from '../../../domain/geo/crs';
 import { azimuthDegrees } from '../../../domain/geo/georeference';
 import type { Topography } from './useTopography';
 import { Field, Kv, parseNum } from './TopoFields';
-import { colors, spacing } from '../../design/tokens';
+import { spacing } from '../../design/tokens';
 import { type } from '../../design/typography';
+import { themedStyles } from '../../design/theme';
 
 const METHOD = { none: 'Solo locales', origin: 'Origen conocido + azimut', gps: 'GPS en un punto', control: 'Ajuste por mojones' } as const;
 
 export function TopographyPanel({ topo }: { topo: Topography }) {
+  const styles = useStyles();
   const { geo } = topo;
   const [secs, setSecs] = useState(String(geo?.gpsSeconds ?? 30));
   useEffect(() => setSecs(String(geo?.gpsSeconds ?? 30)), [geo?.gpsSeconds]);
@@ -74,8 +76,8 @@ export function TopographyPanel({ topo }: { topo: Topography }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   text: { ...type.body, color: colors.textSecondary },
   gps: { marginTop: spacing.sm },
   actions: { gap: spacing.sm, marginTop: spacing.md },
-});
+}));

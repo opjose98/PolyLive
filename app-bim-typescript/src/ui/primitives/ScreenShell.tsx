@@ -12,8 +12,9 @@ import React, { useEffect } from 'react';
 import { BackHandler, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { SlideInRight, SlideOutRight } from 'react-native-reanimated';
 import { IconButton } from './IconButton';
-import { colors, spacing } from '../design/tokens';
+import { spacing } from '../design/tokens';
 import { type } from '../design/typography';
+import { themedStyles } from '../design/theme';
 
 export function ScreenShell({
   title,
@@ -31,6 +32,7 @@ export function ScreenShell({
   scroll?: boolean;
   children: React.ReactNode;
 }) {
+  const styles = useStyles();
   useEffect(() => {
     if (!onBack) return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -67,7 +69,7 @@ export function ScreenShell({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   root: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.background },
   header: {
     flexDirection: 'row',
@@ -84,4 +86,4 @@ const styles = StyleSheet.create({
   subtitle: { ...type.caption, color: colors.textSecondary },
   body: { padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xxl },
   fill: { flex: 1 },
-});
+}));

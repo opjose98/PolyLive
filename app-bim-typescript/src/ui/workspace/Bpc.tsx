@@ -17,9 +17,10 @@ import type { BpcContext } from '../../application/workspace/bpcContext';
 import { PROPS, PropKey } from '../../application/workspace/catalog';
 import { nudgeProp, valueFromDrag } from '../../application/workspace/propDrag';
 import { Icon, Tappable } from '../primitives';
-import { colors, elevation, radius, sizes, spacing } from '../design/tokens';
+import { elevation, radius, sizes, spacing } from '../design/tokens';
 import { type } from '../design/typography';
 import { haptic } from '../design/haptics';
+import { themedStyles, useTheme } from '../design/theme';
 
 export interface BpcPill {
   readonly key: PropKey;
@@ -45,6 +46,8 @@ export interface BpcProps {
 }
 
 export const Bpc = React.memo(function Bpc({ context, pills, actions = [], onExitTool, toolDetail, top, right }: BpcProps) {
+  const styles = useStyles();
+  const colors = useTheme();
   const key = context.kind === 'tool' ? `t-${context.tool.toolId}` : context.kind === 'selection' ? 's' : 'c';
   return (
     <Animated.View style={[styles.bar, { top, right }]} layout={LinearTransition.springify().damping(22)}>
@@ -83,7 +86,7 @@ export const Bpc = React.memo(function Bpc({ context, pills, actions = [], onExi
           ))}
           {actions.map((a) => (
             <Tappable key={a.label} onPress={a.onPress} style={styles.action} accessibilityLabel={a.label} haptic="tap">
-              <Icon name={a.icon} size={16} color={colors.amberDark} />
+              <Icon name={a.icon} size={16} color={colors.accentText} />
               <Text style={styles.actionText}>{a.label}</Text>
             </Tappable>
           ))}
@@ -100,6 +103,8 @@ export const Bpc = React.memo(function Bpc({ context, pills, actions = [], onExi
 
 /** Píldora ↔: arrastrar horizontalmente cambia el valor paso a paso. */
 function DragPill({ pill }: { pill: BpcPill }) {
+  const styles = useStyles();
+  const colors = useTheme();
   const def = PROPS[pill.key];
   const [dragging, setDragging] = useState(false);
   const [live, setLive] = useState(pill.value);
@@ -141,7 +146,7 @@ function DragPill({ pill }: { pill: BpcPill }) {
         accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
         onAccessibilityAction={(e) => pill.onCommit(nudgeProp(def, pill.value, e.nativeEvent.actionName === 'increment' ? 1 : -1))}
       >
-        <Icon name="arrow-left-right" size={14} color={colors.amber} />
+        <Icon name="arrow-left-right" size={14} color={colors.accent} />
         <Text style={styles.pillLabel}>{def.label}</Text>
         <Text style={styles.value}>
           {shown} {def.unit}
@@ -151,7 +156,7 @@ function DragPill({ pill }: { pill: BpcPill }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   bar: {
     position: 'absolute',
     left: spacing.md,
@@ -178,9 +183,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     height: 30,
   },
-  pillActive: { borderColor: colors.amber, backgroundColor: colors.amberSoft },
+  pillActive: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
   pillLabel: { ...type.label, color: colors.textSecondary },
   action: { flexDirection: 'row', alignItems: 'center', gap: 4, height: 30, paddingHorizontal: spacing.xs },
-  actionText: { ...type.label, color: colors.amberDark },
+  actionText: { ...type.label, color: colors.accentText },
   exit: { paddingHorizontal: spacing.sm, height: '100%', justifyContent: 'center', borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: colors.border },
-});
+}));

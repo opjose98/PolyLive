@@ -12,10 +12,11 @@ import { ScrollView, StyleProp, StyleSheet, Text, View, ViewStyle } from 'react-
 import Animated, { FadeOut, ZoomIn } from 'react-native-reanimated';
 import { useStore } from 'zustand';
 import { workspaceStore } from '../../state/workspaceStore';
-import { colors, elevation, radius, spacing } from '../design/tokens';
+import { elevation, radius, spacing } from '../design/tokens';
 import { type } from '../design/typography';
 import { Tappable } from './Tappable';
 import { Icon } from './Icon';
+import { themedStyles, useTheme } from '../design/theme';
 
 export interface FloatWindowProps {
   id: string;
@@ -26,6 +27,8 @@ export interface FloatWindowProps {
 }
 
 export function FloatWindow({ id, title, style, children }: FloatWindowProps) {
+  const styles = useStyles();
+  const colors = useTheme();
   const visible = useStore(workspaceStore, (s) => s.currentWindow?.id === id);
   if (!visible) return null;
 
@@ -53,7 +56,7 @@ export function FloatWindow({ id, title, style, children }: FloatWindowProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   window: {
     position: 'absolute',
     backgroundColor: colors.surface,
@@ -74,4 +77,4 @@ const styles = StyleSheet.create({
   title: { ...type.heading, color: colors.text },
   body: { flexGrow: 0 },
   bodyContent: { padding: spacing.md, gap: spacing.sm },
-});
+}));

@@ -17,8 +17,9 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { colors, elevation, sizes } from '../design/tokens';
+import { elevation, sizes } from '../design/tokens';
 import { spring } from '../design/motion';
+import { themedStyles } from '../design/theme';
 
 export interface SideDrawerProps {
   open: boolean;
@@ -30,6 +31,7 @@ export interface SideDrawerProps {
 }
 
 export function SideDrawer({ open, onClose, side, top = 0, children }: SideDrawerProps) {
+  const styles = useStyles();
   const { width: screenW } = useWindowDimensions();
   const width = Math.min(screenW * sizes.drawerWidthRatio, 420);
   const dir = side === 'right' ? 1 : -1;
@@ -80,7 +82,7 @@ export function SideDrawer({ open, onClose, side, top = 0, children }: SideDrawe
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
   scrim: { backgroundColor: colors.scrim },
   panel: { position: 'absolute', top: 0, bottom: 0, backgroundColor: colors.surface, ...elevation[3] },
-});
+}));
