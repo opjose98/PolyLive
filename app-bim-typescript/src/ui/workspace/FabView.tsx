@@ -10,52 +10,87 @@ import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 import { workspaceStore } from '../../state/workspaceStore';
 import {
-  FILTERS_ELEVATION,
-  FILTERS_PLAN,
   LAYERS,
+  MODE_BLOCK_MESSAGE,
   OptionDef,
-  VIEWS_ELEVATION,
-  VIEWS_PLAN,
+  WORK_MODES,
+  WorkModeId,
+  filtersFor,
+  modeBlock,
+  workModeDef,
 } from '../../application/workspace/catalog';
-import { FloatWindow, IconButton, Tappable, Icon } from '../primitives';
+import { FloatWindow, IconButton, Tappable, Icon, toast } from '../primitives';
 import { colors, radius, sizes, spacing } from '../design/tokens';
 import { type } from '../design/typography';
 import { STAGGER_MS } from '../design/motion';
 
-export const FabView = React.memo(function FabView({ top }: { top: number }) {
-  const { open, view, mode, windowId } = useStore(
+/** Entra a un modo si se puede; si no, explica por qué (toast). */
+export function selectWorkMode(id: WorkModeId, hasObjects: boolean): boolean {
+  const ws = workspaceStore.getState();
+  const block = modeBlock(id, { view: ws.mode, hasObjects });
+  if (block) {
+    toast(MODE_BLOCK_MESSAGE[block], { kind: 'warning' });
+    return false;
+  }
+  if (ws.workMode !== id) {
+    ws.setWorkMode(id);
+    toast(`${workModeDef(id).label}: ${workModeDef(id).hint}`, { kind: 'info', durationMs: 1400 });
+  } else ws.closePanels();
+  return true;
+}
+
+/**
+ * FAB de vista: elige el MODO de trabajo (Levantamiento, Topografía, Avance,
+ * Revisión). El botón muestra siempre el modo activo con su ícono y color.
+ * Debajo, sin desplegar, quedan Filtros y Capas (contextuales al modo).
+ */
+export const FabView = React.memo(function FabView({ top, hasObjects = true }: { top: number; hasObjects?: boolean }) {
+  const { open, workMode, mode, windowId } = useStore(
     workspaceStore,
-    useShallow((s) => ({ open: s.currentPanel === 'fabView', view: s.view, mode: s.mode, windowId: s.currentWindow?.id })),
+    useShallow((s) => ({ open: s.currentPanel === 'fabView', workMode: s.workMode, mode: s.mode, windowId: s.currentWindow?.id })),
   );
   const ws = workspaceStore.getState;
-  const views = mode === 'plan' ? VIEWS_PLAN : VIEWS_ELEVATION;
+  const active = workModeDef(workMode);
+  const modes = WORK_MODES.filter((m) => !(m.planOnly && mode !== 'plan'));
 
   return (
     <>
       <View style={[styles.wrap, { top }]} pointerEvents="box-none">
-        <IconButton
-          icon="eye-outline"
-          label="Tipo de vista"
-          size={sizes.fabView}
-          on={open}
+        <Tappable
           onPress={() => ws().togglePanel('fabView')}
           haptic="select"
-          style={styles.mainBorder}
-        />
+          style={[styles.main, { borderColor: active.color }, open && { backgroundColor: active.color }]}
+          accessibilityLabel={`Modo: ${active.label}. Cambiar de modo`}
+          accessibilityState={{ expanded: open }}
+        >
+          <Animated.View key={active.id} entering={ZoomIn.duration(180)}>
+            <Icon name={active.icon} size={22} color={open ? colors.textOnAccent : active.color} />
+          </Animated.View>
+        </Tappable>
         {open ? (
           <View style={styles.minis}>
-            {views.map((v, i) => (
-              <Animated.View key={v.id} entering={ZoomIn.delay(i * STAGGER_MS).springify().damping(15)} exiting={FadeOut.duration(80)}>
-                <Tappable style={styles.miniRow} onPress={() => ws().setView(v.id)} haptic="select" accessibilityLabel={v.label}>
-                  <View style={styles.tip}>
-                    <Text style={styles.tipText}>{v.label}</Text>
-                  </View>
-                  <View style={[styles.miniBtn, view === v.id && styles.miniOn]}>
-                    <Icon name={v.icon!} size={18} color={view === v.id ? colors.textOnAccent : colors.text} />
-                  </View>
-                </Tappable>
-              </Animated.View>
-            ))}
+            {modes.map((m, i) => {
+              const on = workMode === m.id;
+              const blocked = modeBlock(m.id, { view: mode, hasObjects }) !== null;
+              return (
+                <Animated.View key={m.id} entering={ZoomIn.delay(i * STAGGER_MS).springify().damping(15)} exiting={FadeOut.duration(80)}>
+                  <Tappable
+                    style={[styles.miniRow, blocked && styles.blocked]}
+                    onPress={() => selectWorkMode(m.id, hasObjects)}
+                    haptic={blocked ? 'none' : 'select'}
+                    accessibilityLabel={m.label}
+                    accessibilityState={{ selected: on, disabled: blocked }}
+                  >
+                    <View style={[styles.tip, on && { backgroundColor: m.color }]}>
+                      <Text style={styles.tipText}>{m.label}</Text>
+                    </View>
+                    <View style={[styles.miniBtn, on && { backgroundColor: m.color, borderColor: m.color }]}>
+                      <Icon name={m.icon} size={18} color={on ? colors.textOnAccent : m.color} />
+                    </View>
+                  </Tappable>
+                </Animated.View>
+              );
+            })}
           </View>
         ) : (
           <Animated.View entering={FadeIn.duration(140)} style={styles.extra}>
@@ -78,7 +113,7 @@ export const FabView = React.memo(function FabView({ top }: { top: number }) {
       </View>
 
       <FloatWindow id="filters" title="Filtros" style={[styles.window, { top: top + 8 }]}>
-        <Checks items={mode === 'plan' ? FILTERS_PLAN : FILTERS_ELEVATION} kind="filters" />
+        <Checks items={filtersFor(workMode, mode)} kind="filters" />
       </FloatWindow>
       <FloatWindow id="layers" title="Capas" style={[styles.window, { top: top + 8 }]}>
         <Checks items={LAYERS} kind="layers" />
@@ -115,7 +150,21 @@ function Checks({ items, kind }: { items: readonly OptionDef[]; kind: 'filters' 
 
 const styles = StyleSheet.create({
   wrap: { position: 'absolute', right: spacing.lg, alignItems: 'flex-end' },
-  mainBorder: {},
+  main: {
+    width: sizes.fabView,
+    height: sizes.fabView,
+    borderRadius: sizes.fabView / 2,
+    borderWidth: 2,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 5,
+  },
+  blocked: { opacity: 0.45 },
   minis: { marginTop: spacing.sm, gap: spacing.sm, alignItems: 'flex-end' },
   miniRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   tip: { backgroundColor: colors.tooltip, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 3 },
@@ -130,7 +179,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  miniOn: { backgroundColor: colors.amber, borderColor: colors.amber },
   extra: { marginTop: spacing.md, gap: spacing.sm, alignItems: 'center', width: sizes.fabView },
   window: { right: 64, width: 210 },
   checkRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 40 },

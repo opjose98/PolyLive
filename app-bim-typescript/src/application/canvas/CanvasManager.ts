@@ -31,6 +31,7 @@ export class CanvasManager {
       scale: initialTransform?.scale ?? 100,
       offsetX: initialTransform?.offsetX ?? 0,
       offsetY: initialTransform?.offsetY ?? 0,
+      rotation: initialTransform?.rotation ?? 0,
     };
   }
 
@@ -47,6 +48,7 @@ export class CanvasManager {
       scale: Math.max(MIN_SCALE, Math.min(MAX_SCALE, t.scale)),
       offsetX: t.offsetX,
       offsetY: t.offsetY,
+      rotation: t.rotation ?? this.transform.rotation ?? 0,
     };
   }
 

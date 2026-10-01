@@ -26,7 +26,6 @@ import {
   FlatList,
   Image,
   TouchableOpacity,
-  Alert,
   SafeAreaView,
   RefreshControl,
   Dimensions,
@@ -42,6 +41,7 @@ import { AppError, AppErrorCode } from '../../shared/errors/AppError';
 import { PhotoViewer } from '../components/PhotoViewer';
 import { AuditPhoto, PHOTO_BIM_CODE_PREFIX } from '../../domain/objects/audit-photo';
 import { generateBimCode } from '../../domain/objects/project';
+import { alertDialog } from '../primitives';
 
 // ---------------------------------------------------------------------------
 // Object label helper — descriptor legible para el selector de vinculación
@@ -112,7 +112,7 @@ export function GalleryScreen({ services, roomId }: GalleryScreenProps) {
       setPhotos(list);
       setAuditPhotos(new Map(audits.map((a) => [a.metadata.filename, a])));
     } catch (error: any) {
-      Alert.alert('Error', `No se pudieron cargar las fotos: ${error.message}`);
+      alertDialog('Error', `No se pudieron cargar las fotos: ${error.message}`);
     }
   }, [fileSystem, services, roomId]);
 
@@ -134,12 +134,12 @@ export function GalleryScreen({ services, roomId }: GalleryScreenProps) {
     try {
       const permission = await camera.requestPermission();
       if (permission !== 'granted') {
-        Alert.alert('Permiso requerido', 'Se necesita acceso a la cámara para capturar fotos.');
+        alertDialog('Permiso requerido', 'Se necesita acceso a la cámara para capturar fotos.');
         return;
       }
       setCameraOpen(true);
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      alertDialog('Error', error.message);
     }
   }, [camera]);
 
@@ -177,7 +177,7 @@ export function GalleryScreen({ services, roomId }: GalleryScreenProps) {
         await loadPhotos();
       } catch (error) {
         const message = error instanceof AppError ? error.userMessage : 'No se pudo guardar la foto capturada.';
-        Alert.alert('Error', message);
+        alertDialog('Error', message);
       }
     },
     [fileSystem, services, roomId, loadPhotos],
@@ -185,7 +185,7 @@ export function GalleryScreen({ services, roomId }: GalleryScreenProps) {
 
   const handleDelete = useCallback(
     async (photo: StoredPhoto) => {
-      Alert.alert('Eliminar foto', `¿Eliminar ${photo.filename}?`, [
+      alertDialog('Eliminar foto', `¿Eliminar ${photo.filename}?`, [
         { text: 'Cancelar', style: 'cancel' },
         {
           text: 'Eliminar',
@@ -195,7 +195,7 @@ export function GalleryScreen({ services, roomId }: GalleryScreenProps) {
             if (success) {
               await loadPhotos();
             } else {
-              Alert.alert('Error', 'No se pudo eliminar la foto.');
+              alertDialog('Error', 'No se pudo eliminar la foto.');
             }
           },
         },
@@ -212,7 +212,7 @@ export function GalleryScreen({ services, roomId }: GalleryScreenProps) {
     async (photo: StoredPhoto) => {
       const objects = await services.store.listObjects(roomId);
       if (objects.length === 0) {
-        Alert.alert('Sin objetos', 'Aún no hay muros, puertas, ventanas ni columnas en este Recinto.');
+        alertDialog('Sin objetos', 'Aún no hay muros, puertas, ventanas ni columnas en este Recinto.');
         return;
       }
       setLinkableObjects(objects);
@@ -223,7 +223,7 @@ export function GalleryScreen({ services, roomId }: GalleryScreenProps) {
 
   const handleLongPress = useCallback(
     (photo: StoredPhoto) => {
-      Alert.alert(photo.filename, '¿Qué deseas hacer con esta foto?', [
+      alertDialog(photo.filename, '¿Qué deseas hacer con esta foto?', [
         { text: 'Cancelar', style: 'cancel' },
         { text: 'Vincular a objeto BIM', onPress: () => void openLinkPicker(photo) },
         { text: 'Eliminar', style: 'destructive', onPress: () => handleDelete(photo) },
@@ -262,7 +262,7 @@ export function GalleryScreen({ services, roomId }: GalleryScreenProps) {
         await services.store.updateAuditPhoto(audit.id, { metadata_json: audit.metadata_json });
         await loadPhotos();
       } catch {
-        Alert.alert('Error', 'No se pudo cambiar la visibilidad del marcador.');
+        alertDialog('Error', 'No se pudo cambiar la visibilidad del marcador.');
       }
     },
     [auditPhotos, services, loadPhotos],
@@ -286,10 +286,10 @@ export function GalleryScreen({ services, roomId }: GalleryScreenProps) {
         }
 
         await services.useCases.linkPhotoToObject.execute({ photoId: match.id, objectId: target.id });
-        Alert.alert('Vinculada', `Foto vinculada a: ${describeObject(target)}`);
+        alertDialog('Vinculada', `Foto vinculada a: ${describeObject(target)}`);
       } catch (err) {
         const message = err instanceof AppError ? err.userMessage : 'No se pudo vincular la foto.';
-        Alert.alert('Error', message);
+        alertDialog('Error', message);
       } finally {
         setLinking(false);
         setLinkTarget(null);
@@ -332,7 +332,6 @@ export function GalleryScreen({ services, roomId }: GalleryScreenProps) {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Galería</Text>
         <Text style={styles.count}>{photos.length} fotos</Text>
       </View>
 
@@ -457,16 +456,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#DEE2E6',
+    borderBottomColor: '#E0E0E0',
   },
   title: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#212529',
+    fontFamily: 'Roboto_700Bold',
+    color: '#212121',
   },
   count: {
     fontSize: 14,
-    color: '#6C757D',
+    color: '#757575',
   },
   grid: {
     padding: GAP,
@@ -478,11 +477,11 @@ const styles = StyleSheet.create({
     width: THUMB_SIZE,
     height: THUMB_SIZE,
     borderRadius: 4,
-    backgroundColor: '#E9ECEF',
+    backgroundColor: '#F5F5F5',
   },
   photoLabel: {
     fontSize: 10,
-    color: '#6C757D',
+    color: '#757575',
     marginTop: 2,
     width: THUMB_SIZE,
   },
@@ -494,12 +493,12 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#ADB5BD',
+    fontFamily: 'Roboto_500Medium',
+    color: '#BDBDBD',
   },
   emptySubtext: {
     fontSize: 14,
-    color: '#ADB5BD',
+    color: '#BDBDBD',
     marginTop: 8,
     textAlign: 'center',
   },
@@ -510,7 +509,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#2C3E50',
+    backgroundColor: '#FF8F00',
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 4,
@@ -540,22 +539,22 @@ const styles = StyleSheet.create({
   },
   linkModalTitle: {
     fontSize: 16,
-    fontWeight: '700',
-    color: '#212529',
+    fontFamily: 'Roboto_700Bold',
+    color: '#212121',
   },
   linkModalSubtitle: {
     fontSize: 12,
-    color: '#6C757D',
+    color: '#757575',
     marginBottom: 12,
   },
   linkObjectRow: {
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F3F5',
+    borderBottomColor: '#EEEEEE',
   },
   linkObjectLabel: {
     fontSize: 14,
-    color: '#212529',
+    color: '#212121',
   },
   linkCancelButton: {
     marginTop: 12,
@@ -564,8 +563,8 @@ const styles = StyleSheet.create({
   },
   linkCancelText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#E74C3C',
+    fontFamily: 'Roboto_500Medium',
+    color: '#D32F2F',
   },
 });
 

@@ -25,7 +25,6 @@ import {
   TouchableOpacity,
   TextInput,
   Modal,
-  Alert,
   RefreshControl,
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -42,7 +41,7 @@ import {
 } from '../../domain/objects/project';
 import type { Operator } from '../../domain/objects/operator';
 import { AppError } from '../../shared/errors/AppError';
-import { ActionButton } from '../components/ToolPalette';
+import { ActionButton, alertDialog } from '../primitives';
 import { TextField, SegmentedField } from '../components/fields';
 import { colors, spacing, radius, typography, layout } from '../theme/tokens';
 
@@ -81,7 +80,7 @@ export function ProjectsScreen({
   useEffect(() => {
     setLoading(true);
     load()
-      .catch(() => Alert.alert('Error', 'No se pudieron cargar los proyectos.'))
+      .catch(() => alertDialog('Error', 'No se pudieron cargar los proyectos.'))
       .finally(() => setLoading(false));
   }, [load]);
 
@@ -106,7 +105,7 @@ export function ProjectsScreen({
 
   const handleDelete = useCallback(
     (project: Project) => {
-      Alert.alert(
+      alertDialog(
         'Eliminar proyecto',
         `Se eliminará el proyecto "${project.name}".\n\n` +
           'Los Recintos y todo lo dibujado en ellos NO se borran: quedan sin proyecto y se pueden ' +
@@ -121,7 +120,7 @@ export function ProjectsScreen({
                 await services.projects.deleteProject(project.id);
                 await load();
               } catch (err) {
-                Alert.alert(
+                alertDialog(
                   'Error',
                   err instanceof AppError ? err.userMessage : 'No se pudo eliminar el proyecto.',
                 );
@@ -217,7 +216,7 @@ export function ProjectsScreen({
             await load();
             onOpenProject(project);
           } catch (err) {
-            Alert.alert(
+            alertDialog(
               'Error',
               err instanceof AppError ? err.userMessage : 'No se pudo crear el proyecto.',
             );
@@ -238,7 +237,7 @@ export function ProjectsScreen({
             setEditing(null);
             await load();
           } catch (err) {
-            Alert.alert(
+            alertDialog(
               'Error',
               err instanceof AppError ? err.userMessage : 'No se pudo guardar el proyecto.',
             );
@@ -561,7 +560,7 @@ const styles = StyleSheet.create({
   codeBadgeText: {
     ...typography.caption,
     color: colors.yellow,
-    fontWeight: '700',
+    fontFamily: 'Roboto_700Bold',
   },
   cardTitle: {
     ...typography.heading,

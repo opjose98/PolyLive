@@ -19,7 +19,7 @@
 import React, { useState } from 'react';
 import { View, Text, Image, StyleSheet, Modal, ScrollView, TouchableOpacity } from 'react-native';
 import type { AuditPhoto } from '../../domain/objects/audit-photo';
-import { ActionButton, Chip } from './ToolPalette';
+import { ActionButton, Chip } from '../primitives';
 import { colors, spacing, radius, typography, layout } from '../theme/tokens';
 
 // ---------------------------------------------------------------------------
@@ -225,7 +225,7 @@ const styles = StyleSheet.create({
   overlayBadgeText: {
     ...typography.caption,
     color: colors.navy,
-    fontWeight: '700',
+    fontFamily: 'Roboto_700Bold',
   },
   overlayLines: {
     backgroundColor: colors.overlayScrim,

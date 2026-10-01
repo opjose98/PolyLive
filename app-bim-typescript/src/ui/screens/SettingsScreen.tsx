@@ -12,7 +12,7 @@
 // =============================================================================
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity } from 'react-native';
 import { AppServices } from '../../application/AppServices';
 import { ExpoBackupDatabaseUseCase } from '../../native/backup/ExpoBackupDatabaseUseCase';
 import {
@@ -20,7 +20,7 @@ import {
   BackupEntry,
 } from '../../native/backup/ExpoRestoreDatabaseUseCase';
 import { AppError } from '../../shared/errors/AppError';
-import { ActionButton } from '../components/ToolPalette';
+import { ActionButton, alertDialog } from '../primitives';
 import { ToggleRow, ReadonlyRow } from '../components/fields';
 import { colors, spacing, radius, typography, layout } from '../theme/tokens';
 
@@ -89,14 +89,14 @@ export function SettingsScreen({
       // (la versión anterior negaba el backup manual fuera del dispositivo).
       const result = await new ExpoBackupDatabaseUseCase().execute({ db: services.db });
       await loadBackups();
-      Alert.alert(
+      alertDialog(
         'Copia creada',
         result.prunedPaths.length > 0
           ? `Copia guardada. Se eliminaron ${result.prunedPaths.length} copia(s) antigua(s) por rotación.`
           : 'Copia guardada.',
       );
     } catch (err) {
-      Alert.alert('Error', err instanceof AppError ? err.userMessage : 'No se pudo crear la copia.');
+      alertDialog('Error', err instanceof AppError ? err.userMessage : 'No se pudo crear la copia.');
     } finally {
       setCreating(false);
     }
@@ -108,7 +108,7 @@ export function SettingsScreen({
 
   const handleRestore = useCallback(
     (entry: BackupEntry) => {
-      Alert.alert(
+      alertDialog(
         'Restaurar copia',
         `Se sustituirá TODA la base de datos actual por la copia del ` +
           `${entry.createdAt ? entry.createdAt.toLocaleString() : entry.name}.\n\n` +
@@ -129,7 +129,7 @@ export function SettingsScreen({
                 const result = await restoreUseCase.execute({ dbName, backupPath: entry.path });
                 onRestored(result.restoredFrom);
               } catch (err) {
-                Alert.alert(
+                alertDialog(
                   'Error',
                   err instanceof AppError
                     ? err.userMessage
@@ -155,8 +155,6 @@ export function SettingsScreen({
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Ajustes</Text>
-
         {/* --- Copias de seguridad --- */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Copias de seguridad</Text>
@@ -175,7 +173,7 @@ export function SettingsScreen({
               // todavía (no hay almacén de preferencias), así que se dice en
               // vez de fingir que quedó guardada.
               if (!value) {
-                Alert.alert(
+                alertDialog(
                   'Solo esta sesión',
                   'Esta preferencia todavía no se guarda entre arranques: al reabrir la app volverá a estar activada.',
                 );

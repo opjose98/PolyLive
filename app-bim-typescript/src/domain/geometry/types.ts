@@ -97,6 +97,11 @@ export interface CanvasTransform {
   readonly scale: number;    // píxeles por metro
   readonly offsetX: number;  // píxeles
   readonly offsetY: number;  // píxeles
+  /**
+   * Giro de la VISTA, en radianes (horario en pantalla). Solo visual: el
+   * modelo no cambia. Ausente = 0, así que las cámaras de antes siguen igual.
+   */
+  readonly rotation?: number;
 }
 
 // ---------------------------------------------------------------------------

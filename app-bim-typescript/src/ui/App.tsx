@@ -4,11 +4,10 @@
 // =============================================================================
 //
 // FLUJO DE NAVEGACIÓN:
-//   OperatorSelector → Proyectos → Espacios del proyecto → pestañas del espacio
-//                                                           (Levantamiento /
-//                                                            Galería / Exportar /
-//                                                            Ajustes)
-//   Perfil de operador y Topografía se abren como pantallas modales desde Ajustes.
+//   OperatorSelector → Proyectos → Espacios del proyecto → Levantamiento
+//   Sin pestañas (F5): Galería, Exportar, Topografía, Operador y Ajustes se
+//   abren desde el menú ☰ como pantallas que se deslizan por encima; el
+//   levantamiento sigue montado debajo y se recupera tal cual al volver.
 //
 // QUÉ CAMBIÓ RESPECTO A LA VERSIÓN ANTERIOR: el flujo era
 // `OperatorSelector → Dashboard (lista plana de Recintos) → pestañas`. Ahora hay
@@ -18,23 +17,18 @@
 // =============================================================================
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { StatusBar, Text, View, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { StatusBar, Text, View, StyleSheet } from 'react-native';
 import * as Updates from 'expo-updates';
 
 import { OperatorSelectorScreen } from './screens/OperatorSelectorScreen';
 import { OperatorProfileScreen } from './screens/OperatorProfileScreen';
 import { ProjectsScreen } from './screens/ProjectsScreen';
 import { ProjectWorkspaceScreen } from './screens/ProjectWorkspaceScreen';
-import { SurveyScreen } from './screens/SurveyScreen';
+import { SurveyScreen, MenuScreen } from './screens/SurveyScreen';
 import { GalleryScreen } from './screens/GalleryScreen';
 import { ExportScreen } from './screens/ExportScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { SurveyControlScreen } from './screens/SurveyControlScreen';
-// Alias para no chocar con el `StatusBar` de react-native (la barra del sistema
-// operativo) — este es nuestro componente de estado BLE.
-import { StatusBar as AppStatusBar } from './components/StatusBar';
 import { PermissionsManager } from '../native/permissions/PermissionsManager';
 import { ExpoSQLiteDatabase } from '../native/sqlite/ExpoSQLiteDatabase';
 import { ExpoBackupDatabaseUseCase } from '../native/backup/ExpoBackupDatabaseUseCase';
@@ -44,10 +38,10 @@ import { RoomId } from '../domain/objects';
 import { Operator } from '../domain/objects/operator';
 import { Project } from '../domain/objects/project';
 import { AppError } from '../shared/errors/AppError';
-import { colors, spacing, typography, layout } from './theme/tokens';
+import { colors, typography } from './theme/tokens';
+import { alertDialog, ScreenShell } from './primitives';
 
 const DB_NAME = 'polylive.db';
-const Tab = createBottomTabNavigator();
 
 // ---------------------------------------------------------------------------
 // Estado de arranque
@@ -58,11 +52,6 @@ type BootStatus =
   | { phase: 'ready'; services: AppServices }
   | { phase: 'error'; message: string };
 
-/** Pantalla modal abierta por encima de la navegación por pestañas. */
-type Overlay =
-  | { kind: 'none' }
-  | { kind: 'profile' }
-  | { kind: 'surveyControl' };
 
 // ---------------------------------------------------------------------------
 // App
@@ -77,7 +66,8 @@ export default function App() {
   const [operator, setOperator] = useState<Operator | null>(null);
   const [project, setProject] = useState<Project | null>(null);
   const [activeRoomId, setActiveRoomId] = useState<RoomId | null>(null);
-  const [overlay, setOverlay] = useState<Overlay>({ kind: 'none' });
+  /** Pantalla del menú ☰ abierta por encima (null = ninguna). */
+  const [screen, setScreen] = useState<MenuScreen | null>(null);
 
   // -----------------------------------------------------------------------
   // Permisos
@@ -139,7 +129,7 @@ export default function App() {
         try {
           const adopted = await services.projects.adoptOrphanRooms();
           if (adopted && !cancelled) {
-            Alert.alert(
+            alertDialog(
               'Levantamientos recuperados',
               `Se agruparon ${adopted.adopted} Recinto(s) anteriores en el proyecto ` +
                 `"${adopted.project.name}". Puedes renombrarlo o repartirlos en otros proyectos.`,
@@ -179,7 +169,7 @@ export default function App() {
   // -----------------------------------------------------------------------
 
   const handleRestored = useCallback((restoredFrom: string) => {
-    Alert.alert(
+    alertDialog(
       'Copia restaurada',
       `Se restauró la copia ${restoredFrom.split('/').pop()}. La app va a reiniciarse para cargar los ` +
         'datos restaurados.',
@@ -193,7 +183,7 @@ export default function App() {
               // servicios construidos sobre ella.
               await Updates.reloadAsync();
             } catch {
-              Alert.alert(
+              alertDialog(
                 'Reinicia manualmente',
                 'No se pudo reiniciar automáticamente. Cierra la app por completo y vuelve a abrirla.',
               );
@@ -231,149 +221,118 @@ export default function App() {
     return <OperatorSelectorScreen store={services.store} onSelect={setOperator} />;
   }
 
-  // --- Overlays (se muestran por encima de cualquier paso) ---
-  if (overlay.kind === 'profile') {
-    return (
-      <OperatorProfileScreen
-        store={services.store}
-        operator={operator}
-        onUpdated={setOperator}
-        onSwitchOperator={() => {
-          setOverlay({ kind: 'none' });
-          setOperator(null);
-          setProject(null);
-          setActiveRoomId(null);
-        }}
-      />
-    );
-  }
+  const switchOperator = () => {
+    setScreen(null);
+    setOperator(null);
+    setProject(null);
+    setActiveRoomId(null);
+  };
+  const closeScreen = () => setScreen(null);
 
-  if (overlay.kind === 'surveyControl') {
-    return (
-      <View style={styles.flex}>
-        <OverlayBar title="Topografía" onBack={() => setOverlay({ kind: 'none' })} />
-        <SurveyControlScreen services={services} operator={operator} appStore={appStore} />
-      </View>
-    );
-  }
-
+  /** Pantallas del menú ☰: se deslizan por encima de lo que haya debajo. */
+  const renderScreen = () => {
+    if (!screen) return null;
+    switch (screen) {
+      case 'profile':
+        return (
+          <ScreenShell title="Operador" subtitle={operator.name} onBack={closeScreen}>
+            <OperatorProfileScreen
+              store={services.store}
+              operator={operator}
+              onUpdated={setOperator}
+              onSwitchOperator={switchOperator}
+            />
+          </ScreenShell>
+        );
+      case 'surveyControl':
+        return (
+          <ScreenShell title="Topografía" subtitle="Sistema de coordenadas y puntos de control" onBack={closeScreen} scroll={false}>
+            <SurveyControlScreen services={services} operator={operator} appStore={appStore} />
+          </ScreenShell>
+        );
+      case 'settings':
+        return (
+          <ScreenShell title="Ajustes y respaldos" onBack={closeScreen} scroll={false}>
+            <SettingsScreen
+              services={services}
+              dbName={DB_NAME}
+              onOpenProfile={() => setScreen('profile')}
+              onOpenSurveyControl={() => setScreen('surveyControl')}
+              onRestored={handleRestored}
+            />
+          </ScreenShell>
+        );
+      case 'gallery':
+        return activeRoomId ? (
+          <ScreenShell title="Galería de fotos" subtitle={project?.name} onBack={closeScreen} scroll={false}>
+            <GalleryScreen services={services} roomId={activeRoomId} />
+          </ScreenShell>
+        ) : null;
+      case 'export':
+        return activeRoomId ? (
+          <ScreenShell title="Exportar" subtitle="IFC 4 y DXF del recinto" onBack={closeScreen} scroll={false}>
+            <ExportScreen
+              services={services}
+              roomId={activeRoomId}
+              projectId={project?.id as unknown as string | undefined}
+              projectName={project?.name}
+              operatorName={operator.name}
+            />
+          </ScreenShell>
+        ) : null;
+    }
+  };
 
   // --- Paso 2: proyecto ---
   if (!project) {
     return (
-      <ProjectsScreen
-        services={services}
-        operator={operator}
-        onOpenProject={setProject}
-        onOpenSettings={() => setOverlay({ kind: 'profile' })}
-      />
+      <View style={styles.flex}>
+        <ProjectsScreen
+          services={services}
+          operator={operator}
+          onOpenProject={setProject}
+          onOpenSettings={() => setScreen('settings')}
+        />
+        {renderScreen()}
+      </View>
     );
   }
 
   // --- Paso 3: espacio dentro del proyecto ---
   if (!activeRoomId) {
     return (
-      <ProjectWorkspaceScreen
-        services={services}
-        project={project}
-        onOpenSpace={setActiveRoomId}
-        onBack={() => setProject(null)}
-      />
+      <View style={styles.flex}>
+        <ProjectWorkspaceScreen
+          services={services}
+          project={project}
+          onOpenSpace={setActiveRoomId}
+          onBack={() => setProject(null)}
+        />
+        {renderScreen()}
+      </View>
     );
   }
 
-  // --- Paso 4: espacio activo, navegación por pestañas ---
+  // --- Paso 4: el levantamiento. Sin pestañas: todo lo demás está en ☰ ---
   return (
-    <>
+    <View style={styles.flex}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.surface} />
-      {/* Barra de estado BLE oculta: el medidor láser queda para una versión posterior. */}
-
-      <NavigationContainer>
-        <Tab.Navigator
-          screenOptions={{
-            headerShown: false,
-            tabBarStyle: styles.tabBar,
-            tabBarActiveTintColor: colors.navy,
-            tabBarInactiveTintColor: colors.textDisabled,
-            tabBarLabelStyle: styles.tabLabel,
-          }}
-        >
-          <Tab.Screen
-            name="Survey"
-            options={{
-              tabBarLabel: 'Levantamiento',
-              tabBarIcon: ({ color }) => <Text style={[styles.tabIcon, { color }]}>✎</Text>,
-            }}
-          >
-            {() => (
-              <SurveyScreen
-                services={services}
-                roomId={activeRoomId}
-                appStore={appStore}
-                projectId={project.id as unknown as string}
-                projectName={project.name}
-                projectCode={project.bimCode}
-                operatorName={operator.name}
-                onExit={() => setActiveRoomId(null)}
-              />
-            )}
-          </Tab.Screen>
-
-          <Tab.Screen
-            name="Gallery"
-            options={{
-              tabBarLabel: 'Galería',
-              tabBarIcon: ({ color }) => <Text style={[styles.tabIcon, { color }]}>▣</Text>,
-            }}
-          >
-            {() => <GalleryScreen services={services} roomId={activeRoomId} />}
-          </Tab.Screen>
-
-          <Tab.Screen
-            name="Export"
-            options={{
-              tabBarLabel: 'Exportar',
-              tabBarIcon: ({ color }) => <Text style={[styles.tabIcon, { color }]}>↑</Text>,
-            }}
-          >
-            {() => <ExportScreen services={services} roomId={activeRoomId} />}
-          </Tab.Screen>
-
-          <Tab.Screen
-            name="Settings"
-            options={{
-              tabBarLabel: 'Ajustes',
-              tabBarIcon: ({ color }) => <Text style={[styles.tabIcon, { color }]}>⚙</Text>,
-            }}
-          >
-            {() => (
-              <SettingsScreen
-                services={services}
-                dbName={DB_NAME}
-                onOpenProfile={() => setOverlay({ kind: 'profile' })}
-                onOpenSurveyControl={() => setOverlay({ kind: 'surveyControl' })}
-                onRestored={handleRestored}
-              />
-            )}
-          </Tab.Screen>
-        </Tab.Navigator>
-      </NavigationContainer>
-    </>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Barra de las pantallas modales
-// ---------------------------------------------------------------------------
-
-function OverlayBar({ title, onBack }: { title: string; onBack: () => void }) {
-  return (
-    <View style={styles.overlayBar}>
-      <TouchableOpacity onPress={onBack} accessibilityRole="button" accessibilityLabel="Volver">
-        <Text style={styles.breadcrumbLink}>‹ Volver</Text>
-      </TouchableOpacity>
-      <Text style={styles.overlayTitle}>{title}</Text>
-      <View style={styles.overlaySpacer} />
+      <SurveyScreen
+        services={services}
+        roomId={activeRoomId}
+        appStore={appStore}
+        projectId={project.id as unknown as string}
+        projectName={project.name}
+        projectCode={project.bimCode}
+        operatorName={operator.name}
+        onExit={() => setActiveRoomId(null)}
+        onExitProject={() => {
+          setActiveRoomId(null);
+          setProject(null);
+        }}
+        onNavigate={setScreen}
+      />
+      {renderScreen()}
     </View>
   );
 }
@@ -396,55 +355,5 @@ const styles = StyleSheet.create({
   loadingText: {
     ...typography.body,
     color: colors.textSecondary,
-  },
-  breadcrumb: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.surface2,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.divider,
-  },
-  breadcrumbLink: {
-    ...typography.bodyStrong,
-    color: colors.navy,
-  },
-  breadcrumbCode: {
-    ...typography.caption,
-    color: colors.textSecondary,
-  },
-  overlayBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.divider,
-  },
-  overlayTitle: {
-    ...typography.heading,
-    color: colors.textPrimary,
-  },
-  overlaySpacer: {
-    width: 64,
-  },
-  tabBar: {
-    backgroundColor: colors.surface,
-    borderTopColor: colors.divider,
-    height: layout.tabBarHeight,
-    paddingBottom: spacing.sm,
-    paddingTop: spacing.xs,
-  },
-  tabLabel: {
-    ...typography.caption,
-    fontWeight: '600',
-  },
-  tabIcon: {
-    fontSize: 18,
-    fontWeight: '700',
   },
 });

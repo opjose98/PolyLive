@@ -22,6 +22,7 @@
 // todos.
 // =============================================================================
 
+import { columnForExport, roomForExport, wallForExport } from '../../../domain/geometry/handedness';
 import { Point2D } from '../../../domain/geometry/types';
 import { Wall } from '../../../domain/objects/wall';
 import { Column } from '../../../domain/objects/column';
@@ -99,6 +100,14 @@ export class DXFSerializer {
   private precision = 4;
 
   serialize(data: DXFExportData): string {
+    // DXF usa Y hacia arriba; el modelo, Y hacia abajo (ver handedness.ts).
+    // Sin esto AutoCAD recibía la planta espejada norte-sur.
+    data = {
+      ...data,
+      room: data.room ? roomForExport(data.room) : null,
+      walls: data.walls.map(wallForExport),
+      columns: data.columns.map(columnForExport),
+    };
     if (!data.title || data.title.trim().length === 0) {
       throw new DXFExportError('El título del dibujo no puede estar vacío.');
     }

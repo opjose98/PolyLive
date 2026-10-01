@@ -842,6 +842,27 @@ describe('EditorController', () => {
     });
   });
 
+  describe('vista girada', () => {
+    it('girar la vista mantiene el pivote y se sigue seleccionando donde se toca', async () => {
+      editor.setSnapEnabled(false);
+      editor.setNodeSnapEnabled(false);
+      await drawWall(0, 0, 4, 0);
+      editor.setTool('select');
+      const before = editor.screenToWorld(200, 150);
+      editor.setRotation(Math.PI / 2, 200, 150);
+      const after = editor.screenToWorld(200, 150);
+      expect(after.x).toBeCloseTo(before.x);
+      expect(after.y).toBeCloseTo(before.y);
+      // El centro del muro (2, 0) cae donde lo dibuja la vista girada.
+      const p = editor.worldToScreen({ x: 2, y: 0 });
+      await editor.handleTap(p.x, p.y, TOL_PX);
+      expect(editor.getState().selectedId).not.toBeNull();
+      // Encuadrar conserva el giro.
+      editor.zoomToFit(400, 300);
+      expect(editor.getState().transform.rotation).toBeCloseTo(Math.PI / 2);
+    });
+  });
+
   // -------------------------------------------------------------------------
   // Medición
   // -------------------------------------------------------------------------

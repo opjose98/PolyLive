@@ -13,11 +13,13 @@ import { useStore } from 'zustand';
 import { workspaceStore } from '../../state/workspaceStore';
 import {
   CANVAS_THEMES,
-  FILTERS_PLAN,
   LAYERS,
-  VIEWS_PLAN,
+  WORK_MODES,
   ZoomAction,
+  filtersFor,
+  workModeDef,
 } from '../../application/workspace/catalog';
+import { selectWorkMode } from './FabView';
 import { Accordion, SideDrawer, TagToggle, Tappable, Icon } from '../primitives';
 import { colors, radius, spacing } from '../design/tokens';
 import { type } from '../design/typography';
@@ -37,9 +39,32 @@ export interface ConfigDrawerProps {
   info: FileInfo;
   zoomPercent: number;
   onZoom: (action: ZoomAction) => void;
+  hasObjects?: boolean;
+  /** Configuración propia del modo activo (topografía, actividades…), arriba de todo. */
+  modeSection?: React.ReactNode;
 }
 
-export const ConfigDrawer = React.memo(function ConfigDrawer({ top, info, zoomPercent, onZoom }: ConfigDrawerProps) {
+/**
+ * Sección del modo activo mientras su configuración no existe todavía
+ * (M2 Topografía, M3 Avance, M4 Revisión). Levantamiento no la necesita.
+ */
+function ModePlaceholder({ mode }: { mode: import('../../application/workspace/catalog').WorkModeId }) {
+  if (mode === 'levantamiento') return null;
+  const def = workModeDef(mode);
+  const text: Record<string, string> = {
+    topografia: 'Sistema de coordenadas (MAGNA-SIRGAS, Origen Nacional), amarre del proyecto, mojones y mapa de fondo.',
+    avance: 'Catálogo de actividades, cortes de avance y reportes.',
+    revision: 'Comentarios, estados y exportación para enviar.',
+  };
+  return (
+    <Accordion title={`Configuración · ${def.label}`} icon={def.icon} defaultOpen>
+      <Text style={styles.label}>{text[mode]}</Text>
+      <Text style={styles.label}>Disponible en la siguiente fase.</Text>
+    </Accordion>
+  );
+}
+
+export const ConfigDrawer = React.memo(function ConfigDrawer({ top, info, zoomPercent, onZoom, hasObjects = true, modeSection }: ConfigDrawerProps) {
   const s = useStore(workspaceStore);
   const open = s.currentPanel === 'configDrawer';
   const ws = workspaceStore.getState;
@@ -47,7 +72,11 @@ export const ConfigDrawer = React.memo(function ConfigDrawer({ top, info, zoomPe
   return (
     <SideDrawer open={open} onClose={() => ws().closePanels()} side="right" top={top}>
       <ScrollView keyboardShouldPersistTaps="handled">
-        <Accordion title="Datos del archivo" icon="file-document-outline" defaultOpen>
+        {/* Drawer ⋮ = configuración CONTEXTUAL del proyecto: primero lo del modo activo. */}
+        {modeSection ?? (
+          <ModePlaceholder mode={s.workMode} />
+        )}
+        <Accordion title="Datos del archivo" icon="file-document-outline">
           <Row label="Proyecto" value={`${info.project} · ${info.projectCode}`} />
           <Row label="Espacio" value={info.space} />
           <Row label="Operador" value={info.operator} />
@@ -56,14 +85,14 @@ export const ConfigDrawer = React.memo(function ConfigDrawer({ top, info, zoomPe
           <Row label="Área cerrada" value={info.area} />
         </Accordion>
 
-        <Accordion title="Vista y capas" icon="layers-triple-outline">
-          <Group label="Vista">
-            {VIEWS_PLAN.map((v) => (
-              <TagToggle key={v.id} role="radio" label={v.label} on={s.view === v.id} onPress={() => ws().setView(v.id)} />
+        <Accordion title="Modo y capas" icon="layers-triple-outline">
+          <Group label="Modo">
+            {WORK_MODES.filter((m) => !(m.planOnly && s.mode !== 'plan')).map((m) => (
+              <TagToggle key={m.id} role="radio" icon={m.icon} label={m.label} on={s.workMode === m.id} onPress={() => selectWorkMode(m.id, hasObjects)} />
             ))}
           </Group>
           <Group label="Filtros">
-            {FILTERS_PLAN.map((f) => (
+            {filtersFor(s.workMode, s.mode).map((f) => (
               <TagToggle key={f.id} label={f.label} on={s.filters[f.id]} onPress={() => ws().toggleFilter(f.id)} />
             ))}
           </Group>

@@ -15,8 +15,6 @@
 
 import { createStore } from 'zustand/vanilla';
 import {
-  CATEGORIES_ELEVATION,
-  CATEGORIES_PLAN,
   CanvasThemeId,
   FilterId,
   GridId,
@@ -24,7 +22,8 @@ import {
   PropKey,
   ScaleToggleId,
   SnapId,
-  ViewId,
+  WorkModeId,
+  categoriesFor,
   findTool,
   isToolEnabled,
 } from '../application/workspace/catalog';
@@ -72,7 +71,8 @@ export interface WorkspaceData {
   readonly currentWindow: FloatingWindow | null;
   readonly fab: FabState;
   readonly activeTool: ActiveTool | null;
-  readonly view: ViewId;
+  /** Modo de trabajo (FAB de vista). Siempre arranca en Levantamiento. */
+  readonly workMode: WorkModeId;
   readonly filters: Readonly<Record<FilterId, boolean>>;
   readonly layers: Readonly<Record<LayerId, boolean>>;
   readonly canvasTheme: CanvasThemeId;
@@ -114,7 +114,8 @@ export interface WorkspaceActions {
   clearTool(): void;
   setToolProp(key: PropKey, value: number): void;
 
-  setView(view: ViewId): void;
+  /** Cambia de modo: suelta la herramienta y cierra paneles (el cromo cambia). */
+  setWorkMode(mode: WorkModeId): void;
   toggleFilter(id: FilterId): void;
   toggleLayer(id: LayerId): void;
   setCanvasTheme(theme: CanvasThemeId): void;
@@ -150,8 +151,27 @@ export function initialWorkspaceData(mode: WorkspaceMode = 'plan'): WorkspaceDat
     currentWindow: null,
     fab: FAB_CLOSED,
     activeTool: null,
-    view: 'arquitectura',
-    filters: { muros: true, columnas: true, vanos: true, puertas: true, ventanas: true, vigas: true, cotas: true, fotos: true },
+    workMode: 'levantamiento',
+    filters: {
+      muros: true,
+      columnas: true,
+      vanos: true,
+      puertas: true,
+      ventanas: true,
+      vigas: true,
+      cotas: true,
+      fotos: true,
+      vertices: true,
+      mojones: true,
+      coordenadas: true,
+      cuadricula: false,
+      mapa: false,
+      norte: true,
+      actividades: true,
+      cortesAnteriores: true,
+      comentarios: true,
+      resueltos: false,
+    },
     layers: { arquitectonico: true, estructural: true, topografia: false, coordinacion: false },
     canvasTheme: 'claro',
     grid: { lines: true, dots: false, rotation: false },
@@ -187,7 +207,14 @@ export function createWorkspaceStore(initial: Partial<WorkspaceData> = {}) {
       ...initialWorkspaceData(),
       ...initial,
 
-      setMode: (mode) => set({ mode, activeTool: null, ...panelsOpenedAt(null) }),
+      // Topografía solo existe en planta: pasar al alzado vuelve a Levantamiento.
+      setMode: (mode) =>
+        set({
+          mode,
+          activeTool: null,
+          ...panelsOpenedAt(null),
+          ...(mode === 'elevation' && get().workMode === 'topografia' && { workMode: 'levantamiento' as const }),
+        }),
 
       openPanel: (key) => set(panelsOpenedAt(key)),
       togglePanel: (key) => set(panelsOpenedAt(get().currentPanel === key ? null : key)),
@@ -212,7 +239,7 @@ export function createWorkspaceStore(initial: Partial<WorkspaceData> = {}) {
       pickFabCategory: (categoryId) => set({ fab: pickFabCategory(get().fab, categoryId) }),
 
       pickFabTool: (categoryId, toolId) => {
-        const categories = get().mode === 'plan' ? CATEGORIES_PLAN : CATEGORIES_ELEVATION;
+        const categories = categoriesFor(get().workMode, get().mode);
         const found = findTool(categories, categoryId, toolId);
         if (found && isToolEnabled(found.tool) && (found.tool.methods?.length ?? 0) > 1) {
           set({ fab: openFabMethods(get().fab, toolId) });
@@ -222,7 +249,7 @@ export function createWorkspaceStore(initial: Partial<WorkspaceData> = {}) {
       },
 
       activateTool: (categoryId, toolId, methodId) => {
-        const categories = get().mode === 'plan' ? CATEGORIES_PLAN : CATEGORIES_ELEVATION;
+        const categories = categoriesFor(get().workMode, get().mode);
         const found = findTool(categories, categoryId, toolId);
         if (!found) return { ok: false, reason: 'not-found' };
         if (!isToolEnabled(found.tool)) return { ok: false, reason: 'disabled' };
@@ -244,7 +271,7 @@ export function createWorkspaceStore(initial: Partial<WorkspaceData> = {}) {
         if (tool) set({ activeTool: { ...tool, props: { ...tool.props, [key]: value } } });
       },
 
-      setView: (view) => set({ view }),
+      setWorkMode: (workMode) => set({ workMode, activeTool: null, ...panelsOpenedAt(null) }),
       toggleFilter: (id) => set((p) => ({ filters: { ...p.filters, [id]: !p.filters[id] } })),
       toggleLayer: (id) => set((p) => ({ layers: { ...p.layers, [id]: !p.layers[id] } })),
       setCanvasTheme: (canvasTheme) => set({ canvasTheme }),

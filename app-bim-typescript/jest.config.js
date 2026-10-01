@@ -10,7 +10,6 @@ module.exports = {
   moduleNameMapper: {
     // Mock native modules for Node test environment
     '^react-native$': '<rootDir>/test/__mocks__/react-native.ts',
-    '^@react-navigation/(.*)$': '<rootDir>/test/__mocks__/react-navigation.ts',
     '^@shopify/react-native-skia$': '<rootDir>/test/__mocks__/react-native-skia.ts',
     '^expo-camera$': '<rootDir>/test/__mocks__/expo-camera.ts',
     '^expo-file-system$': '<rootDir>/test/__mocks__/expo-file-system.ts',

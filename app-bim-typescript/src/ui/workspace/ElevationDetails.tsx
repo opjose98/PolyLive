@@ -12,7 +12,7 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Tappable } from '../primitives';
 import { NumberField, TextField, SegmentedField, ToggleRow, ReadonlyRow } from '../components/fields';
-import { ActionButton } from '../components/ToolPalette';
+import { ActionButton } from '../primitives';
 import { ElevationEditor, ElevationEditorState } from '../../application/elevation/ElevationEditor';
 import { describeExtent } from '../../application/workspace/constraintModel';
 import { isRectangularProfile, VerticalExtent } from '../../domain/objects/vertical';

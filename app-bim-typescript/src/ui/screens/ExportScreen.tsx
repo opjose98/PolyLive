@@ -19,14 +19,11 @@
 // =============================================================================
 
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView } from 'react-native';
 import { AppServices } from '../../application/AppServices';
-import { ExportRoomIfcToFileUseCase } from '../../native/export/ExportRoomIfcToFileUseCase';
-import { ExportRoomDxfToFileUseCase } from '../../native/export/ExportRoomDxfToFileUseCase';
+import { exportPlanDxf, exportRevitIfc } from '../workspace/exportActions';
 import { Room, RoomId, revitObjectId } from '../../domain/objects';
-import { AppError } from '../../shared/errors/AppError';
-import { ValidationWarning } from '../../domain/geometry/types';
-import { ActionButton } from '../components/ToolPalette';
+import { ActionButton, alertDialog } from '../primitives';
 import { ReadonlyRow } from '../components/fields';
 import { colors, spacing, radius, typography } from '../theme/tokens';
 
@@ -37,30 +34,26 @@ import { colors, spacing, radius, typography } from '../theme/tokens';
 export interface ExportScreenProps {
   services: AppServices;
   roomId: RoomId;
+  /** Proyecto del recinto: sus niveles y fases van al IFC. */
+  projectId?: string;
+  projectName?: string;
+  operatorName?: string;
 }
 
 type ExportStatus =
   | { phase: 'idle' }
   | { phase: 'exporting'; format: 'ifc' | 'dxf' }
-  | { phase: 'done'; format: 'ifc' | 'dxf'; filePath: string; warnings: ValidationWarning[]; detail?: string }
+  | { phase: 'done'; format: 'ifc' | 'dxf'; folder: string; detail?: string }
   | { phase: 'error'; message: string };
 
 // ---------------------------------------------------------------------------
 // Componente
 // ---------------------------------------------------------------------------
 
-export function ExportScreen({ services, roomId }: ExportScreenProps) {
+export function ExportScreen({ services, roomId, projectId, projectName = 'Proyecto', operatorName }: ExportScreenProps) {
   const [room, setRoom] = useState<Room | null>(null);
   const [status, setStatus] = useState<ExportStatus>({ phase: 'idle' });
 
-  const exportIfc = useMemo(
-    () => new ExportRoomIfcToFileUseCase(services.useCases.exportRoomIfc),
-    [services],
-  );
-  const exportDxf = useMemo(
-    () => new ExportRoomDxfToFileUseCase(services.useCases.exportRoomDxf),
-    [services],
-  );
 
   const loadRoom = useCallback(async () => {
     const obj = await services.store.readObject(revitObjectId(roomId as unknown as string));
@@ -78,60 +71,35 @@ export function ExportScreen({ services, roomId }: ExportScreenProps) {
   // Acciones
   // -----------------------------------------------------------------------
 
-  const handleExportIfc = useCallback(async () => {
-    setStatus({ phase: 'exporting', format: 'ifc' });
-    try {
-      const result = await exportIfc.execute({ roomId });
-      setStatus({
-        phase: 'done',
-        format: 'ifc',
-        filePath: result.filePath,
-        warnings: result.warnings,
-      });
-    } catch (err) {
-      setStatus({
-        phase: 'error',
-        message: err instanceof AppError ? err.userMessage : 'No se pudo exportar el Recinto a IFC.',
-      });
-    }
-  }, [exportIfc, roomId]);
+  const ctx = useMemo(
+    () => ({
+      roomId,
+      projectId,
+      projectName,
+      spaceName: (room?.properties.name as string | undefined) ?? 'Espacio',
+      author: operatorName,
+    }),
+    [roomId, projectId, projectName, room, operatorName],
+  );
 
-  const handleExportDxf = useCallback(async () => {
-    setStatus({ phase: 'exporting', format: 'dxf' });
-    try {
-      // Las elevaciones se pasan explícitamente porque viven en otro store: sin
-      // ellas el DXF saldría sin puertas ni ventanas en planta.
-      const elevations = await services.elevations.listElevations(roomId);
-      const result = await exportDxf.execute({
-        roomId,
-        title: (room?.properties.name as string | undefined) ?? undefined,
-        elevations,
-      });
-
-      setStatus({
-        phase: 'done',
-        format: 'dxf',
-        filePath: result.filePath,
-        warnings: [],
-        detail:
-          `${result.stats.walls} muro(s), ${result.stats.columns} columna(s), ` +
-          `${result.stats.openings} hueco(s)` +
-          (result.stats.roomClosed ? ', recinto cerrado' : ', recinto sin cerrar'),
-      });
-    } catch (err) {
-      setStatus({
-        phase: 'error',
-        message: err instanceof AppError ? err.userMessage : 'No se pudo exportar el Recinto a DXF.',
-      });
-    }
-  }, [exportDxf, services, roomId, room]);
+  const run = useCallback(
+    async (format: 'ifc' | 'dxf') => {
+      setStatus({ phase: 'exporting', format });
+      const r = format === 'ifc' ? await exportRevitIfc(services, ctx) : await exportPlanDxf(services, ctx);
+      if (r.ok) setStatus({ phase: 'done', format, folder: r.folder, detail: r.detail });
+      else setStatus(r.message ? { phase: 'error', message: r.message } : { phase: 'idle' });
+    },
+    [services, ctx],
+  );
+  const handleExportIfc = useCallback(() => run('ifc'), [run]);
+  const handleExportDxf = useCallback(() => run('dxf'), [run]);
 
   const explainIfcBlock = useCallback(() => {
-    Alert.alert(
+    alertDialog(
       'Por qué IFC necesita el Recinto cerrado',
       'Un archivo IFC describe ESPACIOS, no solo líneas. Un recinto sin cerrar no delimita ningún ' +
         'espacio: el receptor no podría calcular su volumen ni asociarle elementos.\n\n' +
-        'Cierra el Recinto desde la pestaña Levantamiento, o exporta a DXF, que sí admite un ' +
+        'Cierra el Recinto con muros en el levantamiento, o exporta a DXF, que sí admite un ' +
         'levantamiento a medias.',
     );
   }, []);
@@ -143,8 +111,6 @@ export function ExportScreen({ services, roomId }: ExportScreenProps) {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Exportar</Text>
-
         {/* --- Estado del Recinto --- */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Recinto activo</Text>
@@ -170,7 +136,8 @@ export function ExportScreen({ services, roomId }: ExportScreenProps) {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>IFC 4 (modelo BIM)</Text>
           <Text style={styles.muted}>
-            Intercambio BIM estándar. Requiere el Recinto cerrado para poder describir el espacio.
+            Para Revit: un piso por nivel del proyecto, muros con sus restricciones de base y tope,
+            vanos y fases. Requiere el Recinto cerrado para poder describir el espacio.
           </Text>
           <ActionButton
             label={status.phase === 'exporting' && status.format === 'ifc' ? 'Exportando...' : 'Exportar a IFC'}
@@ -207,19 +174,9 @@ export function ExportScreen({ services, roomId }: ExportScreenProps) {
               {status.format === 'ifc' ? 'IFC exportado' : 'DXF exportado'}
             </Text>
             <Text style={styles.path} numberOfLines={3} selectable>
-              {status.filePath}
+              Guardado en {status.folder}
             </Text>
             {status.detail ? <Text style={styles.muted}>{status.detail}</Text> : null}
-            {status.warnings.length > 0 ? (
-              <>
-                <Text style={styles.warningsTitle}>Advertencias ({status.warnings.length})</Text>
-                {status.warnings.map((w, i) => (
-                  <Text key={i} style={styles.warningText}>
-                    • {w.message}
-                  </Text>
-                ))}
-              </>
-            ) : null}
           </View>
         ) : null}
 
@@ -258,10 +215,10 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   successCard: {
-    backgroundColor: 'rgba(52, 199, 89, 0.12)',
+    backgroundColor: 'rgba(46, 125, 50, 0.10)',
   },
   errorCard: {
-    backgroundColor: 'rgba(255, 59, 48, 0.12)',
+    backgroundColor: 'rgba(211, 47, 47, 0.10)',
   },
   cardTitle: {
     ...typography.heading,

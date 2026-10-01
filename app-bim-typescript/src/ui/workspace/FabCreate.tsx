@@ -14,7 +14,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeOut, ZoomIn } from 'react-native-reanimated';
 import { useStore } from 'zustand';
 import { workspaceStore } from '../../state/workspaceStore';
-import { CATEGORIES_ELEVATION, CATEGORIES_PLAN, isToolEnabled } from '../../application/workspace/catalog';
+import { categoriesFor, isToolEnabled } from '../../application/workspace/catalog';
 import { fabMainIcon } from '../../application/workspace/fabMachine';
 import type { ActiveTool } from '../../application/workspace/bpcContext';
 import { IconButton, Icon, Tappable, toast } from '../primitives';
@@ -39,7 +39,9 @@ export interface FabCreateProps {
 export const FabCreate = React.memo(function FabCreate({ onToolActivated }: FabCreateProps) {
   const fab = useStore(workspaceStore, (s) => s.fab);
   const mode = useStore(workspaceStore, (s) => s.mode);
-  const categories = mode === 'plan' ? CATEGORIES_PLAN : CATEGORIES_ELEVATION;
+  const workMode = useStore(workspaceStore, (s) => s.workMode);
+  // Catálogo contextual: depende del modo de trabajo y de la vista.
+  const categories = categoriesFor(workMode, mode);
   const ws = workspaceStore.getState;
 
   const activate = (categoryId: string, toolId: string, methodId?: string) => {
