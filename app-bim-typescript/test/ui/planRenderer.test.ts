@@ -384,11 +384,15 @@ describe('drawPlan — columnas', () => {
 // ---------------------------------------------------------------------------
 
 describe('drawPlan — muro en curso', () => {
-  it('previsualiza el muro con su espesor y rotula su longitud en vivo', () => {
+  it('previsualiza el muro con su espesor y rotula su longitud y su ángulo en vivo', () => {
     const r = new RecordingRenderer();
     drawPlan(r, scene({ wallDraft: { start: { x: 0, y: 0 }, end: { x: 3, y: 0 }, snappedToNode: false }, draftThickness: 0.2 }));
     expect(r.ops('strokePolygon')).toHaveLength(1);
-    expect(r.texts()).toContain('3.00 m');
+    expect(r.texts()).toContain('3.00 m · 0°');
+    // Hacia la pantalla arriba (Y del modelo negativa) = 90°, como el eje Y.
+    const up = new RecordingRenderer();
+    drawPlan(up, scene({ wallDraft: { start: { x: 0, y: 0 }, end: { x: 0, y: -2 }, snappedToNode: false } }));
+    expect(up.texts()).toContain('2.00 m · 90°');
   });
 
   it('con solo el primer punto fijado muestra el punto, sin muro', () => {
