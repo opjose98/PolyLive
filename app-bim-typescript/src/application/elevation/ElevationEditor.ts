@@ -165,15 +165,21 @@ export class ElevationEditor {
 
   /** Lee el muro y su alzado. `fit` encuadra la vista (la primera vez). */
   async load(fit = true): Promise<void> {
-    const wall = await this.services.store.readObject(revitObjectId(this.wallId));
-    if (!(wall instanceof Wall)) {
-      this.patch({ wall: null, elevation: null });
-      this.notify('error', 'El muro ya no existe.');
-      return;
+    try {
+      const wall = await this.services.store.readObject(revitObjectId(this.wallId));
+      if (!(wall instanceof Wall)) {
+        this.patch({ wall: null, elevation: null });
+        this.notify('error', 'El muro ya no existe.');
+        return;
+      }
+      this.stored = await this.services.elevations.getElevation(wall);
+      this.publish(wall, this.stored);
+      if (fit) this.zoomToFit();
+    } catch {
+      // La vista llama a load() sin esperar: un error aquí no debe quedar
+      // como promesa rechazada sin manejar.
+      this.notify('error', 'No se pudo leer el alzado del muro.');
     }
-    this.stored = await this.services.elevations.getElevation(wall);
-    this.publish(wall, this.stored);
-    if (fit) this.zoomToFit();
   }
 
   private publish(wall: Wall, stored: WallElevation): void {

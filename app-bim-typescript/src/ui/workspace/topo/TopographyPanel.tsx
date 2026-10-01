@@ -53,10 +53,14 @@ export function TopographyPanel({ topo }: { topo: Topography }) {
               label="Promedio del GPS"
               unit="s"
               value={secs}
-              onChange={(v) => {
-                setSecs(v);
-                const n = parseNum(v);
-                if (n !== null && n >= 5 && n <= 600) topo.setGpsSeconds(n);
+              onChange={setSecs}
+              onBlur={() => {
+                const n = parseNum(secs);
+                if (n !== null && n >= 5 && n <= 600) {
+                  if (Math.round(n) !== geo.gpsSeconds) topo.setGpsSeconds(n);
+                } else {
+                  setSecs(String(geo.gpsSeconds));
+                }
               }}
             />
           </View>

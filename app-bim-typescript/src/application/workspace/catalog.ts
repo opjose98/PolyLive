@@ -125,6 +125,16 @@ const AUDITORIA: CategoryDef = {
 };
 
 /**
+ * En alzado la foto todavía no se ancla a la cara del muro: la herramienta se
+ * ve pero queda deshabilitada (antes salía habilitada con el binding de
+ * planta y no hacía nada).
+ */
+const AUDITORIA_ELEVATION: CategoryDef = {
+  ...AUDITORIA,
+  tools: [{ id: 'foto', label: 'Foto', icon: 'camera-outline' }],
+};
+
+/**
  * Puerta y Ventana no están en el mockup de planta, pero el motor ya las crea
  * sobre un muro: quitarlas sería una regresión.
  */
@@ -181,7 +191,7 @@ export const CATEGORIES_ELEVATION: readonly CategoryDef[] = [
       { id: 'correa', label: 'Correa', icon: 'view-sequential', props: { depth: 20 } },
     ],
   },
-  AUDITORIA,
+  AUDITORIA_ELEVATION,
 ];
 
 // ---------------------------------------------------------------------------

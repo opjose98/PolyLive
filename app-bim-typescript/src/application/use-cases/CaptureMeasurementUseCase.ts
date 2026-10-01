@@ -10,7 +10,6 @@ import {
   RoomId,
   MeasurementId,
   Measurement,
-  measurementId as toMeasurementId,
   generateId,
 } from '../../domain/objects';
 import { IBLEManager } from './types';

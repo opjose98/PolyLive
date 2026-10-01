@@ -8,7 +8,6 @@ import {
   IObjectStore,
   Wall,
   RoomId,
-  RevitObjectId,
   generateId,
   ObjectProperties,
 } from '../../domain/objects';

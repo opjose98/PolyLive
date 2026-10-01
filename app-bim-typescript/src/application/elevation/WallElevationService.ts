@@ -25,7 +25,6 @@
 
 import { IDatabase } from '../../infrastructure/sqlite/database';
 import { ObjectStore } from '../../infrastructure/sqlite/ObjectStore';
-import { CommandStack } from '../state/CommandStack';
 import { Wall } from '../../domain/objects/wall';
 import { Door } from '../../domain/objects/door';
 import { Window } from '../../domain/objects/window';
@@ -199,7 +198,6 @@ export class WallElevationService {
   constructor(
     private readonly db: IDatabase,
     private readonly store: ObjectStore,
-    private readonly commandStack: CommandStack,
   ) {}
 
   // -------------------------------------------------------------------------

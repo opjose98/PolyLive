@@ -35,7 +35,6 @@ import { CDT } from '../../src/domain/geometry/CDT';
 import { CommandStack } from '../../src/application/state/CommandStack';
 import { Command } from '../../src/application/commands/Command';
 import { CanvasManager } from '../../src/application/canvas';
-import { createAppStore } from '../../src/state/appStore';
 import { CaptureMeasurementUseCase } from '../../src/application/use-cases/CaptureMeasurementUseCase';
 import { IBLEManager, ICDT, IValidationService, ValidationResult } from '../../src/application/use-cases/types';
 import { CloseRoomUseCase } from '../../src/application/use-cases/CloseRoomUseCase';
@@ -339,11 +338,6 @@ describe('Crítico: Zoom > 500x → Scale clamped (State)', () => {
     expect(canvasManager.getTransform().scale).toBe(1);
   });
 
-  it('appStore.updateCanvasTransform clamps scale a MAX_SCALE (500)', () => {
-    const store = createAppStore();
-    store.getState().updateCanvasTransform({ scale: 5000 });
-    expect(store.getState().canvasTransform.scale).toBe(500);
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -357,7 +351,7 @@ describe('Crítico: Database corrupto → Backup restore (Infrastructure)', () =
     expect(true).toBe(true);
   });
 
-  it('BackupDatabaseUseCase / RestoreDatabaseUseCase — ver cobertura completa en test/application/BackupRestoreUseCases.test.ts', () => {
+  it('BackupDatabaseUseCase / RestoreDatabaseUseCase — ver cobertura completa en test/native/backup/ (variantes Expo, las que usa la app)', () => {
     // Implementados: rotación de hasta 5 backups, verificación de integridad
     // antes de aceptar un backup, restaurar el más reciente que pase
     // integrity_check (saltando corruptos), AppError.RESTORE_FAILED si todos

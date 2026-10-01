@@ -18,7 +18,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, StyleSheet, TouchableOpacity } from 'react-native';
-import { colors, spacing, radius, typography, layout } from '../theme/tokens';
+import { colors, spacing, radius, sizes } from '../design/tokens';
+import { type } from '../design/typography';
 
 // ---------------------------------------------------------------------------
 // NumberField
@@ -279,7 +280,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   fieldLabel: {
-    ...typography.label,
+    ...type.label,
     color: colors.textSecondary,
     marginBottom: spacing.xs,
   },
@@ -298,75 +299,75 @@ const styles = StyleSheet.create({
   },
   fieldInput: {
     flex: 1,
-    minHeight: layout.touchTargetMin,
+    minHeight: sizes.touchMin,
     borderWidth: 1,
-    borderColor: colors.divider,
-    borderRadius: radius.sm,
+    borderColor: colors.border,
+    borderRadius: radius.md,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     backgroundColor: colors.surface,
-    color: colors.textPrimary,
-    fontSize: typography.body.fontSize,
+    color: colors.text,
+    fontSize: type.body.fontSize,
   },
   fieldInputMultiline: {
     minHeight: 72,
     textAlignVertical: 'top',
   },
   fieldInputDisabled: {
-    backgroundColor: colors.surface3,
+    backgroundColor: colors.background,
     color: colors.textSecondary,
   },
   fieldInputError: {
     borderColor: colors.error,
   },
   fieldUnit: {
-    ...typography.label,
+    ...type.label,
     color: colors.textSecondary,
     marginLeft: spacing.sm,
     minWidth: 24,
   },
   fieldError: {
-    ...typography.caption,
+    ...type.caption,
     color: colors.error,
     marginTop: spacing.xs,
   },
   fieldHint: {
-    ...typography.caption,
+    ...type.caption,
     color: colors.textSecondary,
     marginTop: spacing.xs,
   },
   segmented: {
     flexDirection: 'row',
     borderWidth: 1,
-    borderColor: colors.divider,
-    borderRadius: radius.sm,
+    borderColor: colors.border,
+    borderRadius: radius.md,
     overflow: 'hidden',
   },
   segment: {
     flex: 1,
-    minHeight: layout.touchTargetMin,
+    minHeight: sizes.touchMin,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: colors.surface,
   },
   segmentActive: {
-    backgroundColor: colors.navy,
+    backgroundColor: colors.amberDark,
   },
   segmentDisabled: {
     opacity: 0.5,
   },
   segmentText: {
-    ...typography.label,
+    ...type.label,
     color: colors.textSecondary,
   },
   segmentTextActive: {
-    color: colors.textOnDark,
+    color: colors.textOnAccent,
   },
   toggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    minHeight: layout.touchTargetMin,
+    minHeight: sizes.touchMin,
     paddingVertical: spacing.sm,
   },
   toggleTextWrap: {
@@ -374,29 +375,29 @@ const styles = StyleSheet.create({
     paddingRight: spacing.md,
   },
   toggleLabel: {
-    ...typography.bodyStrong,
-    color: colors.textPrimary,
+    ...type.bodyStrong,
+    color: colors.text,
   },
   toggleDescription: {
-    ...typography.caption,
+    ...type.caption,
     color: colors.textSecondary,
     marginTop: 2,
   },
   toggleTrack: {
     width: 46,
     height: 28,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surface3,
+    borderRadius: radius.round,
+    backgroundColor: colors.background,
     padding: 3,
     justifyContent: 'center',
   },
   toggleTrackOn: {
-    backgroundColor: colors.navy,
+    backgroundColor: colors.amberDark,
   },
   toggleKnob: {
     width: 22,
     height: 22,
-    borderRadius: radius.pill,
+    borderRadius: radius.round,
     backgroundColor: colors.surface,
   },
   toggleKnobOn: {
@@ -408,15 +409,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: colors.divider,
+    borderBottomColor: colors.border,
   },
   readonlyLabel: {
-    ...typography.label,
+    ...type.label,
     color: colors.textSecondary,
   },
   readonlyValue: {
-    ...typography.mono,
-    color: colors.textPrimary,
+    ...type.value,
+    color: colors.text,
     maxWidth: '60%',
   },
 });

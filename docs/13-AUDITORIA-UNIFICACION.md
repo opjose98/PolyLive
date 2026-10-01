@@ -92,7 +92,7 @@ Confirmada con el usuario. Razones:
 | `EditorController` | `application/editor/EditorController.ts` |
 | `DxfExporter` | `infrastructure/export/dxf/DXFSerializer.ts` |
 | SPDS (fotos con marcador en planta) | metadata de `AuditPhoto` + `planRenderer` + `PhotoViewer` |
-| `levon_tokens.dart` | `ui/theme/tokens.ts` |
+| `levon_tokens.dart` | `ui/theme/tokens.ts` → hoy `ui/design/tokens.ts` (ver doc 16) |
 | Painters de planta y elevación | `ui/canvas/planRenderer.ts`, `ui/canvas/elevationRenderer.ts` |
 
 ### 3.3 Lo NO portado, y por qué
@@ -176,7 +176,7 @@ Componentes nuevos: `ToolPalette`, `QuickBar`, `PropertiesPanel`, `PlanCanvasVie
 
 Renderers nuevos (funciones puras, testeables): `planRenderer`, `elevationRenderer`.
 
-Sistema de diseño: `ui/theme/tokens.ts`.
+Sistema de diseño: `ui/design/tokens.ts` + `typography.ts` + `canvasThemes.ts` (el antiguo `ui/theme/tokens.ts` se eliminó en la auditoría post-M2, doc 16).
 
 ---
 

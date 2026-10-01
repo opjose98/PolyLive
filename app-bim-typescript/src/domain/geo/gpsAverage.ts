@@ -8,6 +8,18 @@
 // suele ser más honesta que la precisión que declara el sistema.
 // =============================================================================
 
+/**
+ * Una posición del GPS tal como la entrega el proveedor (una lectura suelta,
+ * p. ej. para la foto o para sugerir el sistema de coordenadas).
+ */
+export interface GpsCoordinates {
+  readonly latitude: number;
+  readonly longitude: number;
+  readonly altitude: number;
+  /** Precisión horizontal (m). SIEMPRE > 0: nunca se asume precisión perfecta. */
+  readonly accuracy: number;
+}
+
 export interface GpsFix {
   readonly lat: number;
   readonly lon: number;

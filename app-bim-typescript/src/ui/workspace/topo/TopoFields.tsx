@@ -16,6 +16,7 @@ export function Field({
   placeholder,
   unit,
   flex,
+  onBlur,
 }: {
   label: string;
   value: string;
@@ -24,6 +25,8 @@ export function Field({
   placeholder?: string;
   unit?: string;
   flex?: boolean;
+  /** Al salir del campo: para guardar una vez, no en cada tecla. */
+  onBlur?: () => void;
 }) {
   return (
     <View style={[styles.field, flex && styles.flex]}>
@@ -37,6 +40,7 @@ export function Field({
           placeholder={placeholder}
           placeholderTextColor={colors.textDisabled}
           selectTextOnFocus
+          onBlur={onBlur}
           accessibilityLabel={label}
         />
         {unit ? <Text style={styles.unit}>{unit}</Text> : null}

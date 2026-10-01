@@ -34,7 +34,8 @@ import { AppError } from '../../shared/errors/AppError';
 import { ActionButton, alertDialog } from '../primitives';
 import { TextField } from '../components/fields';
 import { SpacePreview } from '../components/SpacePreview';
-import { colors, spacing, radius, typography, layout } from '../theme/tokens';
+import { colors, spacing, radius } from '../design/tokens';
+import { type } from '../design/typography';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -163,7 +164,7 @@ export function ProjectWorkspaceScreen({
   if (loading) {
     return (
       <SafeAreaView style={styles.center}>
-        <ActivityIndicator color={colors.navy} />
+        <ActivityIndicator color={colors.amberDark} />
         <Text style={styles.muted}>Cargando espacios...</Text>
       </SafeAreaView>
     );
@@ -394,14 +395,14 @@ function SpaceCard({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.surface2,
+    backgroundColor: colors.background,
   },
   center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     gap: spacing.md,
-    backgroundColor: colors.surface2,
+    backgroundColor: colors.background,
   },
   header: {
     paddingHorizontal: spacing.md,
@@ -412,8 +413,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   backText: {
-    ...typography.bodyStrong,
-    color: colors.navy,
+    ...type.bodyStrong,
+    color: colors.amberDark,
   },
   projectHeader: {
     flexDirection: 'row',
@@ -422,7 +423,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.divider,
+    borderBottomColor: colors.border,
     backgroundColor: colors.surface,
   },
   projectHeaderText: {
@@ -432,30 +433,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
     borderRadius: radius.xs,
-    backgroundColor: colors.navy,
+    backgroundColor: colors.amberDark,
   },
   codeBadgeText: {
-    ...typography.caption,
-    color: colors.yellow,
+    ...type.caption,
+    color: colors.textOnAccent,
     fontFamily: 'Roboto_700Bold',
   },
   spaceBadge: {
     paddingHorizontal: spacing.xs,
     paddingVertical: 1,
     borderRadius: radius.xs,
-    backgroundColor: colors.surface3,
+    backgroundColor: colors.background,
   },
   spaceBadgeText: {
-    ...typography.caption,
-    color: colors.navy,
+    ...type.caption,
+    color: colors.amberDark,
     fontFamily: 'Roboto_700Bold',
   },
   title: {
-    ...typography.title,
-    color: colors.textPrimary,
+    ...type.title,
+    color: colors.text,
   },
   subtitle: {
-    ...typography.caption,
+    ...type.caption,
     color: colors.textSecondary,
   },
   list: {
@@ -468,17 +469,17 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   emptyTitle: {
-    ...typography.heading,
-    color: colors.textPrimary,
+    ...type.heading,
+    color: colors.text,
     textAlign: 'center',
   },
   muted: {
-    ...typography.body,
+    ...type.body,
     color: colors.textSecondary,
   },
   card: {
     backgroundColor: colors.surface,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     padding: spacing.md,
   },
   cardBroken: {
@@ -500,16 +501,16 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   cardTitle: {
-    ...typography.heading,
-    color: colors.textPrimary,
+    ...type.heading,
+    color: colors.text,
     flex: 1,
   },
   cardMeta: {
-    ...typography.caption,
+    ...type.caption,
     color: colors.textSecondary,
   },
   cardWarning: {
-    ...typography.caption,
+    ...type.caption,
     color: colors.warning,
   },
   cardActions: {
@@ -518,7 +519,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginTop: spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: colors.divider,
+    borderTopColor: colors.border,
     paddingTop: spacing.sm,
   },
   cardActionButton: {
@@ -527,8 +528,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cardActionText: {
-    ...typography.label,
-    color: colors.navy,
+    ...type.label,
+    color: colors.amberDark,
   },
   cardActionDanger: {
     color: colors.error,
@@ -538,27 +539,27 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     padding: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: colors.divider,
+    borderTopColor: colors.border,
     backgroundColor: colors.surface,
   },
   dialogScrim: {
     flex: 1,
-    backgroundColor: colors.overlayScrim,
+    backgroundColor: colors.scrim,
     justifyContent: 'center',
     padding: spacing.lg,
   },
   dialogCard: {
     flexGrow: 0,
     backgroundColor: colors.surface,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
   },
   dialog: {
     padding: spacing.lg,
     gap: spacing.sm,
   },
   dialogTitle: {
-    ...typography.title,
-    color: colors.textPrimary,
+    ...type.title,
+    color: colors.text,
   },
   dialogActions: {
     flexDirection: 'row',

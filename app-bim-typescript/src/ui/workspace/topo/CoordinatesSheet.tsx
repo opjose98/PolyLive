@@ -50,7 +50,13 @@ export function CoordinatesSheet({ topo, vertices }: { topo: Topography; vertice
               <View style={styles.cardHead}>
                 <Text style={styles.name}>{b.name}</Text>
                 <Text style={[styles.badge, placed && b.latLon ? styles.badgeOn : null]}>
-                  {placed && b.latLon ? 'control' : placed ? 'solo local' : 'sin colocar'}
+                  {placed && b.latLon
+                    ? 'control'
+                    : placed
+                      ? topo.georef
+                        ? 'calculado por el amarre'
+                        : 'solo local'
+                      : 'sin colocar'}
                 </Text>
                 <IconButton variant="plain" size={36} icon="map-marker-down" label={`Colocar ${b.name}`} onPress={() => topo.benchmarkActions.place(b)} />
                 <IconButton variant="plain" size={36} icon="link-variant-off" label={`Quitar ${b.name}`} onPress={() => topo.benchmarkActions.unlink(b)} />

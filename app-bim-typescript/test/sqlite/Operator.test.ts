@@ -4,8 +4,7 @@
 
 import { Database } from '../../src/infrastructure/sqlite/database';
 import { ObjectStore } from '../../src/infrastructure/sqlite/ObjectStore';
-import { Operator } from '../../src/domain/objects/operator';
-import { operatorId } from '../../src/domain/objects/survey';
+import { Operator, operatorId } from '../../src/domain/objects/operator';
 import { Room, roomId, levelId, revitObjectId } from '../../src/domain/objects';
 
 describe('Operator (domain)', () => {

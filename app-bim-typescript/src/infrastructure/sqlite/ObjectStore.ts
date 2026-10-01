@@ -5,7 +5,7 @@
 // =============================================================================
 
 import { IDatabase } from './database';
-import { RevitObjectRow, MeasurementRow, AuditPhotoRow, SiteRow, SurveyControlPointRow, PolygonDraftRow, OperatorRow } from './types';
+import { RevitObjectRow, MeasurementRow, AuditPhotoRow, OperatorRow } from './types';
 import {
   RevitObjectBase,
   RevitObjectId,
@@ -26,19 +26,9 @@ import { Room } from '../../domain/objects/room';
 import { parseExtent, parseWallVertical } from '../../domain/objects/vertical';
 import { Measurement, CaptureMethod } from '../../domain/objects/measurement';
 import { AuditPhoto } from '../../domain/objects/audit-photo';
-import { meters, squareMeters, degrees } from '../../domain/geometry/types';
-import { MeasurementId, AuditPhotoId, measurementId, auditPhotoId, LevelId, levelId } from '../../domain/objects/base';
-import {
-  SurveyControlPoint,
-  SiteCoordinateSystem,
-  SiteId,
-  SurveyControlPointId,
-  siteId as toSiteId,
-  surveyControlPointId,
-  operatorId,
-  OperatorId,
-} from '../../domain/objects/survey';
-import { Operator } from '../../domain/objects/operator';
+import { meters, squareMeters } from '../../domain/geometry/types';
+import { MeasurementId, AuditPhotoId, measurementId, auditPhotoId, levelId } from '../../domain/objects/base';
+import { Operator, operatorId, OperatorId } from '../../domain/objects/operator';
 
 /**
  * Implementación de IObjectStore usando SQLite puro (sin ORM).
@@ -467,113 +457,6 @@ export class ObjectStore implements IObjectStore {
   }
 
   // -------------------------------------------------------------------------
-  // Survey operations (Spike #7 — CreateControlPointUseCase,
-  // DefineSiteCoordinateSystemUseCase). No forman parte de la interfaz
-  // IObjectStore (no operan sobre RevitObjectBase) — se invocan desde los
-  // UseCases vía cast `(store as any)`, mismo patrón ya usado por
-  // createAuditPhoto()/createMeasurement() arriba.
-  // -------------------------------------------------------------------------
-
-  /**
-   * Define el SiteCoordinateSystem de una Sede.
-   *
-   * INMUTABLE (SiteCoordinateSystem.md): lanza si la Sede ya tiene un
-   * sistema de coordenadas definido — no existe UPDATE para esta tabla.
-   */
-  async defineSiteCoordinateSystem(system: SiteCoordinateSystem): Promise<void> {
-    const existing = await this.db.get<SiteRow>(
-      `SELECT site_id FROM sites WHERE site_id = ?`,
-      [system.siteId as string]
-    );
-    if (existing) {
-      throw new Error(
-        `SiteCoordinateSystem para la Sede ${system.siteId} ya fue definido — es inmutable y no puede redefinirse`,
-      );
-    }
-    await this.db.run(
-      `INSERT INTO sites (site_id, origin_json, north_rotation, defined_at, defined_by)
-       VALUES (?, ?, ?, ?, ?)`,
-      [
-        system.siteId as string,
-        JSON.stringify(system.origin),
-        system.northRotation as number,
-        system.definedAt.toISOString(),
-        system.definedBy as string,
-      ]
-    );
-  }
-
-  /** Lee el SiteCoordinateSystem de una Sede. Retorna null si no está definido. */
-  async getSiteCoordinateSystem(site: SiteId): Promise<SiteCoordinateSystem | null> {
-    const row = await this.db.get<SiteRow>(
-      `SELECT * FROM sites WHERE site_id = ?`,
-      [site as string]
-    );
-    if (!row) return null;
-    return {
-      siteId: toSiteId(row.site_id),
-      origin: JSON.parse(row.origin_json),
-      northRotation: degrees(row.north_rotation),
-      definedAt: new Date(row.defined_at),
-      definedBy: operatorId(row.defined_by),
-    };
-  }
-
-  /** Crea un SurveyControlPoint para una Sede. */
-  async createSurveyControlPoint(point: SurveyControlPoint): Promise<SurveyControlPointId> {
-    const now = new Date().toISOString();
-    await this.db.run(
-      `INSERT INTO survey_control_points
-         (id, site_id, local_coordinates_json, gps_json, name, notes, captured_at, is_deleted, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
-      [
-        point.id as string,
-        point.siteId as string,
-        JSON.stringify(point.localCoordinates),
-        JSON.stringify(point.gpsCoordinates),
-        point.name ?? null,
-        point.notes ?? null,
-        point.capturedAt.toISOString(),
-        now,
-        now,
-      ]
-    );
-    return point.id;
-  }
-
-  /** Lista los SurveyControlPoints de una Sede (excluye soft-deleted). */
-  async listSurveyControlPoints(site: SiteId): Promise<SurveyControlPoint[]> {
-    const rows = await this.db.all<SurveyControlPointRow>(
-      `SELECT * FROM survey_control_points WHERE site_id = ? AND is_deleted = 0 ORDER BY captured_at`,
-      [site as string]
-    );
-    return rows.map((row) => this.surveyControlPointRowToObject(row));
-  }
-
-  /** Soft-delete de un SurveyControlPoint (usado por CreateControlPointCommand.undo()). */
-  async deleteSurveyControlPoint(id: SurveyControlPointId): Promise<void> {
-    const now = new Date().toISOString();
-    await this.db.run(
-      `UPDATE survey_control_points SET is_deleted = 1, updated_at = ? WHERE id = ?`,
-      [now, id as string]
-    );
-  }
-
-  /** Convierte una fila `survey_control_points` a SurveyControlPoint. */
-  private surveyControlPointRowToObject(row: SurveyControlPointRow): SurveyControlPoint {
-    return new SurveyControlPoint({
-      id: surveyControlPointId(row.id),
-      siteId: toSiteId(row.site_id),
-      localCoordinates: JSON.parse(row.local_coordinates_json),
-      gpsCoordinates: JSON.parse(row.gps_json),
-      name: row.name ?? undefined,
-      notes: row.notes ?? undefined,
-      capturedAt: new Date(row.captured_at),
-      is_deleted: row.is_deleted === 1,
-    });
-  }
-
-  // -------------------------------------------------------------------------
   // Operator operations — ver domain/objects/operator.ts para el alcance
   // (solo nombre, sin autenticación). No forman parte de IObjectStore —
   // mismo patrón de acceso que las operaciones de Sede arriba.
@@ -650,64 +533,6 @@ export class ObjectStore implements IObjectStore {
       `SELECT * FROM revit_objects WHERE object_type = 'Room' AND is_deleted = 0 ORDER BY created_at DESC`,
     );
     return rows.map((row) => this.rowToObject(row) as Room);
-  }
-
-  // -------------------------------------------------------------------------
-  // Polygon draft operations (RecoverRoomDraftUseCase / SaveRoomDraftUseCase,
-  // Maestro §7.10). No forman parte de la interfaz IObjectStore (operan
-  // sobre `polygon_drafts`, no sobre RevitObjectBase) — mismo patrón de
-  // acceso vía `(store as any)` ya usado por las operaciones de Sede arriba.
-  // -------------------------------------------------------------------------
-
-  /**
-   * Guarda (o sobreescribe) el borrador de trazo en progreso de un Recinto.
-   * A lo sumo un borrador vivo por Recinto: si ya existe uno para `roomId`,
-   * se reemplaza — el trazo anterior queda obsoleto en cuanto el usuario
-   * sigue agregando vértices.
-   */
-  async saveDraft(roomId: RoomId, vertices: Array<{ x: number; y: number }>, isClosed: boolean): Promise<string> {
-    const existing = await this.db.get<PolygonDraftRow>(
-      `SELECT id FROM polygon_drafts WHERE room_id = ?`,
-      [roomId as string],
-    );
-    const now = new Date().toISOString();
-
-    if (existing) {
-      await this.db.run(
-        `UPDATE polygon_drafts SET vertices_json = ?, is_closed = ?, saved_at = ? WHERE id = ?`,
-        [JSON.stringify(vertices), isClosed ? 1 : 0, now, existing.id],
-      );
-      return existing.id;
-    }
-
-    const id = `draft-${roomId}-${Date.now()}`;
-    await this.db.run(
-      `INSERT INTO polygon_drafts (id, room_id, vertices_json, is_closed, saved_at) VALUES (?, ?, ?, ?, ?)`,
-      [id, roomId as string, JSON.stringify(vertices), isClosed ? 1 : 0, now],
-    );
-    return id;
-  }
-
-  /** Lee el borrador más reciente de un Recinto, o null si no hay ninguno. */
-  async getLatestDraft(
-    roomId: RoomId,
-  ): Promise<{ id: string; vertices: Array<{ x: number; y: number }>; isClosed: boolean; savedAt: Date } | null> {
-    const row = await this.db.get<PolygonDraftRow>(
-      `SELECT * FROM polygon_drafts WHERE room_id = ? ORDER BY saved_at DESC LIMIT 1`,
-      [roomId as string],
-    );
-    if (!row) return null;
-    return {
-      id: row.id,
-      vertices: JSON.parse(row.vertices_json),
-      isClosed: row.is_closed === 1,
-      savedAt: new Date(row.saved_at),
-    };
-  }
-
-  /** Descarta (borra físicamente) un borrador — se llama tras recuperar o al cerrar el Recinto. */
-  async deleteDraft(draftId: string): Promise<void> {
-    await this.db.run(`DELETE FROM polygon_drafts WHERE id = ?`, [draftId]);
   }
 
   // =========================================================================

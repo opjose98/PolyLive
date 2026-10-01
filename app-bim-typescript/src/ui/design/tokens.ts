@@ -3,9 +3,9 @@
 // Fuente: polylive-mockup/css/styles.css (:root)
 // =============================================================================
 //
-// Reemplaza a `ui/theme/tokens.ts` (navy + amarillo, heredado de LevON). Las
-// pantallas antiguas siguen usando ese archivo hasta que se migren; ninguna
-// pantalla nueva debe importarlo.
+// ÚNICA fuente de colores, espacios, radios y tamaños del cromo. El antiguo
+// `ui/theme/tokens.ts` (navy + amarillo de LevON) se eliminó en la auditoría
+// post-M2: todas las pantallas usan estos tokens y `typography.ts`.
 //
 // Estos tokens son del CROMO (barras, FABs, paneles). Los colores del lienzo
 // dependen del tema y viven en `canvasThemes.ts`.

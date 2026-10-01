@@ -13,7 +13,7 @@ import {
   meters,
   degrees,
 } from './types';
-import { degreesToRadians, radiansToDegrees } from './coordinates';
+import { radiansToDegrees } from './coordinates';
 
 // ---------------------------------------------------------------------------
 // Helpers internos

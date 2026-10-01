@@ -79,25 +79,6 @@ export interface PhotoMarkerView {
 
 export type EditorTool = 'select' | 'wall' | 'door' | 'window' | 'column' | 'measure' | 'photo';
 
-/** Metadatos de cada herramienta — los consume la paleta de la UI. */
-export interface ToolDescriptor {
-  readonly tool: EditorTool;
-  readonly label: string;
-  readonly icon: string;
-  /** Qué hacer, en una línea, para el texto de ayuda contextual. */
-  readonly hint: string;
-}
-
-export const TOOLS: readonly ToolDescriptor[] = [
-  { tool: 'select', label: 'Seleccionar', icon: '⬚', hint: 'Toca un objeto para seleccionarlo; arrastra sus puntos para moverlo.' },
-  { tool: 'wall', label: 'Muro', icon: '╱', hint: 'Arrastra un dedo de extremo a extremo (o dos toques en Punto a punto). Dos dedos mueven la vista.' },
-  { tool: 'door', label: 'Puerta', icon: '⌷', hint: 'Toca sobre un muro para insertar una puerta en ese punto.' },
-  { tool: 'window', label: 'Ventana', icon: '⊞', hint: 'Toca sobre un muro para insertar una ventana en ese punto.' },
-  { tool: 'column', label: 'Columna', icon: '◉', hint: 'Toca para colocar una columna en esa posición.' },
-  { tool: 'measure', label: 'Medir', icon: '↔', hint: 'Toca el muro que vas a medir con el Huepa, luego pulsa Medir.' },
-  { tool: 'photo', label: 'Foto', icon: '◎', hint: 'Toca el punto desde el que quieres fotografiar; se abrirá la cámara.' },
-];
-
 /** Valores por defecto de los objetos que el editor crea. Editables en Ajustes. */
 export interface EditorDefaults {
   wallThickness: Meters;
@@ -206,7 +187,6 @@ export interface EditorState {
   readonly photoMarkers: readonly PhotoMarkerView[];
   readonly transform: CanvasTransform;
   readonly snapEnabled: boolean;
-  readonly gridEnabled: boolean;
   readonly nodeSnapEnabled: boolean;
   readonly canUndo: boolean;
   readonly canRedo: boolean;
@@ -267,6 +247,20 @@ export class EditorController {
   private creationVertical: CreationVertical = { wall: null, column: null };
   /** Muros por id, recalculado solo cuando cambia la lista de objetos. */
   private wallIndex: { objects: readonly RevitObjectBase[]; byId: Map<string, Wall> } | null = null;
+  /**
+   * Objetos y muros del alcance (nivel + fase). Decidir si un muro se ve en la
+   * planta activa resuelve sus restricciones y su perfil: hacerlo en cada
+   * consulta (la vista pregunta varias veces por render, y cada toque busca
+   * nodos) era el costo dominante con muchos muros. Se recalcula solo cuando
+   * cambian los objetos o el alcance (ambos se reemplazan, nunca se mutan).
+   */
+  private scopeCache: {
+    objects: readonly RevitObjectBase[];
+    level: LevelScope | null;
+    phase: PhaseScope | null;
+    scoped: readonly RevitObjectBase[];
+    walls: readonly Wall[];
+  } | null = null;
 
   constructor(params: {
     services: AppServices;
@@ -295,7 +289,6 @@ export class EditorController {
       photoMarkers: [],
       transform: this.canvas.getTransform(),
       snapEnabled: true,
-      gridEnabled: true,
       nodeSnapEnabled: true,
       canUndo: false,
       canRedo: false,
@@ -346,13 +339,27 @@ export class EditorController {
   // -------------------------------------------------------------------------
 
   /** Muros del nivel y la fase activos: los únicos que se tocan, enganchan o miden. */
-  get walls(): Wall[] {
-    return this.scopedObjects.filter((o): o is Wall => o instanceof Wall);
+  get walls(): readonly Wall[] {
+    return this.scope().walls;
   }
 
   /** Objetos del nivel activo, sin lo creado en fases posteriores a la activa. */
-  get scopedObjects(): RevitObjectBase[] {
-    return this.state.objects.filter((o) => this.inScope(o));
+  get scopedObjects(): readonly RevitObjectBase[] {
+    return this.scope().scoped;
+  }
+
+  private scope(): NonNullable<EditorController['scopeCache']> {
+    const c = this.scopeCache;
+    if (c && c.objects === this.state.objects && c.level === this.levelScope && c.phase === this.phaseScope) return c;
+    const scoped = this.state.objects.filter((o) => this.inScope(o));
+    this.scopeCache = {
+      objects: this.state.objects,
+      level: this.levelScope,
+      phase: this.phaseScope,
+      scoped,
+      walls: scoped.filter((o): o is Wall => o instanceof Wall),
+    };
+    return this.scopeCache;
   }
 
   /** Objetos de otros niveles visibles como calco atenuado. */
@@ -407,7 +414,16 @@ export class EditorController {
     this.phaseScope = phase;
     const sel = this.selected;
     if (sel && !this.inScope(sel)) this.patch({ selectedId: null });
-    void this.reload();
+    this.refresh();
+  }
+
+  /**
+   * Recarga sin esperar ni propagar el error (para llamarla desde la vista o
+   * desde un cambio de alcance): un fallo se avisa como cualquier otro, en
+   * vez de quedar como promesa rechazada sin manejar.
+   */
+  refresh(): void {
+    this.reload().catch((err) => this.fail(err, 'No se pudo leer la planta.'));
   }
 
   private markerOf(o: RevitObjectBase, key: string, scope: MarkerScope): string {
@@ -608,10 +624,6 @@ export class EditorController {
   }
 
   /** Valores con que se crean los objetos nuevos (espesor de muro, ancho de vano…). */
-  getDefaults(): EditorDefaults {
-    return this.defaults;
-  }
-
   setDefaults(partial: Partial<EditorDefaults>): void {
     this.defaults = { ...this.defaults, ...partial };
   }
@@ -619,10 +631,6 @@ export class EditorController {
   setSnapEnabled(enabled: boolean): void {
     this.snap.setEnabled(enabled);
     this.patch({ snapEnabled: enabled });
-  }
-
-  setGridEnabled(enabled: boolean): void {
-    this.patch({ gridEnabled: enabled });
   }
 
   setNodeSnapEnabled(enabled: boolean): void {
@@ -659,12 +667,6 @@ export class EditorController {
       ...transform,
       scale: Math.max(MIN_SCALE, Math.min(MAX_SCALE, transform.scale)),
     });
-    this.patch({ transform: this.canvas.getTransform() });
-  }
-
-  pan(dxPixels: number, dyPixels: number): void {
-    const t = this.canvas.getTransform();
-    this.canvas.setTransform({ ...t, offsetX: t.offsetX + dxPixels, offsetY: t.offsetY + dyPixels });
     this.patch({ transform: this.canvas.getTransform() });
   }
 
@@ -1446,23 +1448,6 @@ export class EditorController {
   // -------------------------------------------------------------------------
   // Internos
   // -------------------------------------------------------------------------
-
-  /**
-   * Snap combinado en el orden que fija Canvas2D-interacción.md: primero el
-   * snap a nodo existente (gana siempre, porque es lo que cierra la topología
-   * y evita las fugas de recinto), y solo si no hay nodo cerca, el snap
-   * angular respecto al vértice anterior.
-   */
-  private applySnaps(world: Point2D, previous: Point2D | undefined, tol: Meters): Point2D {
-    if (this.state.nodeSnapEnabled) {
-      const node = this.selection.findNearestNode({ worldPoint: world, walls: this.walls, thresholdMeters: tol });
-      if (node) return node;
-    }
-    if (previous !== undefined && this.state.snapEnabled) {
-      return this.snap.snapPoint(world, previous);
-    }
-    return world;
-  }
 
   /** Snap para el extremo de un muro que se está arrastrando. */
   private snapEndpoint(world: Point2D, otherEnd: Point2D): Point2D {

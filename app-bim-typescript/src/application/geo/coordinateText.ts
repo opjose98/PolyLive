@@ -10,7 +10,7 @@
 
 import type { Point2D } from '../../domain/geometry/types';
 import { toLocal } from '../../domain/geometry/handedness';
-import { crsDef, formatDms, formatMeters, workingCrs } from '../../domain/geo/crs';
+import { GridPoint, crsDef, formatDms, formatMeters, workingCrs } from '../../domain/geo/crs';
 import { Georeference, azimuthDegrees } from '../../domain/geo/georeference';
 import type { RealCoordinates } from './TopographyService';
 
@@ -55,8 +55,18 @@ export function coordinateRows(
 export function coordinateLabel(real: RealCoordinates | null, modelPoint: Point2D, display: CoordDisplay = 'grid'): string[] {
   if (real) {
     if (display === 'latlon') return [`${real.latLon.lat.toFixed(7)}`, `${real.latLon.lon.toFixed(7)}`];
-    return [`N ${formatMeters(real.grid.n, 2)}`, `E ${formatMeters(real.grid.e, 2)}`];
+    return gridLabel(real.grid);
   }
+  return localLabel(modelPoint);
+}
+
+/** Rótulo N/E. Los rótulos del lienzo lo usan directo: no necesitan lat/long (proj4). */
+export function gridLabel(g: GridPoint): string[] {
+  return [`N ${formatMeters(g.n, 2)}`, `E ${formatMeters(g.e, 2)}`];
+}
+
+/** Rótulo x/y local (Y arriba), sin amarre. */
+export function localLabel(modelPoint: Point2D): string[] {
   const l = toLocal(modelPoint);
   return [`x ${l.x.toFixed(2)}`, `y ${l.y.toFixed(2)}`];
 }

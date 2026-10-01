@@ -4,7 +4,7 @@
 // =============================================================================
 
 import { Command } from './Command';
-import { IObjectStore, RevitObjectId, RevitObjectBase } from '../../domain/objects';
+import { IObjectStore, RevitObjectId } from '../../domain/objects';
 
 /**
  * Marca un objeto como borrado. Undo restaura el objeto y todos sus dependientes.
@@ -16,7 +16,8 @@ import { IObjectStore, RevitObjectId, RevitObjectBase } from '../../domain/objec
  */
 export class DeleteObjectCommand extends Command {
   readonly type = 'DeleteObject' as const;
-  private readonly objectId: RevitObjectId;
+  /** Objeto que se pidió borrar (los demás de `deletedIds` son sus dependientes). */
+  readonly objectId: RevitObjectId;
   private readonly deletedIds: RevitObjectId[];
 
   constructor(objectId: RevitObjectId, deletedIds: RevitObjectId[]) {

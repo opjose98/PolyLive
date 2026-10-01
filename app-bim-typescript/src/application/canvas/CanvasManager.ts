@@ -15,7 +15,7 @@
 // PRESUPUESTO: snap + miter + transformaciones < 30ms (UI thread)
 // =============================================================================
 
-import { Point2D, CanvasTransform, Degrees, degrees } from '../../domain/geometry/types';
+import { Point2D, CanvasTransform, Degrees } from '../../domain/geometry/types';
 import {
   worldToScreen as domainWorldToScreen,
   screenToWorld as domainScreenToWorld,

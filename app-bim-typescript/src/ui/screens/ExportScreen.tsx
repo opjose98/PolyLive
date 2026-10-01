@@ -25,7 +25,8 @@ import { exportPlanDxf, exportRevitIfc } from '../workspace/exportActions';
 import { Room, RoomId, revitObjectId } from '../../domain/objects';
 import { ActionButton, alertDialog } from '../primitives';
 import { ReadonlyRow } from '../components/fields';
-import { colors, spacing, radius, typography } from '../theme/tokens';
+import { colors, spacing, radius } from '../design/tokens';
+import { type } from '../design/typography';
 
 // ---------------------------------------------------------------------------
 // Props y estado
@@ -56,8 +57,12 @@ export function ExportScreen({ services, roomId, projectId, projectName = 'Proye
 
 
   const loadRoom = useCallback(async () => {
-    const obj = await services.store.readObject(revitObjectId(roomId as unknown as string));
-    setRoom(obj instanceof Room ? obj : null);
+    try {
+      const obj = await services.store.readObject(revitObjectId(roomId as unknown as string));
+      setRoom(obj instanceof Room ? obj : null);
+    } catch {
+      setRoom(null);
+    }
   }, [services, roomId]);
 
   useEffect(() => {
@@ -198,19 +203,19 @@ export function ExportScreen({ services, roomId, projectId, projectName = 'Proye
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.surface2,
+    backgroundColor: colors.background,
   },
   content: {
     padding: spacing.lg,
     gap: spacing.lg,
   },
   title: {
-    ...typography.title,
-    color: colors.textPrimary,
+    ...type.title,
+    color: colors.text,
   },
   card: {
     backgroundColor: colors.surface,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     padding: spacing.lg,
     gap: spacing.sm,
   },
@@ -221,24 +226,24 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(211, 47, 47, 0.10)',
   },
   cardTitle: {
-    ...typography.heading,
-    color: colors.textPrimary,
+    ...type.heading,
+    color: colors.text,
   },
   muted: {
-    ...typography.body,
+    ...type.body,
     color: colors.textSecondary,
   },
   path: {
-    ...typography.mono,
-    color: colors.textPrimary,
+    ...type.value,
+    color: colors.text,
   },
   warningsTitle: {
-    ...typography.label,
+    ...type.label,
     color: colors.warning,
     marginTop: spacing.sm,
   },
   warningText: {
-    ...typography.caption,
+    ...type.caption,
     color: colors.textSecondary,
   },
 });

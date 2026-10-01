@@ -5,12 +5,9 @@
 
 import {
   Point2D,
-  Point3D,
-  Meters,
   Degrees,
   CanvasTransform,
   EPSILON,
-  meters,
   degrees,
 } from './types';
 
@@ -79,21 +76,8 @@ export function rotatePoint2D(point: Point2D, angle: Degrees): Point2D {
   };
 }
 
-/** Rota un punto 3D alrededor del eje Z por el ángulo dado. Z no se afecta. */
-export function rotatePoint3D_Z(point: Point3D, angle: Degrees): Point3D {
-  const rotated2D = rotatePoint2D(
-    { x: point.x as number, y: point.y as number },
-    angle,
-  );
-  return {
-    x: meters(rotated2D.x),
-    y: meters(rotated2D.y),
-    z: point.z,
-  };
-}
-
 // ---------------------------------------------------------------------------
-// Proyección y distancia punto-línea
+// Proyección punto-línea
 // ---------------------------------------------------------------------------
 
 /**
@@ -122,33 +106,4 @@ export function projectPointToLine(
     x: lineStart.x + clamped * dx,
     y: lineStart.y + clamped * dy,
   };
-}
-
-/**
- * Distancia de un punto a un segmento de línea (perpendicular clamped).
- */
-export function distancePointToLine(
-  point: Point2D,
-  lineStart: Point2D,
-  lineEnd: Point2D,
-): Meters {
-  const projected = projectPointToLine(point, lineStart, lineEnd);
-  const dx = point.x - projected.x;
-  const dy = point.y - projected.y;
-  return meters(Math.sqrt(dx * dx + dy * dy));
-}
-
-// ---------------------------------------------------------------------------
-// Comparación con tolerancia
-// ---------------------------------------------------------------------------
-
-/** Compara si dos puntos 2D son iguales dentro de una tolerancia. */
-export function pointsEqual(
-  p1: Point2D,
-  p2: Point2D,
-  tolerance: number = EPSILON,
-): boolean {
-  const dx = p1.x - p2.x;
-  const dy = p1.y - p2.y;
-  return Math.sqrt(dx * dx + dy * dy) < tolerance;
 }

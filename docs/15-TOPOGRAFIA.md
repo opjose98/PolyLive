@@ -103,11 +103,12 @@ de dos dedos en "norte arriba" (`northUpViewRotation`). Ver [14 §4](14-MODOS-DE
 
 Topografía **no edita muros** (sin arrastre ni trazo; no abre alzados).
 
-## 9. Legado
+## 9. Legado (eliminado)
 
-El Spike #7 (`SurveyControlPoint`, `SiteCoordinateSystem`, tabla `survey_control_points`, por sede) sigue en el
-dominio con sus tests, pero ya no tiene pantalla: `SurveyControlScreen` y su enlace en Ajustes se eliminaron.
-Candidato a migrar a `benchmarks` y borrar.
+El Spike #7 (`SurveyControlPoint`, `SiteCoordinateSystem`, tablas `sites` y `survey_control_points`, por sede) y
+su pantalla `SurveyControlScreen` se eliminaron en la auditoría post-M2 ([16](16-AUDITORIA-POST-M2.md)): la
+topografía vive solo en `domain/geo`. `OperatorId` pasó a `domain/objects/operator.ts` y `GpsCoordinates` a
+`domain/geo/gpsAverage.ts`. Las bases instaladas conservan esas tablas vacías; nada las lee.
 
 ## 10. Pruebas
 

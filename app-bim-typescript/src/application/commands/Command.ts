@@ -3,7 +3,7 @@
 // Basado en: Command-abstracción.md (Obsidian 02-Aplicación/comandos)
 // =============================================================================
 
-import { RevitObjectId, generateId, IObjectStore } from '../../domain/objects';
+import { generateId, IObjectStore } from '../../domain/objects';
 
 // ---------------------------------------------------------------------------
 // CommandId — Branded type

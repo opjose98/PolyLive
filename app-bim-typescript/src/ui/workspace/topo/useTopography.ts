@@ -18,7 +18,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useStore } from 'zustand';
 import type { Point2D } from '../../../domain/geometry/types';
 import type { CrsId, GridPoint, LatLon } from '../../../domain/geo/crs';
-import { Georeference, gridToModel, northFromLocalY, northUpViewRotation } from '../../../domain/geo/georeference';
+import { Georeference, gridToModel, modelToGrid, northFromLocalY, northUpViewRotation } from '../../../domain/geo/georeference';
+import type { Wall } from '../../../domain/objects/wall';
 import { latLonToGrid } from '../../../domain/geo/crs';
 import { ProjectBenchmark, Benchmark, isControlPoint } from '../../../domain/geo/benchmark';
 import type { GpsAverage } from '../../../domain/geo/gpsAverage';
@@ -26,7 +27,7 @@ import type { AppServices } from '../../../application/AppServices';
 import type { EditorController } from '../../../application/editor/EditorController';
 import type { PlanBenchmark } from '../../canvas/planRenderer';
 import { categoriesFor, findTool, TopoAction } from '../../../application/workspace/catalog';
-import { CoordDisplay, coordinateLabel, isGeoreferenced } from '../../../application/geo/coordinateText';
+import { CoordDisplay, coordinateLabel, gridLabel, isGeoreferenced, localLabel } from '../../../application/geo/coordinateText';
 import { workspaceStore } from '../../../state/workspaceStore';
 import { toast } from '../../primitives';
 import { haptic } from '../../design/haptics';
@@ -49,6 +50,11 @@ export interface TopographyInput {
 }
 
 const msg = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
+
+/** Promesa disparada desde un botón: un error se avisa, nunca queda sin manejar. */
+const guard = (p: Promise<unknown>, fallback: string) => {
+  p.catch((e) => toast(msg(e, fallback), { kind: 'error' }));
+};
 
 export function useTopography({ services, projectId, spaceId, editor, levelZ, operatorName, touchTolerancePx }: TopographyInput) {
   const topo = services.topography;
@@ -151,33 +157,40 @@ export function useTopography({ services, projectId, spaceId, editor, levelZ, op
 
   const showBenchmarks = (active || workMode === 'levantamiento') && filters.mojones;
 
-  const coordLabels = useMemo(() => {
-    if (!active) return [];
+  // Rótulo de un punto del dibujo. En planas (lo normal) basta la
+  // transformación de Helmert; lat/long (proj4) solo si se pide.
+  const labelAt = useCallback(
+    (p: Point2D): string[] => {
+      if (!isGeoreferenced(geo)) return localLabel(p);
+      return display === 'latlon' ? coordinateLabel(realOf(p), p, 'latlon') : gridLabel(modelToGrid(geo, spaceId, p));
+    },
+    [geo, display, realOf, spaceId],
+  );
+
+  // Rótulos fijos (vértices y mojones): se recalculan si cambian los muros,
+  // el amarre o los filtros; tocar un punto (la sonda) no los toca.
+  const walls = editor.walls;
+  const fixedLabels = useMemo(() => {
     const labels: { position: Point2D; lines: string[] }[] = [];
-    if (filters.coordenadas) {
-      if (filters.vertices) {
-        const seen = new Set<string>();
-        for (const w of editor.walls) {
-          for (const p of [w.startPoint, w.endPoint]) {
-            const k = `${p.x.toFixed(3)},${p.y.toFixed(3)}`;
-            if (seen.has(k)) continue;
-            seen.add(k);
-            labels.push({ position: p, lines: coordinateLabel(realOf(p), p, display) });
-          }
-        }
-      }
-      if (filters.mojones) {
-        for (const b of planBenchmarks) {
-          const pb = benchmarks.find((x) => x.id === b.id);
-          const real = pb ? topo.benchmarkCoordinates(geo, pb) : null;
-          labels.push({ position: b.position, lines: coordinateLabel(real, b.position, display) });
-        }
+    if (!active || !filters.coordenadas) return labels;
+    if (filters.vertices) {
+      for (const p of uniqueVertices(walls)) labels.push({ position: p, lines: labelAt(p) });
+    }
+    if (filters.mojones) {
+      const byId = new Map(benchmarks.map((b) => [b.id, b] as const));
+      for (const b of planBenchmarks) {
+        const pb = byId.get(b.id);
+        const real = pb?.latLon ? topo.benchmarkCoordinates(geo, pb) : null;
+        labels.push({ position: b.position, lines: real ? coordinateLabel(real, b.position, display) : labelAt(b.position) });
       }
     }
-    if (probe) labels.push({ position: probe, lines: coordinateLabel(realOf(probe), probe, display) });
     return labels;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, filters, editor.walls, planBenchmarks, benchmarks, probe, realOf, display, geo]);
+  }, [active, filters.coordenadas, filters.vertices, filters.mojones, walls, planBenchmarks, benchmarks, labelAt, topo, geo, display]);
+
+  const coordLabels = useMemo(
+    () => (active && probe ? [...fixedLabels, { position: probe, lines: labelAt(probe) }] : fixedLabels),
+    [active, probe, fixedLabels, labelAt],
+  );
 
   // --- Norte ---
   const georef = isGeoreferenced(geo);
@@ -376,16 +389,22 @@ export function useTopography({ services, projectId, spaceId, editor, levelZ, op
     },
     unlink: (b: ProjectBenchmark) =>
       projectId &&
-      void topo
-        .unlinkBenchmark(projectId, b.id)
-        .then(reload)
-        .then(() => {
-          if (selectedId === b.id) setSelectedId(null);
-          toast(`${b.name} quitado del proyecto (sigue en la biblioteca)`, { kind: 'info' });
-        }),
+      guard(
+        topo
+          .unlinkBenchmark(projectId, b.id)
+          .then(reload)
+          .then(() => {
+            if (selectedId === b.id) setSelectedId(null);
+            toast(`${b.name} quitado del proyecto (sigue en la biblioteca)`, { kind: 'info' });
+          }),
+        'No se pudo quitar el mojón',
+      ),
     link: (b: Benchmark) =>
-      projectId && void topo.linkFromLibrary(projectId, b.id).then(reload).then(() => toast(`${b.name} agregado al proyecto`, { kind: 'success' })),
-    rename: (b: ProjectBenchmark, name: string) => void topo.renameBenchmark(b.id, name, b.description).then(reload),
+      projectId &&
+      guard(
+        topo.linkFromLibrary(projectId, b.id).then(reload).then(() => toast(`${b.name} agregado al proyecto`, { kind: 'success' })),
+        'No se pudo agregar el mojón',
+      ),
   };
 
   const selectedBenchmark = benchmarks.find((b) => b.id === selectedId) ?? null;
@@ -453,8 +472,17 @@ export function useTopography({ services, projectId, spaceId, editor, levelZ, op
       } else return false;
       return true;
     },
-    setGpsSeconds: (s: number) => projectId && void topo.setGpsSeconds(projectId, s).then(reload),
+    setGpsSeconds: (s: number) => projectId && guard(topo.setGpsSeconds(projectId, s).then(reload), 'No se pudo guardar el tiempo del GPS'),
   };
 }
 
 export type Topography = ReturnType<typeof useTopography>;
+
+/** Extremos de muro sin repetir (las esquinas compartidas cuentan una vez). */
+export function uniqueVertices(walls: readonly Wall[]): Point2D[] {
+  const seen = new Map<string, Point2D>();
+  for (const w of walls) {
+    for (const p of [w.startPoint, w.endPoint]) seen.set(`${p.x.toFixed(3)},${p.y.toFixed(3)}`, p);
+  }
+  return [...seen.values()];
+}

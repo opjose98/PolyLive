@@ -141,6 +141,12 @@ export function ElevationView(props: ElevationViewProps) {
     [st, editor, width, height, severity, ws.grid, ws.filters.cotas, palette, visibleTypes],
   );
 
+  // Solo Levantamiento edita vanos; Avance y Revisión miran el alzado.
+  const editable = ws.workMode === 'levantamiento';
+  useEffect(() => {
+    if (!editable) setSheetOpen(false);
+  }, [editable]);
+
   // --- Gestos ---
   const onTap = useCallback(
     (x: number, y: number) => {
@@ -167,9 +173,9 @@ export function ElevationView(props: ElevationViewProps) {
     (x: number, y: number) => {
       const hit = editor.openingAt(x, y, TOUCH_TOL);
       if (hit) editor.select(hit.id);
-      setSheetOpen(true);
+      if (editable) setSheetOpen(true);
     },
-    [editor],
+    [editor, editable],
   );
 
   // --- BPC ---
@@ -207,14 +213,16 @@ export function ElevationView(props: ElevationViewProps) {
           value,
           onCommit: (v) => workspaceStore.getState().setToolProp(key, v),
         }))
-      : context.kind === 'selection'
+      : context.kind === 'selection' && editable
         ? (Object.entries(context.selection.props) as [PropKey, number][]).map(([key, value]) => ({
             key,
             value,
             onCommit: (v) => commitSel(key, v),
           }))
         : [];
-  const actions: BpcAction[] = [{ icon: 'tune-variant', label: sel ? 'Propiedades' : 'Detalles', onPress: () => setSheetOpen(true) }];
+  const actions: BpcAction[] = editable
+    ? [{ icon: 'tune-variant', label: sel ? 'Propiedades' : 'Detalles', onPress: () => setSheetOpen(true) }]
+    : [];
 
   const onZoom = useCallback(
     (a: ZoomAction) => {
@@ -244,7 +252,7 @@ export function ElevationView(props: ElevationViewProps) {
             onTap={onTap}
             onDoubleTap={() => editor.zoomToFit()}
             onLongPress={onLongPress}
-            onDragStart={(x, y) => ws.workMode === 'levantamiento' && editor.beginDrag(x, y, TOUCH_TOL)}
+            onDragStart={(x, y) => editable && editor.beginDrag(x, y, TOUCH_TOL)}
             onDragMove={(x, y) => editor.updateDrag(x, y, TOUCH_TOL)}
             onDragEnd={() => void editor.endDrag()}
             onDragCancel={() => editor.cancelDrag()}

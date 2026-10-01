@@ -3,7 +3,6 @@
 // Basado en: RevitObjectBase.md (Obsidian 01-Dominio/objetos-bim)
 // =============================================================================
 
-import { Point2D, Meters, SquareMeters } from '../geometry/types';
 
 // ---------------------------------------------------------------------------
 // Branded IDs — para seguridad de tipos

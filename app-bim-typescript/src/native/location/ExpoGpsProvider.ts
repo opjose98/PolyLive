@@ -21,7 +21,7 @@
 
 import * as Location from 'expo-location';
 import { meters, Meters } from '../../domain/geometry/types';
-import { GpsCoordinates } from '../../domain/objects/survey';
+import { GpsCoordinates } from '../../domain/geo/gpsAverage';
 import { AppError, AppErrorCode } from '../../shared/errors/AppError';
 
 export interface IGpsProvider {

@@ -72,68 +72,6 @@ CREATE TABLE IF NOT EXISTS audit_photos (
 `;
 
 /**
- * Tabla: polygon_drafts
- * Borradores de polígonos para recuperación (crash recovery).
- *
- * - vertices_json: array JSON de Point2D (progreso del trazo)
- * - is_closed: ¿el polígono se cerró antes del crash?
- */
-export const CREATE_POLYGON_DRAFTS = `
-CREATE TABLE IF NOT EXISTS polygon_drafts (
-  id              TEXT PRIMARY KEY NOT NULL,
-  room_id         TEXT NOT NULL,
-  vertices_json   TEXT NOT NULL DEFAULT '[]',
-  is_closed       INTEGER NOT NULL DEFAULT 0 CHECK(is_closed IN (0, 1)),
-  saved_at        TEXT NOT NULL DEFAULT (datetime('now'))
-);
-`;
-
-/**
- * Tabla: sites
- * Sistema de coordenadas de una Sede (Spike #7, SiteCoordinateSystem.md).
- *
- * - Una fila por Sede como máximo (site_id es PK) — modela la invariante
- *   "único por Sede" directamente en el esquema.
- * - INMUTABLE una vez insertada: ObjectStore.defineSiteCoordinateSystem()
- *   rechaza un INSERT si ya existe una fila para ese site_id — no hay
- *   sentencia UPDATE para esta tabla en todo el sistema.
- * - origin_json serializa un Point3D ({x,y,z} en metros).
- */
-export const CREATE_SITES = `
-CREATE TABLE IF NOT EXISTS sites (
-  site_id         TEXT PRIMARY KEY NOT NULL,
-  origin_json     TEXT NOT NULL,
-  north_rotation  REAL NOT NULL,
-  defined_at      TEXT NOT NULL,
-  defined_by      TEXT NOT NULL
-);
-`;
-
-/**
- * Tabla: survey_control_points
- * Mojones/benchmarks topográficos (Spike #7, SurveyControlPoint.md).
- *
- * - Pertenecen a una Sede completa (site_id), no a un Recinto — por eso no
- *   viven en `revit_objects` (que exige room_id NOT NULL).
- * - En MVP v0.1 son referencia documental: local_coordinates_json y
- *   gps_json no se usan en ningún cálculo de geometría BIM.
- */
-export const CREATE_SURVEY_CONTROL_POINTS = `
-CREATE TABLE IF NOT EXISTS survey_control_points (
-  id                      TEXT PRIMARY KEY NOT NULL,
-  site_id                 TEXT NOT NULL,
-  local_coordinates_json  TEXT NOT NULL,
-  gps_json                TEXT NOT NULL,
-  name                    TEXT,
-  notes                   TEXT,
-  captured_at             TEXT NOT NULL,
-  is_deleted              INTEGER NOT NULL DEFAULT 0 CHECK(is_deleted IN (0, 1)),
-  created_at              TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at              TEXT NOT NULL DEFAULT (datetime('now'))
-);
-`;
-
-/**
  * Tabla: operators
  * Perfil mínimo de la persona que realiza el levantamiento — ver el
  * comentario de alcance en domain/objects/operator.ts (solo `name`, sin
@@ -310,12 +248,6 @@ CREATE INDEX IF NOT EXISTS idx_measurements_wall_id
 CREATE INDEX IF NOT EXISTS idx_audit_photos_room_id
   ON audit_photos(room_id);
 
-CREATE INDEX IF NOT EXISTS idx_polygon_drafts_room_id
-  ON polygon_drafts(room_id);
-
-CREATE INDEX IF NOT EXISTS idx_survey_control_points_site_id
-  ON survey_control_points(site_id) WHERE is_deleted = 0;
-
 CREATE INDEX IF NOT EXISTS idx_project_spaces_project
   ON project_spaces(project_id) WHERE is_deleted = 0;
 
@@ -337,9 +269,6 @@ export const ALL_DDL: string[] = [
   CREATE_REVIT_OBJECTS,
   CREATE_MEASUREMENTS,
   CREATE_AUDIT_PHOTOS,
-  CREATE_POLYGON_DRAFTS,
-  CREATE_SITES,
-  CREATE_SURVEY_CONTROL_POINTS,
   CREATE_OPERATORS,
   CREATE_PROJECTS,
   CREATE_PROJECT_SPACES,
