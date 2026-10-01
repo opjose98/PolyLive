@@ -1,3 +1,11 @@
+// =============================================================================
+// primitives — Piezas básicas de la interfaz (botones, hojas, diálogos…)
+// =============================================================================
+//
+// Todas toman los colores del modo y del tema (ver design/theme.ts). Las
+// pantallas importan desde aquí, nunca de los archivos sueltos.
+// =============================================================================
+
 export { Icon } from './Icon';
 export type { IconName } from './Icon';
 export { Tappable } from './Tappable';

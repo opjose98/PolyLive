@@ -2,7 +2,7 @@
 name: CDT-casos-prueba
 description: 12 casos de prueba con input/output exacto para validar triangulación CDT.
 type: testing
-depends-on: "[[CDT-algoritmo]], [[tipos-geométricos]]"
+depends-on: "[[CDT-algoritmo]], [[tipos-geometricos]]"
 mentioned-in: "geometry-kernel-test-cases.md, estrategia-testing-y-fixtures.md §1.1"
 tags: #geometría #testing #validation
 ---
@@ -120,7 +120,7 @@ Casos de prueba unitarios para [[CDT-algoritmo]], con input/output conocido. Cor
 
 **Input:** Último vértice a 4cm del primero
 
-**Expected:** Este test valida la **integración** `isClosed()` → snapeo → `triangulate()` (ver [[Room-especificación]]).
+**Expected:** Este test valida la **integración** `isClosed()` → snapeo → `triangulate()` (ver [[Room-especificacion]]).
 
 **Propósito:** No testea CDT aislado, sino el flujo completo de cierre.
 

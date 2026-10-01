@@ -2,7 +2,7 @@
 name: estrategia-unit-testing
 description: Estrategia de unit testing para cada capa — qué testear, cómo aislar, fixtures.
 type: testing
-depends-on: "[[tipos-geométricos]], [[RevitObjectBase]], [[CreateWallUseCase]]"
+depends-on: "[[tipos-geometricos]], [[RevitObjectBase]], [[CreateWallUseCase]]"
 mentioned-in: "Maestro §13, matriz-trazabilidad"
 tags: #testing #unit #strategy
 ---

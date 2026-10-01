@@ -9,7 +9,9 @@
 //   3. Todos Walls: thickness > 0 (error)
 //   4. Todos vanos: Wall padre válido (error)
 //   5. Todos Rooms: levelId definido (error)
-//   6. SiteCoordinateSystem definido (warning, posición será {0,0})
+//   6. Proyecto georreferenciado (warning: sin amarre, el sitio queda en {0,0}).
+//      Lo alimenta la Georeference del proyecto (domain/geo, M2); en M2b se
+//      escribirá como IfcMapConversion.
 //   7. Sin objetos is_deleted = true (excluir automáticamente)
 //   8. Archivo .ifc escribible (error I/O) — validado externamente
 // =============================================================================
@@ -26,20 +28,20 @@ import { GateValidationEntry, GateValidationResult } from './types';
  *
  * @param room     — el Room a exportar
  * @param objects  — todos los objetos BIM del Room (Walls, Doors, Windows, Columns, Floor)
- * @param options  — opciones adicionales (hasSiteCoordinateSystem, canWriteFile)
+ * @param options  — opciones adicionales (hasGeoreference, canWriteFile)
  * @returns GateValidationResult con entries y valid (true si no hay errors)
  */
 export function validate8Criteria(
   room: Room,
   objects: RevitObjectBase[],
   options?: {
-    hasSiteCoordinateSystem?: boolean;
+    hasGeoreference?: boolean;
     canWriteFile?: boolean;
   }
 ): GateValidationResult {
   const entries: GateValidationEntry[] = [];
   const opts = {
-    hasSiteCoordinateSystem: options?.hasSiteCoordinateSystem ?? true,
+    hasGeoreference: options?.hasGeoreference ?? true,
     canWriteFile: options?.canWriteFile ?? true,
   };
 
@@ -125,13 +127,13 @@ export function validate8Criteria(
   }
 
   // -------------------------------------------------------------------------
-  // Criterio 6: SiteCoordinateSystem definido (warning)
+  // Criterio 6: proyecto georreferenciado (warning)
   // -------------------------------------------------------------------------
-  if (!opts.hasSiteCoordinateSystem) {
+  if (!opts.hasGeoreference) {
     entries.push({
       criterion: 6,
       severity: 'warning',
-      message: 'SiteCoordinateSystem no definido — posición será (0,0)',
+      message: 'Proyecto sin georreferencia: el sitio quedará en (0,0)',
     });
   }
 

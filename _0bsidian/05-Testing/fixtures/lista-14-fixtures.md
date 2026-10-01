@@ -2,7 +2,7 @@
 name: lista-14-fixtures
 description: Definición de 14 fixtures (test data) reutilizables en todos los tests.
 type: testing
-depends-on: "[[RevitObjectBase]], [[tipos-geométricos]], [[estrategia-unit-testing]]"
+depends-on: "[[RevitObjectBase]], [[tipos-geometricos]], [[estrategia-unit-testing]]"
 mentioned-in: "Spike #2-5 tests usaron fixtures"
 tags: #testing #fixtures #test-data
 ---

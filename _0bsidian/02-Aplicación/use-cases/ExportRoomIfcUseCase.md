@@ -2,7 +2,7 @@
 name: ExportRoomIfcUseCase
 description: UseCase para exportar un Recinto a IFC — orquesta validación, generación en worker, y guardado.
 type: aplicación
-depends-on: "[[Room-especificación]], [[IFCSerializer]], [[ExportValidationService]]"
+depends-on: "[[Room-especificacion]], [[IFCSerializer]], [[ExportValidationService]]"
 mentioned-in: "Maestro §9, arquitectura-aplicacion-v1.md §7"
 tags: #usecase #export #ifc
 ---

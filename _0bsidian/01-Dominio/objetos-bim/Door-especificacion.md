@@ -2,7 +2,7 @@
 name: Door-especificación
 description: Puerta — vano en muro, con dimensiones y propiedades de acceso.
 type: dominio
-depends-on: "[[RevitObjectBase]], [[Wall-especificación]], [[proyecciones-punto-muro]]"
+depends-on: "[[RevitObjectBase]], [[Wall-especificacion]], [[proyecciones-punto-muro]]"
 mentioned-in: "Maestro §6.3, [[matriz-reglas-de-negocio]]"
 tags: #objetos-bim #vano #door
 ---
@@ -37,7 +37,7 @@ class Door extends RevitObjectBase {
 
 ## Invariantes
 
-- `parentWallId` es REQUERIDO y siempre válido (referencia a [[Wall-especificación]] existente)
+- `parentWallId` es REQUERIDO y siempre válido (referencia a [[Wall-especificacion]] existente)
 - `offsetAlongWall >= 0 && offsetAlongWall + width <= wall.length` (restricción suave — warning si se viola)
 - `offsetPerpendicular` debe estar dentro del espesor del muro (restricción suave)
 - `width > 0 && height > 0`
@@ -57,11 +57,11 @@ Ver [[pseudocodigo-step-ifc.md]] §4.2: genera `IfcOpeningElement` dentro del `I
 ## Relacionado con
 
 - [[RevitObjectBase]] — clase padre
-- [[Wall-especificación]] — muro padre (requerido)
-- [[Window-especificación]] — similar, pero ventana
+- [[Wall-especificacion]] — muro padre (requerido)
+- [[Window-especificacion]] — similar, pero ventana
 - [[proyecciones-punto-muro]] — cálculo de offsetAlongWall y offsetPerpendicular
 - [[DoorWindowValidationService]] — validación
-- [[Room-especificación]] — contiene muro que contiene puerta (jerarquía)
+- [[Room-especificacion]] — contiene muro que contiene puerta (jerarquía)
 
 ---
 

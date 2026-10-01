@@ -21,6 +21,8 @@ afirmación es [[trazabilidad-nota-codigo-test]].
 
 | Si quieres... | Lee |
 |---|---|
+| ver qué herramientas hay y en qué estado | **[[estado-y-capitulos]]** |
+| entender los modos (Levantamiento, Topografía…) | [[modos-de-trabajo]] |
 | saber dónde está cada funcionalidad en la app | [[mapa-de-navegacion]] |
 | verificar que la bóveda corresponde al código | [[trazabilidad-nota-codigo-test]] |
 | entender qué se arregló en la unificación con LevON | [[bugs-corregidos-unificacion]] |
@@ -41,8 +43,13 @@ afirmación es [[trazabilidad-nota-codigo-test]].
 [[snap-angular]] · [[proyecciones-punto-muro]] · [[transformaciones-coordenadas]] ·
 [[sistema-coordenadas-6-capas]]
 
-### Topografía
-[[SiteCoordinateSystem]] · [[SurveyControlPoint]] · [[gpsAnchor-referencia]]
+### Topografía (M2)
+[[Georreferencia-proyecto]] · [[CRS-MAGNA-SIRGAS]] · [[Mojones-biblioteca]] · [[GPS-promediado]] ·
+[[gpsAnchor-referencia]]
+*Legado eliminado:* [[SiteCoordinateSystem]] · [[SurveyControlPoint]]
+
+### Niveles, fases y restricciones
+[[Niveles-y-fases]] · [[Restricciones-verticales]]
 
 ### Validación
 [[matriz-reglas-de-negocio]] · [[WallValidationService]] · [[RoomValidationService]] ·
@@ -66,8 +73,12 @@ afirmación es [[trazabilidad-nota-codigo-test]].
 [[UpdateObjectPropertyUseCase]] · [[CaptureMeasurementUseCase]] · [[CapturePhotoUseCase]] ·
 [[LinkPhotoToObjectUseCase]] · [[ExportRoomIfcUseCase]]
 
-### Editor y servicios *(nuevos)*
-[[EditorController]] · [[SelectionService]] · [[ProjectService]] · [[WallElevationService]]
+### Editor y servicios
+[[EditorController]] · [[ElevationEditor]] · [[SelectionService]] · [[ProjectService]] ·
+[[WallElevationService]] · [[TopographyService]]
+
+### Espacio de trabajo
+[[modos-de-trabajo]] · [[catalogo-herramientas]] · [[alcance-nivel-fase]]
 
 ---
 
@@ -84,8 +95,8 @@ afirmación es [[trazabilidad-nota-codigo-test]].
 
 ## 04 — UI / UX
 
-[[Canvas2D-interacción]] · [[gestión-estado-Zustand]] · [[presupuesto-frame]] ·
-**[[mapa-de-navegacion]]** · **[[sistema-de-diseño]]**
+[[Canvas2D-interacción]] · **[[capa-viva-y-camara]]** · [[gestión-estado-Zustand]] · [[presupuesto-frame]] ·
+**[[mapa-de-navegacion]]** · **[[sistema-de-diseño]]** · **[[convenciones-de-dibujo]]** · [[uso-a-una-mano]]
 
 ---
 
@@ -108,7 +119,7 @@ afirmación es [[trazabilidad-nota-codigo-test]].
 
 ## 06 — Referencias cruzadas
 
-**[[trazabilidad-nota-codigo-test]]** · **[[bugs-corregidos-unificacion]]**
+**[[trazabilidad-nota-codigo-test]]** · **[[bugs-corregidos-unificacion]]** · **[[auditoria-post-M2]]**
 
 ---
 
@@ -131,7 +142,7 @@ Lo portado:
 | `EditorController` | [[EditorController]] |
 | `DxfExporter` | [[DXF-R2000]] |
 | SPDS (fotos de campo con marcador) | [[PhotoMarker-SPDS]] |
-| `levon_tokens.dart` | [[sistema-de-diseño]] |
+| `levon_tokens.dart` | [[sistema-de-diseño]] (hoy: tema por modo) |
 | Painters de planta y elevación | `ui/canvas/planRenderer.ts`, `ui/canvas/elevationRenderer.ts` |
 
 Lo **no** portado, y por qué:
@@ -141,5 +152,5 @@ Lo **no** portado, y por qué:
   explícita: ver [[WallElevation-MEM]].
 - **Archivos `.levon` (ZIP con JSON)** — PolyLive persiste en SQLite. Un segundo formato de
   persistencia sería una segunda fuente de verdad.
-- **Riverpod / GoRouter** — equivalentes de Flutter que aquí cubren Zustand y React Navigation.
+- **Riverpod / GoRouter** — equivalentes de Flutter; aquí cubren Zustand y la navegación propia (sin React Navigation desde F5).
 - **Export PDF** — LevON lo declaraba pero no lo implementó. No hay nada que portar.

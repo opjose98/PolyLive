@@ -1,3 +1,11 @@
+// =============================================================================
+// Icon — Íconos MaterialCommunityIcons con el color del tema por defecto
+// =============================================================================
+//
+// Los catálogos guardan el nombre como texto; un test verifica que todos
+// existan en la fuente. Sin `color`, toma el texto del tema activo.
+// =============================================================================
+
 import React from 'react';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { StyleProp, TextStyle } from 'react-native';

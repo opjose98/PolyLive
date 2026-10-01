@@ -1,22 +1,22 @@
 // =============================================================================
 // ExpoGpsProvider.ts — Lectura de posición GPS sobre expo-location
-// Basado en: gpsAnchor-referencia.md, SurveyControlPoint.md,
+// Basado en: gpsAnchor-referencia.md, docs/15-TOPOGRAFIA.md,
 //            permissions-ios-android.md
 // =============================================================================
 //
 // GAP CERRADO: `expo-location` estaba declarado en package.json y el único
 // archivo que lo importaba era PermissionsManager — solo para PEDIR el permiso.
-// Nunca se leía una posición. El resultado: `SurveyControlPoint` exige unas
-// `GpsCoordinates` con `accuracy > 0`, y no existía ninguna forma de obtenerlas
-// en la app; cualquier pantalla de topografía habría tenido que inventarlas.
+// Nunca se leía una posición. Hoy la usan la foto de campo (geoetiqueta) y la
+// sugerencia del sistema de coordenadas en Topografía; el promedio de un punto
+// GPS lo hace GpsAverager, que observa la posición durante N segundos.
 //
 // CONTRATO: `IGpsProvider` deja la capa de aplicación independiente de Expo, lo
 // que permite inyectar un proveedor fijo en tests y en el modo de escritorio.
 //
 // INVARIANTE QUE ESTA CLASE SOSTIENE: nunca devuelve `accuracy <= 0`. Android
 // e iOS pueden entregar `accuracy: null` (sin estimación) o 0; aceptarlo tal
-// cual haría estallar el constructor de SurveyControlPoint más tarde, lejos de
-// la causa. Aquí se convierte en un error explícito o en el peor caso conocido.
+// cual haría creer que un punto es exacto. Aquí se convierte en un error
+// explícito o en el peor caso conocido.
 // =============================================================================
 
 import * as Location from 'expo-location';
@@ -106,8 +106,8 @@ export class ExpoGpsProvider implements IGpsProvider {
     const { latitude, longitude, altitude, accuracy } = position.coords;
 
     // El sistema puede devolver `null` en accuracy (sin estimación disponible).
-    // Se rechaza en vez de sustituirlo por un número inventado: la invariante
-    // de SurveyControlPoint es precisamente "nunca asumir precisión perfecta".
+    // Se rechaza en vez de sustituirlo por un número inventado: la regla es
+    // "nunca asumir precisión perfecta" (ver GpsCoordinates en domain/geo).
     if (accuracy == null || !(accuracy > 0)) {
       throw new AppError({
         code: AppErrorCode.GPS_UNAVAILABLE,

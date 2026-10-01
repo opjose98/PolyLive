@@ -2,7 +2,7 @@
 name: CloseRoomCommand
 description: Comando para cerrar un Recinto — almacena área anterior (nullptr) para undo.
 type: aplicación
-depends-on: "[[Command-abstracción]], [[Room-especificación]]"
+depends-on: "[[Command-abstracción]], [[Room-especificacion]]"
 mentioned-in: "arquitectura-aplicacion-v1.md §2.3"
 tags: #command #room #close
 ---

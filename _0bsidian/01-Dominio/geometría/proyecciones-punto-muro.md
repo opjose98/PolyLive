@@ -2,7 +2,7 @@
 name: proyecciones-punto-muro
 description: Proyección de punto al sistema local del muro — offset perpendicular para vanos (puertas, ventanas).
 type: dominio
-depends-on: "[[tipos-geométricos]], [[sistema-coordenadas-6-capas]]"
+depends-on: "[[tipos-geometricos]], [[sistema-coordenadas-6-capas]]"
 mentioned-in: "Maestro §4.3, pseudocodigo-step-ifc.md §4.2"
 tags: #geometría #core #parametrización
 ---
@@ -85,9 +85,9 @@ function isVanoWithinWall(vano: VanoDimensions, wall: Wall): boolean {
 
 ## Relacionado con
 
-- [[tipos-geométricos]] — usa Point2D, Meters
+- [[tipos-geometricos]] — usa Point2D, Meters
 - [[sistema-coordenadas-6-capas]] — coordenadas locales del Room
-- [[Door-especificación]], [[Window-especificación]] — usan estas coordenadas
+- [[Door-especificacion]], [[Window-especificacion]] — usan estas coordenadas
 - [[pseudocodigo-step-ifc.md]] — exportación IFC usa estos offsets
 
 ---

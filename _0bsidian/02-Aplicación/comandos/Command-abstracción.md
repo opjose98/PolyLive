@@ -69,7 +69,7 @@ Los 18 comandos se organizan en categorías:
 
 - [[CreateWallCommand]], [[MoveWallCommand]], etc. — implementaciones específicas
 - [[CommandStack]] — gestor de undo/redo
-- [[arquitectura-aplicacion-v1.md]] — lista de 18 comandos
+- [[arquitectura-aplicacion-v1]] — lista de 18 comandos
 
 ---
 

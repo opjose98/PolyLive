@@ -2,7 +2,7 @@
 name: CreateWallCommand
 description: Comando para crear un Wall — almacena el muro para undo.
 type: aplicación
-depends-on: "[[Command-abstracción]], [[Wall-especificación]]"
+depends-on: "[[Command-abstracción]], [[Wall-especificacion]]"
 mentioned-in: "arquitectura-aplicacion-v1.md §2.3"
 tags: #command #wall #create
 ---

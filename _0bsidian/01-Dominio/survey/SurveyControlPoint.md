@@ -2,10 +2,14 @@
 name: SurveyControlPoint
 description: Mojones/benchmarks topográficos — puntos de control para posicionamiento de múltiples Recintos.
 type: dominio
-depends-on: "[[tipos-geométricos]], [[sistema-coordenadas-6-capas]]"
+depends-on: "[[tipos-geometricos]], [[sistema-coordenadas-6-capas]]"
 mentioned-in: "Maestro §4.3.2, estrategia-testing-y-fixtures.md"
 tags: #survey #topografía #control-point
 ---
+
+> **LEGADO — eliminado en la [[auditoria-post-M2]].** Los mojones viven en una biblioteca común:
+> ver [[Mojones-biblioteca]] y [[GPS-promediado]]. Esta nota queda como historia del Spike #7.
+
 
 # SurveyControlPoint — Punto de Control Topográfico
 
@@ -65,7 +69,7 @@ En pseudocodigo-step-ifc.md §4.3, se exporta como:
 
 - [[sistema-coordenadas-6-capas]] — usa coordenadas Site + Geographic
 - [[SiteCoordinateSystem]] — los ControlPoints ayudan a definir el sistema
-- [[Room-especificación]] — múltiples Rooms se alinean con ControlPoints
+- [[Room-especificacion]] — múltiples Rooms se alinean con ControlPoints
 - [[estrategia-testing-y-fixtures.md]] — fixture `site-with-control-points.json`
 
 ---

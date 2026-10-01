@@ -1,99 +1,46 @@
 ---
 name: sistema-de-diseño
-description: Tokens de color, espaciado, tipografía y reglas táctiles. Portado de LevON.
+description: Tema por modo × tono (claro, oscuro, alto contraste), tokens, tipografía y estilos con caché.
 type: ui-ux
-depends-on: "[[presupuesto-frame]], [[Canvas2D-interacción]]"
-mentioned-in: "[[mapa-de-navegacion]], [[trazabilidad-nota-codigo-test]]"
-tags: #ui-ux #diseño #tokens #portado-de-levon
+depends-on: "[[modos-de-trabajo]], [[presupuesto-frame]]"
+mentioned-in: "[[mapa-de-navegacion]], [[convenciones-de-dibujo]], [[trazabilidad-nota-codigo-test]]"
+tags: #ui-ux #diseño #tema #tokens
 ---
 
 # Sistema de diseño
 
-## Por qué existe
+Código: `ui/design/theme.ts` (colores), `ui/design/tokens.ts` (espacios, radios, tamaños, sombras — **sin
+colores**), `ui/design/typography.ts` (Roboto), `ui/design/canvasThemes.ts` (paletas del lienzo),
+`ui/design/motion.ts` (duraciones), `ui/design/haptics.ts`. Detalle: `docs/17-TEMA-FLUIDEZ-Y-DIBUJO.md`.
 
-Antes de `src/ui/theme/tokens.ts`, cada pantalla declaraba sus propios colores literales en su
-`StyleSheet` (`#2C3E50`, `#DEE2E6`, `#6C757D`…).
+Historia: LevON (navy + amarillo) → mockup (ámbar) en F0 → `ui/theme/tokens.ts` eliminado en la
+[[auditoria-post-M2]] → tema por modo en PR #11.
 
-El resultado era que **el mismo concepto** —una superficie, un borde, un texto secundario— tenía
-valores distintos según la pantalla, y no había ninguna forma de tocar la identidad visual sin
-recorrer las once pantallas a mano.
+## Dos ejes
 
-**Regla: las pantallas no declaran colores literales. Si falta un token, se añade al archivo.**
+- **Modo → acento**: ámbar / verde / azul / morado (los colores de los íconos de [[modos-de-trabajo]]).
+- **Tema → tono**: claro, oscuro, alto contraste (sol directo).
 
-## Paleta
+`chromeColors(tema, modo)` y `canvasPaletteFor(tema, modo)`: 12 combinaciones precalculadas. El lienzo usa
+la misma: trazo en curso, selección, snap y recinto en el color del modo.
 
-La identidad (navy + amarillo) viene de LevON (`levon_tokens.dart`), que es la decisión de producto
-ya tomada. Los grises y superficies se reconcilian con los que PolyLive ya usaba, para que la
-migración no cambie el aspecto de nada que ya estaba bien.
+## Uso
 
-| Grupo | Tokens |
-|---|---|
-| Marca | `navy` `navyLight` `yellow` `yellowDark` |
-| Canvas | `canvasBg` `grid` `gridMajor` `wallStructural` `wallPartition` `wallPreview` `vanoStroke` `columnFill` `snapNode` `nodeColor` `selectStroke` `selectFill` `handleFill` `handleStroke` `roomFill` `roomStroke` `photoMarker` |
-| Feedback | `error` `warning` `success` `info` |
-| Superficies | `surface` `surface2` `surface3` `divider` `overlayScrim` |
-| Texto | `textPrimary` `textSecondary` `textDisabled` `textOnDark` |
-
-## Escalas
-
-- **Espaciado**: 4 / 8 / 12 / 16 / 24 / 32 (escala de 4 pt)
-- **Radios**: 4 / 8 / 12 / 16 / 24 / pill
-- **Tipografía**: `title` `heading` `body` `bodyStrong` `label` `caption` `mono`
-
-## Reglas táctiles
-
-```typescript
-touchTargetMin:   44   // radio táctil mínimo en píxeles
-touchTolerancePx: 22   // tolerancia de acierto = la mitad del objetivo visual
-handleRadiusPx:    7   // radio de dibujo de los handles
+```ts
+const useStyles = themedStyles((colors) => ({ box: { backgroundColor: colors.surface } }));
+function X() { const styles = useStyles(); const colors = useTheme(); /* … */ }
 ```
 
-La tolerancia se convierte a metros para hablar con [[SelectionService]]:
+Hojas de estilo en caché por paleta: cambiar de modo o tema cuesta un render.
 
-```typescript
-touchToleranceMeters(px, escala) = px / escala
-```
+## Claves
 
-Un único sitio donde vive esa fórmula, para que ninguna pantalla la reinvente y la desincronice.
+`accent` (relleno), `accentText` (texto/bordes), `accentSoft`, `textOnAccent`, `surface`, `background`,
+`border`, `text`, `textSecondary`, `textDisabled`, `tooltip` / `tooltipText` / `tooltipAccent` (rótulos
+invertidos), `glass` (sobre el lienzo), `scrim`, semánticos, `hairline`, `isDark`, `sideB`.
 
-## Campos numéricos: la decisión que importa
+## Reglas
 
-`NumberField` edita el valor **como texto** y solo lo confirma al perder el foco o al pulsar
-"hecho".
-
-Un `onChangeText` que parseara y persistiera en cada pulsación haría **imposible escribir "0.15"**:
-al teclear `0.` el parseo da `0`, el valor se normaliza a `"0"` y el punto desaparece bajo el dedo.
-
-Es el fallo clásico de los formularios numéricos en móvil, y en campo, con guantes, es inutilizable.
-
-Además se acepta **coma decimal**: el teclado numérico de muchos Android en español ofrece `,` y no
-`.`, y rechazarla haría el campo intocable.
-
-## Reglas de dibujo en el canvas
-
-Ver [[presupuesto-frame]].
-
-- **El espesor del muro se dibuja a escala, con un mínimo de 2 px.** A zoom bajo, `0.15 m × 5 px/m`
-  = 0,75 px: el muro desaparecería.
-- **La rejilla usa paso adaptativo** (entre 20 y 100 px por celda). Un paso fijo se vuelve una
-  mancha sólida al alejar —miles de líneas por frame, justo lo que se come el presupuesto de 16 ms—
-  y desaparece al acercar.
-- **La rejilla está anclada al origen del MUNDO**, no a la esquina del viewport. Si se anclara al
-  viewport, resbalaría al panear y dejaría de servir de referencia métrica.
-- **Una cota ilegible es peor que ninguna.** Por debajo de 40 px de muro en pantalla, la longitud no
-  se rotula: se solaparía con el muro contiguo.
-- **El caché de tipografías es estático.** Se instancia un `SkiaCanvasAdapter` en cada repintado, así
-  que un caché de instancia no llegaría a reutilizarse nunca y `matchFont` se llamaría docenas de
-  veces por frame.
-
-## Accesibilidad
-
-Todos los controles llevan `accessibilityRole`, `accessibilityLabel` y, cuando el efecto no es
-evidente, `accessibilityHint`. Los toggles usan `accessibilityState.checked`; los selectores,
-`accessibilityState.selected`.
-
-## Código
-
-- `src/ui/theme/tokens.ts`
-- `src/ui/components/fields.tsx`
-- `src/ui/components/ToolPalette.tsx`
+- Ningún color literal en las pantallas (salvo la cámara).
+- Objetivos táctiles ≥ 44 px; tolerancia de acierto en el lienzo 22 px.
+- Transiciones cortas: 80 / 140 / 200 / 300 ms.

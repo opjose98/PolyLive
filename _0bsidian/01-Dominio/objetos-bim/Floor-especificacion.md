@@ -2,7 +2,7 @@
 name: Floor-especificación
 description: Piso/Losa — plano horizontal de cierre del Recinto, materialización implícita al cerrar.
 type: dominio
-depends-on: "[[RevitObjectBase]], [[Room-especificación]]"
+depends-on: "[[RevitObjectBase]], [[Room-especificacion]]"
 mentioned-in: "Maestro §6.5, §6.6, [[CloseRoomUseCase]]"
 tags: #objetos-bim #floor #superficie
 ---
@@ -65,7 +65,7 @@ Ver [[pseudocodigo-step-ifc.md]] §4.4: genera `IfcSlab` (tipo FLOOR) con geomet
 ## Relacionado con
 
 - [[RevitObjectBase]] — clase padre
-- [[Room-especificación]] — contiene Floor (1:1)
+- [[Room-especificacion]] — contiene Floor (1:1)
 - [[CloseRoomUseCase]] — materializa Floor implícito
 
 ---

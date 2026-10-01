@@ -2,7 +2,7 @@
 name: serializador-IFC-general
 description: Cómo se genera un archivo .ifc válido — STEP format, GUIDs, entidades BIM.
 type: infraestructura
-depends-on: "[[Room-especificación]], [[Wall-especificación]], [[Door-especificación]]"
+depends-on: "[[Room-especificacion]], [[Wall-especificacion]], [[Door-especificacion]]"
 mentioned-in: "pseudocodigo-step-ifc.md, Maestro §9"
 tags: #ifc #export #serialización
 ---

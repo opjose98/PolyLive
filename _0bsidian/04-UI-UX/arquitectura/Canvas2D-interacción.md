@@ -7,6 +7,10 @@ mentioned-in: "Maestro §11, arquitectura-aplicacion-v1.md §C"
 tags: #canvas #ui #interacción
 ---
 
+> **ESTADO — ampliado.** El lienzo actual (gestos, cámara en el hilo UI, capa viva) está en
+> [[capa-viva-y-camara]]; la representación de cada elemento en [[convenciones-de-dibujo]].
+
+
 # Canvas2D — Interacción
 
 ## Resumen

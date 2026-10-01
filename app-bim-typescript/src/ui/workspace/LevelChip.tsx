@@ -1,3 +1,12 @@
+// =============================================================================
+// LevelChip — Dónde estás: nivel y fase activos (o el muro, en alzado)
+// =============================================================================
+//
+// Rótulo discreto bajo la BPC. El nivel activo es donde nace lo que se crea;
+// verlo siempre evita dibujar en el piso equivocado. Fondo translúcido del
+// tema (`glass`) para leerse sobre cualquier lienzo.
+// =============================================================================
+
 import React from 'react';
 import { Text } from 'react-native';
 import { useStore } from 'zustand';

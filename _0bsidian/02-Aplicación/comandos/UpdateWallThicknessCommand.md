@@ -2,7 +2,7 @@
 name: UpdateWallThicknessCommand
 description: Comando para actualizar el espesor de un muro — almacena valor anterior para undo.
 type: aplicación
-depends-on: "[[Command-abstracción]], [[Wall-especificación]]"
+depends-on: "[[Command-abstracción]], [[Wall-especificacion]]"
 mentioned-in: "arquitectura-aplicacion-v1.md §2.3"
 tags: #command #wall #property
 ---

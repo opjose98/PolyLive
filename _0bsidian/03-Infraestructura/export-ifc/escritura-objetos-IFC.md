@@ -2,7 +2,7 @@
 name: escritura-objetos-IFC
 description: writeWall(), writeColumn(), writeDoor(), writeWindow() con IfcOpeningElement.
 type: infraestructura
-depends-on: "[[serializador-IFC-general]], [[Wall-especificación]], [[Door-especificación]]"
+depends-on: "[[serializador-IFC-general]], [[Wall-especificacion]], [[Door-especificacion]]"
 mentioned-in: "pseudocodigo-step-ifc.md §4"
 tags: #ifc #serialización #objetos
 ---

@@ -1,47 +1,27 @@
 ---
 name: gestión-estado-Zustand
-description: AppState y slices (survey, ble, ui, control-points) con Zustand.
+description: Dónde vive cada estado — workspaceStore (cromo), controladores (modelo), SQLite (verdad).
 type: ui
-depends-on: "[[SurveyLifecycle]], [[Room-especificación]]"
-mentioned-in: "Maestro §14, arquitectura-aplicacion-v1.md"
+depends-on: "[[EditorController]], [[ElevationEditor]]"
+mentioned-in: "[[capa-viva-y-camara]], [[trazabilidad-nota-codigo-test]]"
 tags: #estado #zustand #react
 ---
 
-# Gestión de Estado — Zustand
+# Gestión de estado
 
-## AppState (raíz)
+> **Cambió respecto del diseño original.** El `AppState` con 4 slices (survey, ble, ui, control-points)
+> se eliminó en la [[auditoria-post-M2]]: la pantalla lo escribía en cada render y nadie lo leía.
 
-Slices:
+| Estado | Dónde | Notas |
+|---|---|---|
+| Datos (objetos, proyectos, niveles, topografía) | **SQLite** | Única fuente de verdad |
+| Modelo de la planta en edición | `EditorController` (`subscribe`) | Puro, con tests |
+| Alzado | `ElevationEditor` | Puro, con tests |
+| Cromo: modo, herramienta, FAB, paneles, filtros, capas, tema, snaps, escala, selectores de rango | `state/workspaceStore.ts` (Zustand vanilla) | `useStore(workspaceStore, selector)` |
+| Toasts | store propio en `primitives/Toast.tsx` | |
+| Lo que cambia con el dedo (trazo, arrastre, snap) | **fuente viva** `ui/canvas/liveOverlay.ts` | Solo el lienzo se suscribe; ver [[capa-viva-y-camara]] |
 
-### survey slice
-- currentRoomId: RoomId | null
-- currentSurveyState: SurveyState (idle, creating, editing, recovering, exporting)
-- currentInteractionMode: InteractionMode (draw, move, measure, audit)
-- commandStack: CommandStack
+## Reglas
 
-### ble slice
-- bleEnabled: boolean
-- bleDevice: BLEDevice | null
-- lastMeasurement: Measurement | null
-
-### ui slice
-- canvasTransform: CanvasTransform
-- propertyPanelOpen: boolean
-- selectedObjectId: RevitObjectId | null
-- snapAngularEnabled: boolean
-- snapAngularTolerance: Degrees
-
-### control-points slice
-- controlPoints: SurveyControlPoint[]
-- siteCoordinateSystem: SiteCoordinateSystem | null
-
-## Acceso
-
-```typescript
-const room = useAppStore(state => state.currentRoom)
-const setRoom = useAppStore(state => state.setSurveyRoom)
-```
-
----
-
-*Creada: 2026-09-14*
+- La pantalla se suscribe al editor con `sameStructure`: ignora los cambios que solo son "vivos".
+- El modo y el tema **no se persisten** (siempre abre en Levantamiento, tema claro).

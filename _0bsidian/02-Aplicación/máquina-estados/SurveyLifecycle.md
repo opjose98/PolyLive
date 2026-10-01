@@ -2,10 +2,14 @@
 name: SurveyLifecycle
 description: Estados del ciclo de vida del Levantamiento — idle, creating, editing, recovering, exporting.
 type: aplicación
-depends-on: "[[Room-especificación]], [[CommandStack]]"
+depends-on: "[[Room-especificacion]], [[CommandStack]]"
 mentioned-in: "Maestro §14, arquitectura-aplicacion-v1.md §14"
 tags: #estado #lifecycle #máquina
 ---
+
+> **ESTADO — superado.** El ciclo de vida del trazo (crear/cerrar recinto) ya no existe: cada muro se
+> guarda al trazarlo y los recintos se detectan solos. Ver [[EditorController]].
+
 
 # SurveyLifecycle — Estados del Levantamiento
 

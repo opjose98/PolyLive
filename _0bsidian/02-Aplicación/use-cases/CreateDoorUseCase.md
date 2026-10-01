@@ -2,7 +2,7 @@
 name: CreateDoorUseCase
 description: UseCase para crear una puerta — requiere Wall padre, valida limites del muro.
 type: aplicación
-depends-on: "[[Door-especificación]], [[proyecciones-punto-muro]], [[CreateWallUseCase]]"
+depends-on: "[[Door-especificacion]], [[proyecciones-punto-muro]], [[CreateWallUseCase]]"
 mentioned-in: "Maestro §14, arquitectura-aplicacion-v1.md §2-3"
 tags: #usecase #door #vano
 ---
@@ -82,8 +82,8 @@ async execute(input: CreateDoorInput): Promise<CreateDoorOutput> {
 
 ## Relacionado con
 
-- [[Door-especificación]]
-- [[Wall-especificación]] — padre requerido
+- [[Door-especificacion]]
+- [[Wall-especificacion]] — padre requerido
 - [[proyecciones-punto-muro]] — cálculo de offsets
 
 ---

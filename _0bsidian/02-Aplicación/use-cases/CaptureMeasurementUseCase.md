@@ -2,7 +2,7 @@
 name: CaptureMeasurementUseCase
 description: UseCase para capturar medición (BLE o manual) — almacena promedio de 7 muestras.
 type: aplicación
-depends-on: "[[Wall-especificación]], [[BLEManager]]"
+depends-on: "[[Wall-especificacion]], [[BLEManager]]"
 mentioned-in: "Maestro §10, arquitectura-aplicacion-v1.md §5"
 tags: #usecase #measurement #ble
 ---

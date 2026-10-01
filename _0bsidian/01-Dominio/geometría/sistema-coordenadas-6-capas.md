@@ -2,7 +2,7 @@
 name: sistema-coordenadas-6-capas
 description: Las 6 capas de transformación de coordenadas — Screen, Canvas, Room local, Level, Site, Geographic.
 type: dominio
-depends-on: "[[tipos-geométricos]]"
+depends-on: "[[tipos-geometricos]]"
 mentioned-in: "Maestro §4.3/4.4/11.3, sistema-coordenadas-y-transformaciones.md"
 tags: #geometría #coordenadas #core
 ---
@@ -118,7 +118,7 @@ function levelPointToSitePoint(
 
 ## Relacionado con
 
-- [[tipos-geométricos]] — usa Point2D, Point3D
+- [[tipos-geometricos]] — usa Point2D, Point3D
 - [[transformaciones-coordenadas]] — fórmulas exactas de cada transformación
 - [[SiteCoordinateSystem]] — define rotación y origen de Sede
 - [[Canvas2D-interacción]] — aplica CanvasTransform en tiempo real

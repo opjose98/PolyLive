@@ -2,7 +2,7 @@
 name: matriz-reglas-de-negocio
 description: Tabla de referencia rápida — relaciones objeto-objeto, acciones permitida/warning/bloqueo.
 type: dominio
-depends-on: "[[RevitObjectBase]], [[Wall-especificación]], [[Door-especificación]], [[Room-especificación]]"
+depends-on: "[[RevitObjectBase]], [[Wall-especificacion]], [[Door-especificacion]], [[Room-especificacion]]"
 mentioned-in: "matriz-reglas-de-negocio.md (documento original)"
 tags: #reglas #negocio #matriz #referencia
 ---

@@ -2,7 +2,7 @@
 name: Column-especificación
 description: Columna — elemento estructural cilíndrico o cuadrado, independiente de muros.
 type: dominio
-depends-on: "[[RevitObjectBase]], [[tipos-geométricos]]"
+depends-on: "[[RevitObjectBase]], [[tipos-geometricos]]"
 mentioned-in: "Maestro §6.4, [[CDT-algoritmo]] (huecos)"
 tags: #objetos-bim #column #estructural
 ---
@@ -66,9 +66,9 @@ Ver [[pseudocodigo-step-ifc.md]] §4.3: genera `IfcColumn` con `IfcCylinderGeome
 ## Relacionado con
 
 - [[RevitObjectBase]] — clase padre
-- [[Wall-especificación]] — puede estar embebida
+- [[Wall-especificacion]] — puede estar embebida
 - [[CDT-algoritmo]] — columnas son huecos en triangulación
-- [[Room-especificación]] — contiene columnas
+- [[Room-especificacion]] — contiene columnas
 - [[matriz-reglas-de-negocio]] — validación permisiva (no hay restricciones de cruce)
 
 ---

@@ -2,7 +2,7 @@
 name: DoorWindowValidationService
 description: Validación de puertas y ventanas — verificar que no sobresalen del muro padre.
 type: dominio
-depends-on: "[[Door-especificación]], [[Window-especificación]], [[Wall-especificación]], [[proyecciones-punto-muro]]"
+depends-on: "[[Door-especificacion]], [[Window-especificacion]], [[Wall-especificacion]], [[proyecciones-punto-muro]]"
 mentioned-in: "Maestro §5.4, [[matriz-reglas-de-negocio]]"
 tags: #validación #vano #door #window
 ---
@@ -111,8 +111,8 @@ class DoorWindowValidationService {
 
 ## Relacionado con
 
-- [[Door-especificación]], [[Window-especificación]] — valida estas clases
-- [[Wall-especificación]] — muro padre
+- [[Door-especificacion]], [[Window-especificacion]] — valida estas clases
+- [[Wall-especificacion]] — muro padre
 - [[proyecciones-punto-muro]] — cálculo de offsets
 - [[matriz-reglas-de-negocio]] — defining error vs warning
 

@@ -1,3 +1,12 @@
+// =============================================================================
+// Accordion — Sección plegable de los cajones (drawer ⋮, ajustes)
+// =============================================================================
+//
+// Título con ícono y chevron que gira; el contenido entra con un fundido. Las
+// secciones del drawer contextual (Topografía, Datos del archivo, Tema…) son
+// acordeones para que el cajón quepa en una pantalla de teléfono.
+// =============================================================================
+
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, LinearTransition, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';

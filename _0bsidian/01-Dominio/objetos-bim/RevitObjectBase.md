@@ -2,7 +2,7 @@
 name: RevitObjectBase
 description: Clase base para todos los objetos BIM — Wall, Door, Window, Column, Floor, Room.
 type: dominio
-depends-on: "[[tipos-geométricos]]"
+depends-on: "[[tipos-geometricos]]"
 mentioned-in: "Maestro §6"
 tags: #objetos-bim #core #base
 ---
@@ -63,9 +63,9 @@ interface IObjectStore {
 
 ## Relacionado con
 
-- [[Wall-especificación]] — hereda de RevitObjectBase
-- [[Door-especificación]], [[Window-especificación]], [[Column-especificación]] — heredan
-- [[Floor-especificación]], [[Room-especificación]] — casos especiales que heredan
+- [[Wall-especificacion]] — hereda de RevitObjectBase
+- [[Door-especificacion]], [[Window-especificacion]], [[Column-especificación]] — heredan
+- [[Floor-especificacion]], [[Room-especificacion]] — casos especiales que heredan
 - [[SQLiteObjectStore]] — implementación de IObjectStore
 
 ---

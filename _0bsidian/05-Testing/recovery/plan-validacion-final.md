@@ -2,7 +2,7 @@
 name: plan-validacion-final
 description: Plan para validación final del sistema completo — antes de React Native.
 type: testing
-depends-on: "[[flujos-integración-documentados]], [[pruebas-campo-10]]"
+depends-on: "[[flujos-integracion-documentados]], [[pruebas-campo-10]]"
 mentioned-in: "Spike #6 + siguiente"
 tags: #testing #validation #final
 ---

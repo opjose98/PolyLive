@@ -2,7 +2,9 @@
 // schema.ts — SQL CREATE TABLE para todas las tablas del sistema BIM
 // Basado en: RevitObjectBase.md, Wall/Door/Window/Column/Floor/Room specs,
 //            CaptureMeasurementUseCase.md, CapturePhotoUseCase.md,
-//            SiteCoordinateSystem.md, SurveyControlPoint.md (Spike #7)
+//            Georreferencia y mojones (M2, ver GeoStore). Las tablas de la topografía por
+//            sede (sites, survey_control_points) y de borradores se eliminaron en la
+//            auditoría post-M2; las bases ya instaladas pueden conservarlas vacías.
 // =============================================================================
 
 /**

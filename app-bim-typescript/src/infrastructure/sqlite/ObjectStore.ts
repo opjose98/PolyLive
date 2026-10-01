@@ -1,7 +1,8 @@
 // =============================================================================
 // ObjectStore.ts — Implementación de IObjectStore con SQLite puro
 // Basado en: RevitObjectBase.md, DeleteObjectUseCase.md, matriz-reglas-de-negocio.md
-//            SiteCoordinateSystem.md, SurveyControlPoint.md (Spike #7)
+// Objetos BIM, mediciones, fotos y operadores. Proyectos y espacios viven en
+// ProjectStore; niveles/fases en MarkerStore; topografía en GeoStore.
 // =============================================================================
 
 import { IDatabase } from './database';

@@ -2,7 +2,7 @@
 name: WallValidationService
 description: Servicio de validación de muros — detecta cruces no-esperados, ángulos agudos, etc.
 type: dominio
-depends-on: "[[Wall-especificación]], [[miter-encuentros]], [[matriz-reglas-de-negocio]]"
+depends-on: "[[Wall-especificacion]], [[miter-encuentros]], [[matriz-reglas-de-negocio]]"
 mentioned-in: "Maestro §5.5, arquitectura-carpetas-v1.md §1.1"
 tags: #validación #core #wall
 ---
@@ -112,7 +112,7 @@ class WallValidationService {
 
 ## Relacionado con
 
-- [[Wall-especificación]] — valida esta clase
+- [[Wall-especificacion]] — valida esta clase
 - [[miter-encuentros]] — determina si un cruce es "esperado"
 - [[matriz-reglas-de-negocio]] — define qué es error vs warning
 - [[arquitectura-carpetas-v1.md]] — ubicación del servicio en capas

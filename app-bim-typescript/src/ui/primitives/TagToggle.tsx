@@ -1,3 +1,12 @@
+// =============================================================================
+// TagToggle — Etiqueta que se enciende y apaga (filtros, capas, snaps)
+// =============================================================================
+//
+// Pastilla con su texto; encendida toma el acento del modo. La transición de
+// color corre en el hilo UI (reanimated) para que alternar varias seguidas no
+// tropiece con el render.
+// =============================================================================
+
 import React, { useEffect } from 'react';
 import { StyleSheet, Text } from 'react-native';
 import Animated, { interpolateColor, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';

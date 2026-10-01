@@ -2,10 +2,14 @@
 name: SiteCoordinateSystem
 description: Sistema de coordenadas de Sede — origen y rotación que posiciona todos los Recintos.
 type: dominio
-depends-on: "[[tipos-geométricos]], [[sistema-coordenadas-6-capas]], [[transformaciones-coordenadas]]"
+depends-on: "[[tipos-geometricos]], [[sistema-coordenadas-6-capas]], [[transformaciones-coordenadas]]"
 mentioned-in: "Maestro §4.3.1, sistema-coordenadas-y-transformaciones.md §4"
 tags: #survey #coordenadas #site
 ---
+
+> **LEGADO — eliminado en la [[auditoria-post-M2]].** La topografía es por proyecto: ver
+> [[Georreferencia-proyecto]] y [[CRS-MAGNA-SIRGAS]]. Esta nota queda como historia del Spike #7.
+
 
 # SiteCoordinateSystem — Sistema de Coordenadas de Sede
 
