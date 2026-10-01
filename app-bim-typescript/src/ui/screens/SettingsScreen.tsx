@@ -44,7 +44,6 @@ export interface SettingsScreenProps {
    */
   onRestored: (restoredFrom: string) => void;
   /** Abre la pantalla de topografía (puntos de control y sistema de coordenadas). */
-  onOpenSurveyControl?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -56,7 +55,6 @@ export function SettingsScreen({
   dbName,
   onOpenProfile,
   onRestored,
-  onOpenSurveyControl,
 }: SettingsScreenProps) {
   const [backups, setBackups] = useState<BackupEntry[]>([]);
   const [creating, setCreating] = useState(false);
@@ -211,22 +209,6 @@ export function SettingsScreen({
             ))
           )}
         </View>
-
-        {/* --- Topografía --- */}
-        {onOpenSurveyControl ? (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Topografía</Text>
-            <Text style={styles.subtitle}>
-              Sistema de coordenadas de la Sede y puntos de control (mojones) con referencia GPS.
-            </Text>
-            <ActionButton
-              label="Abrir topografía"
-              variant="secondary"
-              onPress={onOpenSurveyControl}
-              disabled={busy}
-            />
-          </View>
-        ) : null}
 
         {/* --- Operador --- */}
         <View style={styles.card}>

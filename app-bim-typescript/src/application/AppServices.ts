@@ -11,6 +11,8 @@
 // de React que se perdía al desmontar el componente.
 // =============================================================================
 
+import { TopographyService } from './geo/TopographyService';
+import { GeoStore } from '../infrastructure/sqlite/GeoStore';
 import { MarkerStore } from '../infrastructure/sqlite/MarkerStore';
 import { IDatabase } from '../infrastructure/sqlite/database';
 import { LevelId, levelId } from '../domain/objects/base';
@@ -68,6 +70,10 @@ export interface AppServices {
   defaultLevelId: LevelId;
   /** Niveles y fases de cada proyecto. */
   markers: MarkerStore;
+  /** Topografía: georreferencia del proyecto y mojones. */
+  geo: GeoStore;
+  /** Amarres, mojones y coordenadas reales (usa `geo`). */
+  topography: TopographyService;
   useCases: {
     createWall: CreateWallUseCase;
     createDoor: CreateDoorUseCase;
@@ -91,7 +97,7 @@ export interface AppServices {
      */
     detectRooms: DetectRoomsUseCase;
 
-    // Topografía (Spike #7) — alcanzables desde SurveyControlScreen.
+    // Topografía (Spike #7, legado por sede). El modo Topografía (M2) usa `topography`.
     createControlPoint: CreateControlPointUseCase;
     defineSiteCoordinateSystem: DefineSiteCoordinateSystemUseCase;
   };
@@ -110,6 +116,7 @@ export function createAppServices(db: IDatabase): AppServices {
   const cdt = new CDTAdapter();
   const ifcSerializer = new IFCSerializerAdapter();
   const projectStore = new ProjectStore(db);
+  const geoStore = new GeoStore(db);
   const defaultLevelId = levelId('level-1');
 
   return {
@@ -123,6 +130,8 @@ export function createAppServices(db: IDatabase): AppServices {
     elevations: new WallElevationService(db, store, commandStack),
     defaultLevelId,
     markers: new MarkerStore(db),
+    geo: geoStore,
+    topography: new TopographyService(geoStore),
     useCases: {
       createWall: new CreateWallUseCase(store, commandStack, validationService),
       createDoor: new CreateDoorUseCase(store, commandStack, validationService),

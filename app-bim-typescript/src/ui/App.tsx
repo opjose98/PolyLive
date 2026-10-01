@@ -28,7 +28,6 @@ import { SurveyScreen, MenuScreen } from './screens/SurveyScreen';
 import { GalleryScreen } from './screens/GalleryScreen';
 import { ExportScreen } from './screens/ExportScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
-import { SurveyControlScreen } from './screens/SurveyControlScreen';
 import { PermissionsManager } from '../native/permissions/PermissionsManager';
 import { ExpoSQLiteDatabase } from '../native/sqlite/ExpoSQLiteDatabase';
 import { ExpoBackupDatabaseUseCase } from '../native/backup/ExpoBackupDatabaseUseCase';
@@ -244,12 +243,6 @@ export default function App() {
             />
           </ScreenShell>
         );
-      case 'surveyControl':
-        return (
-          <ScreenShell title="Topografía" subtitle="Sistema de coordenadas y puntos de control" onBack={closeScreen} scroll={false}>
-            <SurveyControlScreen services={services} operator={operator} appStore={appStore} />
-          </ScreenShell>
-        );
       case 'settings':
         return (
           <ScreenShell title="Ajustes y respaldos" onBack={closeScreen} scroll={false}>
@@ -257,7 +250,6 @@ export default function App() {
               services={services}
               dbName={DB_NAME}
               onOpenProfile={() => setScreen('profile')}
-              onOpenSurveyControl={() => setScreen('surveyControl')}
               onRestored={handleRestored}
             />
           </ScreenShell>

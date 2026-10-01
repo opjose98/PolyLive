@@ -55,6 +55,11 @@ export interface PlanScene {
   readonly underlay?: readonly RevitObjectBase[];
   /** Ids de objetos de una fase anterior a la activa: se dibujan como existentes. */
   readonly existingIds?: ReadonlySet<string>;
+  /** Mojones con posición en este espacio (Topografía, y visibles en Levantamiento). */
+  readonly benchmarks?: readonly PlanBenchmark[];
+  readonly selectedBenchmarkId?: string | null;
+  /** Rótulos de coordenadas reales (Topografía, filtro "Rótulos de coordenadas"). */
+  readonly coordLabels?: readonly { readonly position: Point2D; readonly lines: readonly string[] }[];
   /** Recintos cerrados detectados a partir de los muros. */
   readonly rooms?: readonly { polygon: readonly Point2D[]; area: number; centroid: Point2D }[];
   /** Nombre a mostrar en el recinto principal (el mayor). */
@@ -81,6 +86,17 @@ export interface PlanScene {
   /** El extremo arrastrado está enganchado a un nodo: se marca con un anillo. */
   readonly snapIndicator?: Point2D | null;
 }
+
+export interface PlanBenchmark {
+  readonly id: string;
+  readonly name: string;
+  readonly position: Point2D;
+  /** Tiene coordenadas reales Y posición en el dibujo: sirve para amarrar. */
+  readonly control: boolean;
+}
+
+/** Color de los mojones (verde de Topografía). */
+const BENCHMARK_COLOR = '#2E7D32';
 
 /** Separación de la rejilla, en metros, elegida según el zoom (20–100 px por celda). */
 export function gridStepMeters(scale: number): number {
@@ -169,6 +185,8 @@ export function drawPlan(r: ICanvasRenderer, scene: PlanScene): void {
   if (scene.showNodes) drawNodes(ctx);
   drawWallDraft(ctx);
   if (scene.photoMarkers?.length) drawPhotoMarkers(ctx);
+  if (scene.coordLabels?.length) drawCoordLabels(ctx);
+  if (scene.benchmarks?.length) drawBenchmarks(ctx);
   drawSelection(ctx);
   if (scene.snapIndicator) drawSnapIndicator(r, ctx.toScreen(scene.snapIndicator), pal);
   if (scene.showLabels) drawLabels(ctx);
@@ -519,6 +537,55 @@ function drawPhotoMarkers({ r, scene, pal, toScreen }: Ctx): void {
       r.setFillStyle(pal.label);
       r.drawText(marker.label, p.x, p.y - PHOTO_MARKER_RADIUS_PX - 4, 10, 'center');
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 7a. Mojones y rótulos de coordenadas (Topografía)
+// ---------------------------------------------------------------------------
+
+/**
+ * Mojón: triángulo (símbolo topográfico de punto de control) con un punto en
+ * el vértice exacto. Relleno si es punto de control (tiene coordenadas reales
+ * y posición); solo contorno si le falta una de las dos.
+ */
+function drawBenchmarks({ r, scene, pal, toScreen }: Ctx): void {
+  const size = 11;
+  for (const b of scene.benchmarks ?? []) {
+    const p = toScreen(b.position);
+    const selected = b.id === scene.selectedBenchmarkId;
+    const tri = [
+      { x: p.x, y: p.y - size * 1.25 },
+      { x: p.x + size, y: p.y + size * 0.6 },
+      { x: p.x - size, y: p.y + size * 0.6 },
+    ];
+    if (selected) {
+      r.setFillStyle(pal.selectionFill);
+      r.fillCircle(p.x, p.y, size * 2);
+    }
+    r.setFillStyle(b.control ? BENCHMARK_COLOR : pal.background);
+    r.fillPolygon(tri);
+    r.setStrokeStyle(selected ? pal.selection : BENCHMARK_COLOR);
+    r.setLineWidth(2);
+    r.strokePolygon(tri);
+    r.setFillStyle(b.control ? pal.handleFill : BENCHMARK_COLOR);
+    r.fillCircle(p.x, p.y, 2.5);
+    r.setFillStyle(BENCHMARK_COLOR);
+    r.drawText(b.name, p.x + size + 3, p.y - size * 0.4, 11, 'left');
+  }
+}
+
+/** Rótulos E/N junto a cada punto; fondo del lienzo detrás para leerlos sobre muros. */
+function drawCoordLabels({ r, scene, pal, toScreen }: Ctx): void {
+  for (const l of scene.coordLabels ?? []) {
+    const p = toScreen(l.position);
+    r.setFillStyle(BENCHMARK_COLOR);
+    r.fillCircle(p.x, p.y, 2.5);
+    const w = Math.max(...l.lines.map((t) => t.length)) * 6.6 + 8;
+    r.setFillStyle(pal.background);
+    r.fillRect(p.x + 5, p.y + 3, w, l.lines.length * 12 + 3);
+    r.setFillStyle(pal.label);
+    l.lines.forEach((t, i) => r.drawText(t, p.x + 8, p.y + 14 + i * 12, 9, 'left'));
   }
 }
 

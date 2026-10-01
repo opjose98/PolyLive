@@ -689,6 +689,18 @@ export class EditorController {
   }
 
   /**
+   * Punto del mundo bajo el dedo, enganchado a la esquina de muro más
+   * cercana si hay una a menos de la tolerancia (para colocar mojones o medir
+   * sobre el levantamiento con precisión). `snapped` dice si enganchó.
+   */
+  snapToNode(screenX: number, screenY: number, touchTolerancePx: number): { point: Point2D; snapped: boolean } {
+    const world = this.screenToWorld(screenX, screenY);
+    const tol = touchToleranceMeters(touchTolerancePx, this.state.transform.scale);
+    const node = this.selection.findNearestNode({ worldPoint: world, walls: this.walls, thresholdMeters: tol });
+    return node ? { point: node, snapped: true } : { point: world, snapped: false };
+  }
+
+  /**
    * Gira la VISTA a `rotation` (rad) alrededor de un punto de pantalla, que
    * queda quieto. Solo visual: no toca el modelo.
    */

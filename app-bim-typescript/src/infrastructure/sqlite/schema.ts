@@ -244,6 +244,46 @@ CREATE TABLE IF NOT EXISTS project_markers (
 );
 `;
 
+/**
+ * Topografía (M2): amarre del proyecto a coordenadas reales, biblioteca común
+ * de mojones y su enlace a cada proyecto. Aditivas, como las demás.
+ */
+export const CREATE_PROJECT_GEOREFERENCE = `
+CREATE TABLE IF NOT EXISTS project_georeference (
+  project_id   TEXT PRIMARY KEY NOT NULL,
+  data_json    TEXT NOT NULL,
+  updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+`;
+
+export const CREATE_BENCHMARKS = `
+CREATE TABLE IF NOT EXISTS benchmarks (
+  id           TEXT PRIMARY KEY NOT NULL,
+  name         TEXT NOT NULL,
+  description  TEXT,
+  lat          REAL,
+  lon          REAL,
+  h            REAL,
+  source       TEXT NOT NULL CHECK(source IN ('tap', 'typed', 'gps', 'import')),
+  accuracy     REAL,
+  created_by   TEXT,
+  created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+  is_deleted   INTEGER NOT NULL DEFAULT 0 CHECK(is_deleted IN (0, 1))
+);
+`;
+
+export const CREATE_PROJECT_BENCHMARKS = `
+CREATE TABLE IF NOT EXISTS project_benchmarks (
+  project_id   TEXT NOT NULL,
+  benchmark_id TEXT NOT NULL,
+  space_id     TEXT,
+  local_x      REAL,
+  local_y      REAL,
+  local_z      REAL,
+  PRIMARY KEY (project_id, benchmark_id)
+);
+`;
+
 // ---------------------------------------------------------------------------
 // Índices para consultas frecuentes
 // ---------------------------------------------------------------------------
@@ -305,5 +345,8 @@ export const ALL_DDL: string[] = [
   CREATE_PROJECT_SPACES,
   CREATE_WALL_ELEVATIONS,
   CREATE_PROJECT_MARKERS,
+  CREATE_PROJECT_GEOREFERENCE,
+  CREATE_BENCHMARKS,
+  CREATE_PROJECT_BENCHMARKS,
   CREATE_INDEXES,
 ];

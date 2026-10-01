@@ -46,13 +46,12 @@ export interface ConfigDrawerProps {
 
 /**
  * Sección del modo activo mientras su configuración no existe todavía
- * (M2 Topografía, M3 Avance, M4 Revisión). Levantamiento no la necesita.
+ * (M3 Avance, M4 Revisión). Topografía trae la suya (TopographyPanel). Levantamiento no la necesita.
  */
 function ModePlaceholder({ mode }: { mode: import('../../application/workspace/catalog').WorkModeId }) {
   if (mode === 'levantamiento') return null;
   const def = workModeDef(mode);
   const text: Record<string, string> = {
-    topografia: 'Sistema de coordenadas (MAGNA-SIRGAS, Origen Nacional), amarre del proyecto, mojones y mapa de fondo.',
     avance: 'Catálogo de actividades, cortes de avance y reportes.',
     revision: 'Comentarios, estados y exportación para enviar.',
   };

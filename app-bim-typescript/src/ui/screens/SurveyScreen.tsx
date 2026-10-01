@@ -72,6 +72,10 @@ import {
 } from '../../application/workspace/constraintModel';
 import { isUniformWall, sameExtent } from '../../domain/objects/vertical';
 import { exportRevitIfc } from '../workspace/exportActions';
+import { useTopography } from '../workspace/topo/useTopography';
+import { TopographySheets } from '../workspace/topo/TopographySheets';
+import { TopographyPanel } from '../workspace/topo/TopographyPanel';
+import { amarreSummary, coordinateInline } from '../../application/geo/coordinateText';
 import { ElevationEditor } from '../../application/elevation/ElevationEditor';
 import { ElevationView } from './ElevationView';
 import type { CanvasTransform } from '../../domain/geometry/types';
@@ -134,7 +138,7 @@ export interface SurveyScreenProps {
 }
 
 /** Pantallas que se abren desde el menú ☰, por encima del levantamiento. */
-export type MenuScreen = 'gallery' | 'export' | 'surveyControl' | 'settings' | 'profile';
+export type MenuScreen = 'gallery' | 'export' | 'settings' | 'profile';
 
 // ---------------------------------------------------------------------------
 // Componente
@@ -405,6 +409,19 @@ export function SurveyScreen({
   const levelHandlers = useMemo(() => makeMarkerHandlers('level', 'Nivel'), [makeMarkerHandlers]);
   const phaseHandlers = useMemo(() => makeMarkerHandlers('phase', 'Fase'), [makeMarkerHandlers]);
 
+  // --- Topografía (M2): mojones, amarre y coordenadas reales ---
+  const topo = useTopography({
+    services,
+    projectId,
+    spaceId: roomId as unknown as string,
+    editor,
+    levelZ: Number.isFinite(levelInfo.nivel.value) ? levelInfo.nivel.value : 0,
+    operatorName,
+    touchTolerancePx: CANVAS_TOUCH_TOLERANCE_PX,
+  });
+
+  const topoBack = topo.back;
+
   // --- Alzado (F4): vive encima de la planta, que queda intacta debajo ---
   const [elevWallId, setElevWallId] = useState<string | null>(null);
   const planCamera = useRef<CanvasTransform | null>(null);
@@ -463,6 +480,7 @@ export function SurveyScreen({
   useEffect(() => {
     if (elevWallId) return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (topoBack()) return true;
       if (panelOpen) {
         setPanelOpen(false);
         return true;
@@ -484,7 +502,7 @@ export function SurveyScreen({
       return false;
     });
     return () => sub.remove();
-  }, [elevWallId, onExit, panelOpen]);
+  }, [elevWallId, onExit, panelOpen, topoBack]);
 
   const closeElevation = useCallback(() => {
     setElevWallId(null);
@@ -597,13 +615,14 @@ export function SurveyScreen({
         wsNow.closeWindow();
         return;
       }
+      if (topo.handleTap(x, y)) return;
       const before = editor.getState().selectedId;
       void editor.handleTap(x, y, CANVAS_TOUCH_TOLERANCE_PX).then(() => {
         const after = editor.getState().selectedId;
         if (editor.getState().tool === 'select' && after && after !== before) haptic.select();
       });
     },
-    [editor],
+    [editor, topo.handleTap],
   );
 
   const handleLongPress = useCallback(
@@ -795,8 +814,13 @@ export function SurveyScreen({
       objects: visibleObjects,
       showLabels: filters.cotas,
       photoMarkers: filters.fotos ? canvasScene.photoMarkers : [],
+      benchmarks: topo.planBenchmarks,
+      selectedBenchmarkId: topo.selectedBenchmark?.id ?? null,
+      coordLabels: topo.coordLabels,
+      // Topografía no dibuja: los nodos se ven para tocarlos y leer coordenadas.
+      showNodes: canvasScene.showNodes || (topo.active && filters.vertices),
     }),
-    [canvasScene, underlay, existingIds, visibleObjects, filters.cotas, filters.fotos],
+    [canvasScene, underlay, existingIds, visibleObjects, filters.cotas, filters.fotos, topo.planBenchmarks, topo.selectedBenchmark, topo.coordLabels, topo.active, filters.vertices],
   );
 
   // --- Selector de base y tope: qué edita ---
@@ -885,6 +909,18 @@ export function SurveyScreen({
   // --- BPC: contexto, píldoras y acciones ---
   const selectionSummary = useMemo((): SelectionSummary | null => {
     const sel = selected;
+    if (topo.active) {
+      const b = topo.selectedBenchmark;
+      if (b) {
+        const pos = topo.positionOf(b);
+        return { typeLabel: `Mojón ${b.name}`, detail: pos ? coordinateInline(topo.benchmarkReal(b), pos.p, topo.display) : 'Sin coordenadas', props: {} };
+      }
+      if (topo.probe) return { typeLabel: 'Vértice', detail: coordinateInline(topo.realOf(topo.probe), topo.probe, topo.display), props: {} };
+      if (sel instanceof Wall) {
+        return { typeLabel: 'Muro', detail: `Inicio ${coordinateInline(topo.realOf(sel.startPoint), sel.startPoint, topo.display)}`, props: {} };
+      }
+      if (sel) return { typeLabel: sel.type, props: {} };
+    }
     if (!sel) return null;
     const cm = (m: unknown) => Math.round(Number(m) * 100);
     if (sel instanceof Wall) {
@@ -905,7 +941,7 @@ export function SurveyScreen({
       return { typeLabel: 'Recinto', detail: state.rooms[0] ? `${state.rooms[0].area.toFixed(2)} m²` : 'abierto', props: {} };
     }
     return { typeLabel: sel.type, props: {} };
-  }, [editor, selected, state.rooms, levelInfo]);
+  }, [editor, selected, state.rooms, levelInfo, topo.active, topo.selectedBenchmark, topo.probe, topo.geo, topo.display]);
 
   const zoomPercent = (state.transform.scale / DEFAULT_SCALE) * 100;
   const bpcContext = resolveBpcContext({
@@ -914,6 +950,7 @@ export function SurveyScreen({
     viewLabel: workModeDef(wsState.workMode).label,
     scaleDenominator: wsState.denominator,
     zoomPercent,
+    ...(topo.active && { canvasTitle: 'Topografía', canvasItems: amarreSummary(topo.geo) }),
   });
 
   const commitSelectionProp = useCallback(
@@ -947,7 +984,13 @@ export function SurveyScreen({
         : [];
 
   const bpcActions: BpcAction[] = [];
-  if (bpcContext.kind === 'selection') {
+  if (topo.active) {
+    if (topo.picking?.kind === 'place' || topo.picking?.kind === 'stand') {
+      bpcActions.push({ icon: 'close-circle-outline', label: 'Cancelar', onPress: topo.cancelPick });
+    }
+    bpcActions.push({ icon: 'table', label: 'Coordenadas', onPress: topo.openCoords });
+    bpcActions.push({ icon: 'map-marker-radius', label: 'Amarre', onPress: topo.openSetup });
+  } else if (bpcContext.kind === 'selection') {
     bpcActions.push({ icon: 'tune-variant', label: 'Propiedades', onPress: () => setPanelOpen(true) });
   }
   if (state.tool === 'wall' && state.wallDraft?.start) {
@@ -1007,12 +1050,17 @@ export function SurveyScreen({
       ...(onExit ? [{ icon: 'view-grid-outline', label: 'Otros espacios del proyecto', onPress: onExit }] : []),
       { section: 'Exportar', icon: 'file-export-outline', label: 'IFC para Revit', detail: 'Pisos por nivel y restricciones', onPress: () => void handleExportIfc() },
       { icon: 'file-cad', label: 'IFC y DXF del recinto', onPress: go('export') },
-      { section: 'Proyecto', icon: 'map-marker-radius-outline', label: 'Topografía', detail: 'Sistema de coordenadas y puntos de control', onPress: go('surveyControl') },
-      ...(onExitProject ? [{ icon: 'folder-outline', label: 'Cambiar de proyecto', onPress: onExitProject }] : []),
+      ...(onExitProject ? [{ section: 'Proyecto', icon: 'folder-outline', label: 'Cambiar de proyecto', onPress: onExitProject }] : []),
       { section: 'App', icon: 'account-circle-outline', label: 'Operador', detail: operatorName || undefined, onPress: go('profile') },
       { icon: 'cog-outline', label: 'Ajustes y respaldos', onPress: go('settings') },
     ];
   }, [onExit, onExitProject, onNavigate, handleZoom, handleExportIfc, operatorName]);
+
+  const topoVertices = useMemo(() => {
+    const seen = new Map<string, { x: number; y: number }>();
+    for (const w of editor.walls) for (const p of [w.startPoint, w.endPoint]) seen.set(`${p.x.toFixed(3)},${p.y.toFixed(3)}`, p);
+    return [...seen.values()];
+  }, [editor, state.objects]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const chromeTop = chromeSpacing.sm;
   const belowBpc = chromeTop + chromeSizes.bpcHeight + chromeSpacing.sm;
@@ -1052,6 +1100,7 @@ export function SurveyScreen({
           dragEnabled={editable && state.tool === 'select' && !state.busy}
           drawEnabled={editable && state.tool === 'wall'}
           doubleTapEnabled={state.tool === 'select' && wsState.workMode !== 'topografia'}
+          rotationSnaps={topo.rotationSnaps}
           longPressEnabled
           snapped={state.dragSnappedToNode || !!state.wallDraft?.snappedToNode}
           onTap={handleTap}
@@ -1100,7 +1149,7 @@ export function SurveyScreen({
             <AxisGizmo
               kind="plan"
               rotation={state.transform.rotation ?? 0}
-              northAngle={wsState.workMode === 'topografia' && wsState.filters.norte ? 0 : null}
+              northAngle={topo.northAngle}
               bottom={chromeSpacing.xl + chromeSizes.fabCreate + chromeSpacing.md}
               onPress={() => editor.setRotation(0, canvasSize.w / 2, canvasSize.h / 2)}
             />
@@ -1115,6 +1164,7 @@ export function SurveyScreen({
           onZoom={handleZoom}
           info={fileInfo}
           hasObjects={hasObjects}
+          modeSection={topo.active && projectId ? <TopographyPanel topo={topo} /> : undefined}
         />
         <MainMenu
           top={0}
@@ -1160,6 +1210,8 @@ export function SurveyScreen({
             }
           />
       </BottomSheet>
+
+      {projectId ? <TopographySheets topo={topo} vertices={topoVertices} /> : null}
 
       {/* --- Cámara anclada a la planta --- */}
       <Modal
