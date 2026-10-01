@@ -248,13 +248,39 @@ export class SkiaCanvasAdapter implements ICanvasRenderer {
   // Internal sync
   // -------------------------------------------------------------------------
 
+  // Una planta son miles de trazos: convertir el color (cadena → Skia) y
+  // tocar el pincel solo cuando cambia ahorra miles de llamadas JSI por grabado.
+  private paintedFill: string | null = null;
+  private paintedStroke: string | null = null;
+  private paintedWidth = -1;
+
   private syncFillPaint(): void {
-    this.fillPaint.setColor(Skia.Color(this.fillColor));
+    if (this.paintedFill === this.fillColor) return;
+    this.paintedFill = this.fillColor;
+    this.fillPaint.setColor(SkiaCanvasAdapter.color(this.fillColor));
   }
 
   private syncStrokePaint(): void {
-    this.strokePaint.setColor(Skia.Color(this.strokeColor));
-    this.strokePaint.setStrokeWidth(this.lineWidth);
+    if (this.paintedStroke !== this.strokeColor) {
+      this.paintedStroke = this.strokeColor;
+      this.strokePaint.setColor(SkiaCanvasAdapter.color(this.strokeColor));
+    }
+    if (this.paintedWidth !== this.lineWidth) {
+      this.paintedWidth = this.lineWidth;
+      this.strokePaint.setStrokeWidth(this.lineWidth);
+    }
+  }
+
+  /** Colores ya convertidos (la paleta del lienzo es corta y fija). */
+  private static colorCache = new Map<string, ReturnType<typeof Skia.Color>>();
+
+  private static color(c: string): ReturnType<typeof Skia.Color> {
+    let v = SkiaCanvasAdapter.colorCache.get(c);
+    if (!v) {
+      v = Skia.Color(c);
+      SkiaCanvasAdapter.colorCache.set(c, v);
+    }
+    return v;
   }
 
   // -------------------------------------------------------------------------

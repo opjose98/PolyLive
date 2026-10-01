@@ -244,8 +244,8 @@ export function ElevationView(props: ElevationViewProps) {
   const belowBpc = chromeTop + sizes.bpcHeight + spacing.sm;
 
   return (
-    <Animated.View entering={FadeIn.duration(220)} exiting={FadeOut.duration(160)} style={StyleSheet.absoluteFill}>
-      <Animated.View entering={ZoomIn.duration(260)} style={StyleSheet.absoluteFill}>
+    <Animated.View entering={FadeIn.duration(140)} exiting={FadeOut.duration(110)} style={StyleSheet.absoluteFill}>
+      <Animated.View entering={ZoomIn.duration(180)} style={StyleSheet.absoluteFill}>
         {scene ? (
           <ElevationCanvas
             scene={scene}
@@ -256,8 +256,7 @@ export function ElevationView(props: ElevationViewProps) {
             onDragMove={(x, y) => editor.updateDrag(x, y, TOUCH_TOL)}
             onDragEnd={() => void editor.endDrag()}
             onDragCancel={() => editor.cancelDrag()}
-            onPan={(dx, dy) => editor.panBy(dx, dy)}
-            onPinch={(fx, fy, k) => editor.zoomAround(fx, fy, k)}
+            onViewDelta={(k, dx, dy) => editor.applyViewDelta(k, dx, dy)}
           />
         ) : (
           <View style={[StyleSheet.absoluteFill, { backgroundColor: palette.background }]} />

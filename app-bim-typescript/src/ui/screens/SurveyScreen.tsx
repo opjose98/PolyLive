@@ -51,6 +51,7 @@ import {
 import { isUniformWall, sameExtent } from '../../domain/objects/vertical';
 import { exportRevitIfc } from '../workspace/exportActions';
 import { useProjectLevels } from '../workspace/useProjectLevels';
+import { createLiveSource, draggedIds, isDragging, sameStructure } from '../canvas/liveOverlay';
 import { uniqueVertices, useTopography } from '../workspace/topo/useTopography';
 import { TopographySheets } from '../workspace/topo/TopographySheets';
 import { TopographyPanel } from '../workspace/topo/TopographyPanel';
@@ -179,7 +180,10 @@ export function SurveyScreen({
   // Suscripción al controlador
   // -----------------------------------------------------------------------
 
-  useEffect(() => editor.subscribe(setState), [editor]);
+  // La pantalla solo se entera de cambios ESTRUCTURALES; el trazo y el
+  // arrastre en vivo van directo al lienzo (ver canvas/liveOverlay.ts).
+  useEffect(() => editor.subscribe((next) => setState((prev) => (sameStructure(prev, next) ? prev : next))), [editor]);
+  const live = useMemo(() => createLiveSource(editor), [editor]);
 
   useEffect(() => {
     editor.init().catch(() => toast('No se pudo abrir el levantamiento.', { kind: 'error' }));
@@ -347,7 +351,7 @@ export function SurveyScreen({
       ws.closeWindow();
       ws.setMode('elevation');
       haptic.select();
-      setTimeout(() => setElevWallId(wallDbId), 280);
+      setTimeout(() => setElevWallId(wallDbId), 170);
     },
     [editor, canvasSize, elevWallId],
   );
@@ -538,39 +542,34 @@ export function SurveyScreen({
   // -----------------------------------------------------------------------
 
   const selected = editor.selected;
-  const displayObjects = useMemo(() => editor.displayObjects, [editor, state.objects, state.dragPreview]);
+  // Mientras se arrastra, el objeto (y sus vanos) se dibujan en la capa viva:
+  // la planta no cambia con cada movimiento del dedo.
+  const dragging = isDragging(state);
+  const displayObjects = useMemo(() => {
+    const hidden = draggedIds(state);
+    return hidden.size ? editor.scopedObjects.filter((o) => !hidden.has(o.id as string)) : editor.scopedObjects;
+  }, [editor, state.objects, dragging, levelInfo]); // eslint-disable-line react-hooks/exhaustive-deps
   // Los handles invitan a arrastrar: solo donde se puede (Levantamiento).
   const handles = useMemo(
-    () => (editable ? editor.selectedHandles : []),
-    [editor, editable, state.objects, state.selectedId, state.dragPreview],
+    () => (editable && !dragging ? editor.selectedHandles : []),
+    [editor, editable, dragging, state.objects, state.selectedId],
   );
   const roomName = useMemo(() => {
     const room = state.objects.find((o) => o.type === 'Room');
     return (room?.properties.name as string | undefined) || undefined;
   }, [state.objects]);
-  const snapIndicator = useMemo(() => {
-    const p = state.dragPreview;
-    if (!state.dragSnappedToNode || !(p instanceof Wall) || !state.draggingHandle) return null;
-    return state.draggingHandle.kind === 'start' ? p.startPoint : p.endPoint;
-  }, [state.dragPreview, state.dragSnappedToNode, state.draggingHandle]);
   const canvasScene = useMemo(
     () => ({
       objects: displayObjects,
-      selectedId: state.selectedId,
+      selectedId: dragging ? null : state.selectedId,
       handles,
       rooms: state.rooms,
       roomName,
-      wallDraft: state.wallDraft,
-      draftThickness: 0.15,
       showNodes: state.tool === 'wall',
       measureTargetId: state.measureTargetId as unknown as string | null,
       photoMarkers: state.photoMarkers,
-      snapIndicator,
     }),
-    [
-      displayObjects, state.selectedId, handles, state.rooms, roomName, state.wallDraft,
-      state.tool, state.measureTargetId, state.photoMarkers, snapIndicator,
-    ],
+    [displayObjects, dragging, state.selectedId, handles, state.rooms, roomName, state.tool, state.measureTargetId, state.photoMarkers],
   );
   const parentWallLength = useMemo(() => {
     if (!(selected instanceof Door) && !(selected instanceof Window)) return undefined;
@@ -894,7 +893,8 @@ export function SurveyScreen({
           doubleTapEnabled={state.tool === 'select' && wsState.workMode !== 'topografia'}
           rotationSnaps={topo.rotationSnaps}
           longPressEnabled
-          snapped={state.dragSnappedToNode || !!state.wallDraft?.snappedToNode}
+          live={live}
+          draftThickness={(activeTool?.props?.thickness ?? 15) / 100}
           onTap={handleTap}
           onDoubleTap={handleDoubleTap}
           onLongPress={handleLongPress}

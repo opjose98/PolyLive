@@ -9,11 +9,13 @@
 
 import { Easing, WithSpringConfig } from 'react-native-reanimated';
 
+// En obra la interfaz tiene que responder YA: transiciones cortas, nada que
+// haga esperar para seguir dibujando.
 export const duration = {
-  instant: 90,
-  fast: 160,
-  base: 240,
-  slow: 360,
+  instant: 80,
+  fast: 140,
+  base: 200,
+  slow: 300,
 } as const;
 
 export const easing = {

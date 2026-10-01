@@ -128,28 +128,23 @@ interface Ctx {
 // ---------------------------------------------------------------------------
 
 /**
- * Capa dinámica: solo el muro en curso y el anillo de snap. Se graba en un
- * Picture aparte para que trazar no obligue a regrabar toda la planta.
+ * Capa viva (se regraba con cada movimiento del dedo, la planta no): el muro
+ * en curso, el objeto que se arrastra con sus vanos y handles, y el anillo de
+ * snap. Es barata porque solo contiene eso.
  */
 export function drawPlanOverlay(r: ICanvasRenderer, scene: PlanScene): void {
-  const pal = scene.palette ?? CANVAS_PALETTES.claro;
-  const toScreen = (p: Point2D) => worldToScreen(p, scene.transform);
-  drawWallDraft({
-    r,
-    scene,
-    pal,
-    toScreen,
-    scale: scene.transform.scale,
-    line: 1.2 * pal.lineScale,
-    walls: [],
-    wallsById: new Map(),
-    outlines: new Map(),
-    vanosByWall: new Map(),
-  });
-  if (scene.snapIndicator) drawSnapIndicator(r, toScreen(scene.snapIndicator), pal);
+  const ctx = makeCtx(r, scene);
+  if (scene.objects.length) {
+    drawWalls(ctx);
+    drawColumns(ctx);
+    drawVanos(ctx);
+    drawSelection(ctx);
+  }
+  drawWallDraft(ctx);
+  if (scene.snapIndicator) drawSnapIndicator(r, ctx.toScreen(scene.snapIndicator), ctx.pal);
 }
 
-export function drawPlan(r: ICanvasRenderer, scene: PlanScene): void {
+function makeCtx(r: ICanvasRenderer, scene: PlanScene): Ctx {
   const pal = scene.palette ?? CANVAS_PALETTES.claro;
   const walls = scene.objects.filter((o): o is Wall => o instanceof Wall);
   const vanosByWall = new Map<string, (Door | Window)[]>();
@@ -158,8 +153,7 @@ export function drawPlan(r: ICanvasRenderer, scene: PlanScene): void {
     const key = o.parentWallId as unknown as string;
     vanosByWall.set(key, [...(vanosByWall.get(key) ?? []), o]);
   }
-
-  const ctx: Ctx = {
+  return {
     r,
     scene,
     pal,
@@ -175,6 +169,11 @@ export function drawPlan(r: ICanvasRenderer, scene: PlanScene): void {
     ),
     vanosByWall,
   };
+}
+
+export function drawPlan(r: ICanvasRenderer, scene: PlanScene): void {
+  const ctx = makeCtx(r, scene);
+  const { pal } = ctx;
 
   if (scene.showGrid) drawGrid(r, scene, pal);
   if (scene.underlay?.length) drawUnderlay(r, scene.underlay, pal, ctx.toScreen, ctx.scale);

@@ -240,16 +240,23 @@ export class ElevationEditor {
     this.patch({ viewport: { ...v, scale: clamp(v.scale, MIN_SCALE, MAX_SCALE) } });
   }
 
-  panBy(dx: number, dy: number): void {
-    const v = this.state.viewport;
-    this.patch({ viewport: { ...v, offsetX: v.offsetX + dx, offsetY: v.offsetY + dy } });
-  }
-
   zoomAround(fx: number, fy: number, factor: number): void {
     const v = this.state.viewport;
     const scale = clamp(v.scale * factor, MIN_SCALE, MAX_SCALE);
     const k = scale / v.scale;
     this.patch({ viewport: { scale, offsetX: fx - (fx - v.offsetX) * k, offsetY: fy - (fy - v.offsetY) * k } });
+  }
+
+  /**
+   * Aplica de una vez lo que un gesto movió la vista: escala `s` alrededor del
+   * origen de pantalla y desplazamiento `dx, dy` (px). El lienzo anima el gesto
+   * por su cuenta y solo entrega el resultado al soltar.
+   */
+  applyViewDelta(s: number, dx: number, dy: number): void {
+    const v = this.state.viewport;
+    const scale = clamp(v.scale * s, MIN_SCALE, MAX_SCALE);
+    const k = scale / v.scale;
+    this.patch({ viewport: { scale, offsetX: dx + v.offsetX * k, offsetY: dy + v.offsetY * k } });
   }
 
   zoomBy(factor: number): void {

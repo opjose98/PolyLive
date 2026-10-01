@@ -41,7 +41,7 @@ export function ScreenShell({
   }, [onBack]);
 
   return (
-    <Animated.View entering={SlideInRight.duration(220)} exiting={SlideOutRight.duration(180)} style={styles.root}>
+    <Animated.View entering={SlideInRight.duration(180)} exiting={SlideOutRight.duration(140)} style={styles.root}>
       <View style={styles.header}>
         {onBack ? <IconButton icon="arrow-left" label="Volver" size={40} raised={false} variant="plain" onPress={onBack} /> : null}
         <View style={styles.titles}>

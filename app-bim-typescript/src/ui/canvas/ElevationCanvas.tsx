@@ -13,9 +13,10 @@
 // Todo con `.runOnJS(true)`: el estado vive en ElevationEditor (hilo JS).
 // =============================================================================
 
-import React, { useMemo, useRef } from 'react';
+import React, { useLayoutEffect, useMemo, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Canvas, Fill, Picture, createPicture } from '@shopify/react-native-skia';
+import { Canvas, Fill, Group, Picture, createPicture } from '@shopify/react-native-skia';
+import { useDerivedValue, useSharedValue } from 'react-native-reanimated';
 import type { SkCanvas } from '@shopify/react-native-skia';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { SkiaCanvasAdapter } from '../../native/canvas/SkiaCanvasAdapter';
@@ -34,8 +35,11 @@ export interface ElevationCanvasProps {
   onDragMove(x: number, y: number): void;
   onDragEnd(): void;
   onDragCancel(): void;
-  onPan(dx: number, dy: number): void;
-  onPinch(fx: number, fy: number, factor: number): void;
+  /**
+   * Fin de un paneo/zoom: la vista se movió `dx, dy` px y se escaló `s`
+   * (alrededor del origen de pantalla) respecto de la grabada.
+   */
+  onViewDelta(s: number, dx: number, dy: number): void;
 }
 
 export const ElevationCanvas = React.memo(function ElevationCanvas(props: ElevationCanvasProps) {
@@ -48,14 +52,41 @@ export const ElevationCanvas = React.memo(function ElevationCanvas(props: Elevat
     () =>
       createPicture((canvas: SkCanvas) => {
         drawElevation(new SkiaCanvasAdapter(canvas), scene);
-      }, { x: 0, y: 0, width: scene.width, height: scene.height }),
+              // Se graba más allá de la pantalla: al panear se ve lo que estaba fuera.
+      }, { x: -scene.width, y: -scene.height, width: scene.width * 3, height: scene.height * 3 }),
     [scene],
   );
 
+  // Cámara del gesto en el hilo UI: mueve el Picture ya grabado. El alzado
+  // se regraba UNA vez al soltar (antes: en cada evento del dedo).
+  const dS = useSharedValue(1);
+  const dX = useSharedValue(0);
+  const dY = useSharedValue(0);
+  const delta = useRef({ s: 1, x: 0, y: 0 }).current;
+  const view = useDerivedValue(() => [{ translateX: dX.value }, { translateY: dY.value }, { scale: dS.value }]);
+  // Llegó el alzado regrabado con la vista nueva: la cámara del gesto vuelve a cero.
+  useLayoutEffect(() => {
+    delta.s = 1;
+    delta.x = 0;
+    delta.y = 0;
+    dS.value = 1;
+    dX.value = 0;
+    dY.value = 0;
+  }, [picture, delta, dS, dX, dY]);
+
   const gesture = useMemo(() => {
     let dragging = false;
-    let last = { x: 0, y: 0 };
     let pinchLast = 1;
+    let moving = 0;
+    const publish = () => {
+      dS.value = delta.s;
+      dX.value = delta.x;
+      dY.value = delta.y;
+    };
+    const release = () => {
+      moving = Math.max(0, moving - 1);
+      if (moving === 0 && (delta.s !== 1 || delta.x !== 0 || delta.y !== 0)) cb.current.onViewDelta(delta.s, delta.x, delta.y);
+    };
 
     const pan = Gesture.Pan()
       .runOnJS(true)
@@ -64,22 +95,27 @@ export const ElevationCanvas = React.memo(function ElevationCanvas(props: Elevat
       .onStart((e) => {
         dragging = cb.current.onDragStart(e.x - e.translationX, e.y - e.translationY);
         if (dragging) haptic.grab();
-        last = { x: e.translationX, y: e.translationY };
+        else moving++;
       })
       .onChange((e) => {
-        if (dragging) cb.current.onDragMove(e.x, e.y);
-        else cb.current.onPan(e.translationX - last.x, e.translationY - last.y);
-        last = { x: e.translationX, y: e.translationY };
+        if (dragging) {
+          cb.current.onDragMove(e.x, e.y);
+          return;
+        }
+        delta.x += e.changeX;
+        delta.y += e.changeY;
+        publish();
       })
       .onEnd(() => {
         if (dragging) {
           haptic.commit();
           cb.current.onDragEnd();
         }
-        dragging = false;
       })
       .onFinalize((_e, ok) => {
-        if (!ok && dragging) cb.current.onDragCancel();
+        if (dragging) {
+          if (!ok) cb.current.onDragCancel();
+        } else release();
         dragging = false;
       });
 
@@ -87,11 +123,18 @@ export const ElevationCanvas = React.memo(function ElevationCanvas(props: Elevat
       .runOnJS(true)
       .onStart(() => {
         pinchLast = 1;
+        moving++;
       })
       .onChange((e) => {
-        cb.current.onPinch(e.focalX, e.focalY, e.scale / pinchLast);
+        const k = e.scale / pinchLast;
         pinchLast = e.scale;
-      });
+        // Zoom alrededor de los dedos: el punto bajo ellos no se mueve.
+        delta.x = e.focalX - (e.focalX - delta.x) * k;
+        delta.y = e.focalY - (e.focalY - delta.y) * k;
+        delta.s *= k;
+        publish();
+      })
+      .onFinalize(() => release());
 
     const tap = Gesture.Tap()
       .runOnJS(true)
@@ -117,6 +160,7 @@ export const ElevationCanvas = React.memo(function ElevationCanvas(props: Elevat
       });
 
     return Gesture.Simultaneous(Gesture.Exclusive(longPress, doubleTap, tap), pan, pinch);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -124,7 +168,9 @@ export const ElevationCanvas = React.memo(function ElevationCanvas(props: Elevat
       <View style={[StyleSheet.absoluteFill, { backgroundColor: pal.background }]} collapsable={false}>
         <Canvas style={StyleSheet.absoluteFill}>
           <Fill color={pal.background} />
-          <Picture picture={picture} />
+          <Group transform={view}>
+            <Picture picture={picture} />
+          </Group>
         </Canvas>
       </View>
     </GestureDetector>
