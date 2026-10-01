@@ -33,8 +33,9 @@ export class IFCSerializerAdapter implements IIFCSerializer {
     windows: any[];
     columns: any[];
     floor: any;
+    [extra: string]: unknown;
   }): Promise<string> {
-    const result = await this.serializer.serialize(data);
+    const result = await this.serializer.serialize(data as any);
 
     if (!result.validation.valid) {
       // El Compatibility Gate (8 criterios) rechazó la exportación — sin este

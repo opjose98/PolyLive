@@ -22,6 +22,11 @@ export interface UpdateObjectPropertyInput {
   objectId: RevitObjectId;
   property: string;
   newValue: unknown;
+  /**
+   * Otros campos que cambian en el mismo paso de deshacer (p. ej. `height`
+   * junto con `vertical`). Se validan y se persisten juntos.
+   */
+  also?: Readonly<Record<string, unknown>>;
 }
 
 export interface UpdateObjectPropertyOutput {
@@ -42,11 +47,14 @@ export class UpdateObjectPropertyUseCase {
     const object = await this.store.readObject(input.objectId);
     if (!object) throw new Error('Objeto no existe');
 
-    // 2. Guardar valor anterior
-    const oldValue = (object as any)[input.property];
+    const updates: Record<string, unknown> = { [input.property]: input.newValue, ...input.also };
 
-    // 3. Aplicar nuevo valor
-    (object as any)[input.property] = input.newValue;
+    // 2. Guardar valores anteriores
+    const oldValues: Record<string, unknown> = {};
+    for (const key of Object.keys(updates)) oldValues[key] = (object as any)[key];
+
+    // 3. Aplicar nuevos valores
+    for (const [key, value] of Object.entries(updates)) (object as any)[key] = value;
 
     // 4. Validar según tipo
     const validationResult = this.validateByType(object);
@@ -55,16 +63,19 @@ export class UpdateObjectPropertyUseCase {
     }
 
     // 5. Persistir
-    await this.store.updateObject(input.objectId, {
-      [input.property]: input.newValue,
-    } as any);
+    await this.store.updateObject(input.objectId, updates as any);
 
-    // 6. Comando (con oldValue para undo)
+    // 6. Comando (con los valores anteriores para undo)
     const command = new UpdateObjectPropertyCommand(
       input.objectId,
       input.property,
-      oldValue,
+      oldValues[input.property],
       input.newValue,
+      Object.keys(input.also ?? {}).map((property) => ({
+        property,
+        oldValue: oldValues[property],
+        newValue: updates[property],
+      })),
     );
     await this.commandStack.execute(command);
 

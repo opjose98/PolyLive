@@ -10,7 +10,9 @@ import {
   RoomId,
   RevitObjectId,
   generateId,
+  ObjectProperties,
 } from '../../domain/objects';
+import type { WallVertical } from '../../domain/objects/vertical';
 import { CommandStack } from '../state/CommandStack';
 import { CreateWallCommand } from '../commands/CreateWallCommand';
 import { CommandId } from '../commands/Command';
@@ -27,6 +29,10 @@ export interface CreateWallInput {
   thickness: Meters;
   height: Meters;
   material?: string;
+  /** Niveles de base y tope de cada extremo (ver domain/objects/vertical.ts). */
+  vertical?: WallVertical;
+  /** Propiedades libres con que nace (nivel y fase activos, p. ej.). */
+  properties?: ObjectProperties;
 }
 
 export interface CreateWallOutput {
@@ -56,6 +62,8 @@ export class CreateWallUseCase {
       thickness: input.thickness,
       height: input.height,
       material: input.material,
+      vertical: input.vertical,
+      properties: input.properties,
     });
 
     // 2. Validar

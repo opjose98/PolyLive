@@ -23,6 +23,7 @@ import { Window } from '../../domain/objects/window';
 import { Column } from '../../domain/objects/column';
 import { Floor } from '../../domain/objects/floor';
 import { Room } from '../../domain/objects/room';
+import { parseExtent, parseWallVertical } from '../../domain/objects/vertical';
 import { Measurement, CaptureMethod } from '../../domain/objects/measurement';
 import { AuditPhoto } from '../../domain/objects/audit-photo';
 import { meters, squareMeters, degrees } from '../../domain/geometry/types';
@@ -771,7 +772,7 @@ export class ObjectStore implements IObjectStore {
     // RevitObjectBase
     'linkedPhotos', 'notes',
     // Wall
-    'startPoint', 'endPoint', 'thickness', 'height', 'material', 'isStructural', 'shape',
+    'startPoint', 'endPoint', 'thickness', 'height', 'material', 'isStructural', 'shape', 'vertical',
     // Door / Window
     'parentWallId', 'offsetAlongWall', 'offsetPerpendicular', 'width',
     'doorType', 'windowType', 'frameType', 'glazing',
@@ -820,6 +821,7 @@ export class ObjectStore implements IObjectStore {
           // Las filas anteriores a este campo no lo traen: un muro sin marca
           // explícita es portante, que es el valor por defecto del dominio.
           isStructural: props.isStructural ?? true,
+          vertical: parseWallVertical(props.vertical),
           properties,
           notes: props.notes,
           geometry_json: row.geometry_json,
@@ -884,6 +886,7 @@ export class ObjectStore implements IObjectStore {
           sectionShape: props.sectionShape ?? 'circular',
           dimensionY: props.dimensionY != null ? meters(props.dimensionY) : undefined,
           rotation: props.rotation ?? 0,
+          vertical: parseExtent(props.vertical),
           properties,
           notes: props.notes,
           geometry_json: row.geometry_json,
@@ -952,6 +955,7 @@ export class ObjectStore implements IObjectStore {
       props.height = obj.height;
       props.material = obj.material;
       props.isStructural = obj.isStructural;
+      if (obj.vertical) props.vertical = obj.vertical;
       // Solo se persiste el eje cuando NO es recto. Un muro recto queda
       // descrito por startPoint/endPoint, así que guardar además su `shape`
       // duplicaría la misma información en dos sitios que podrían divergir
@@ -985,6 +989,7 @@ export class ObjectStore implements IObjectStore {
       props.sectionShape = obj.sectionShape;
       props.dimensionY = obj.dimensionY;
       props.rotation = obj.rotation;
+      if (obj.vertical) props.vertical = obj.vertical;
     } else if (obj instanceof Floor) {
       props.isImplicit = obj.isImplicit;
       props.material = obj.material;

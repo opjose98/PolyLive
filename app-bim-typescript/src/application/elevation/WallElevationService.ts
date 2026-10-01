@@ -26,7 +26,6 @@
 import { IDatabase } from '../../infrastructure/sqlite/database';
 import { ObjectStore } from '../../infrastructure/sqlite/ObjectStore';
 import { CommandStack } from '../state/CommandStack';
-import { DeleteObjectCommand } from '../commands/DeleteObjectCommand';
 import { Wall } from '../../domain/objects/wall';
 import { Door } from '../../domain/objects/door';
 import { Window } from '../../domain/objects/window';
@@ -220,18 +219,77 @@ export class WallElevationService {
       openings_json: string;
     }>(`SELECT * FROM wall_elevations WHERE wall_id = ? AND is_deleted = 0`, [wall.id as string]);
 
+    let stored: WallElevation;
     if (!row) {
-      return defaultElevation(wall.id as string, wall.roomId as string, wall.height as number);
+      stored = defaultElevation(wall.id as string, wall.roomId as string, wall.height as number);
+    } else {
+      const { levels, chainModeEnabled } = deserializeLevels(row.levels_json);
+      stored = {
+        wallId: row.wall_id,
+        roomId: row.room_id,
+        levels,
+        openings: deserializeOpenings(row.openings_json),
+        chainModeEnabled,
+      };
     }
+    return this.reconcileWithVanos(stored, wall);
+  }
 
-    const { levels, chainModeEnabled } = deserializeLevels(row.levels_json);
-    return {
-      wallId: row.wall_id,
-      roomId: row.room_id,
-      levels,
-      openings: deserializeOpenings(row.openings_json),
-      chainModeEnabled,
-    };
+  /**
+   * Alinea los huecos con las puertas y ventanas de la PLANTA, que son la
+   * verdad de dónde está cada vano.
+   *
+   * BUG CORREGIDO: los dos modelos solo se sincronizaban en un sentido
+   * (alzado → planta). Una puerta colocada desde la planta no aparecía en el
+   * alzado; moverla o borrarla en planta dejaba el hueco viejo en el alzado,
+   * apuntando a un vano inexistente. Ahora, al leer:
+   *   - un hueco cuyo vano ya no existe (borrado, deshecho) desaparece;
+   *   - un hueco con vano toma de él posición, ancho y alto;
+   *   - un vano sin hueco aparece como hueco (antepecho por defecto), con un
+   *     id derivado del vano para que sea estable entre lecturas.
+   * No escribe nada: se persiste con la próxima edición.
+   */
+  private async reconcileWithVanos(elevation: WallElevation, wall: Wall): Promise<WallElevation> {
+    const objects = await this.store.listObjects(wall.roomId);
+    const vanos = objects.filter(
+      (o): o is Door | Window =>
+        (o instanceof Door || o instanceof Window) && (o.parentWallId as unknown as string) === (wall.id as string),
+    );
+    const byId = new Map(vanos.map((v) => [v.id as string, v]));
+    const used = new Set<string>();
+
+    const openings: WallOpening[] = [];
+    for (const o of elevation.openings) {
+      if (!o.vanoId) {
+        openings.push(o);
+        continue;
+      }
+      const vano = byId.get(o.vanoId);
+      if (!vano) continue;
+      used.add(o.vanoId);
+      openings.push({
+        ...o,
+        xOffset: vano.offsetAlongWall as number,
+        width: vano.width as number,
+        height: vano.height as number,
+      });
+    }
+    for (const vano of vanos) {
+      if (used.has(vano.id as string)) continue;
+      const type: OpeningType = vano instanceof Door ? 'door' : 'window';
+      openings.push({
+        id: wallOpeningId(`vano:${vano.id}`),
+        type,
+        xOffset: vano.offsetAlongWall as number,
+        width: vano.width as number,
+        height: vano.height as number,
+        sillHeight: OPENING_DEFAULTS[type].sillHeight,
+        isFlipped: false,
+        vanoId: vano.id as string,
+        notes: vano.notes,
+      });
+    }
+    return { ...elevation, openings };
   }
 
   async saveElevation(elevation: WallElevation): Promise<void> {
@@ -454,11 +512,10 @@ export class WallElevationService {
     if (!opening) return elevation;
 
     if (opening.vanoId) {
-      // Pasa por el CommandStack para que el borrado sea deshacible junto con
-      // el resto de la sesión, en vez de un borrado suelto fuera del historial.
-      const vanoId = revitObjectId(opening.vanoId);
-      await this.store.deleteObject(vanoId);
-      await this.commandStack.execute(new DeleteObjectCommand(vanoId, [vanoId]));
+      // El paso de deshacer lo registra quien orquesta la edición (el
+      // ElevationEditor, con una instantánea de alzado + vanos): apilar aquí
+      // otro comando partiría una edición en dos pasos.
+      await this.store.deleteObject(revitObjectId(opening.vanoId));
     }
 
     const next: WallElevation = {

@@ -49,6 +49,8 @@ export interface IIFCSerializer {
     windows: any[];
     columns: any[];
     floor: any;
+    /** Niveles, fases, antepechos y metadatos (ver infrastructure/export/ifc/types.ts). */
+    [extra: string]: unknown;
   }): Promise<string>;
 }
 

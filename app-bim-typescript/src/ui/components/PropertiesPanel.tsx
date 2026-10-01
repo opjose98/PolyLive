@@ -173,16 +173,23 @@ function WallFields({
         disabled={busy}
         onCommit={(v) => onCommit('thickness', v)}
       />
-      <NumberField
-        label="Altura"
-        unit="m"
-        decimals={2}
-        min={0.1}
-        max={20}
-        value={wall.height as number}
-        disabled={busy}
-        onCommit={(v) => onCommit('height', v)}
-      />
+      {/* Con restricciones de nivel la altura es consecuencia de ellas: se
+          edita con el selector B/T de la planta, no escribiendo un número
+          que las contradiga. */}
+      {wall.vertical ? (
+        <ReadonlyRow label="Altura (por niveles)" value={`${Number(wall.height).toFixed(2)} m`} />
+      ) : (
+        <NumberField
+          label="Altura"
+          unit="m"
+          decimals={2}
+          min={0.1}
+          max={20}
+          value={wall.height as number}
+          disabled={busy}
+          onCommit={(v) => onCommit('height', v)}
+        />
+      )}
       <SegmentedField
         label="Función"
         value={wall.isStructural ? 'structural' : 'partition'}
@@ -255,16 +262,20 @@ function ColumnFields({
           onCommit={(v) => onCommit('dimensionY', v)}
         />
       ) : null}
-      <NumberField
-        label="Altura"
-        unit="m"
-        decimals={2}
-        min={0.1}
-        max={20}
-        value={column.height as number}
-        disabled={busy}
-        onCommit={(v) => onCommit('height', v)}
-      />
+      {column.vertical ? (
+        <ReadonlyRow label="Altura (por niveles)" value={`${Number(column.height).toFixed(2)} m`} />
+      ) : (
+        <NumberField
+          label="Altura"
+          unit="m"
+          decimals={2}
+          min={0.1}
+          max={20}
+          value={column.height as number}
+          disabled={busy}
+          onCommit={(v) => onCommit('height', v)}
+        />
+      )}
       {!column.isCircular ? (
         <NumberField
           label="Rotación"

@@ -143,6 +143,28 @@ export interface SerializeInput {
   readonly projectName?: string;
   readonly siteName?: string;
   readonly buildingName?: string;
+  /**
+   * Niveles del proyecto (cada uno será un IfcBuildingStorey). Sin ellos, un
+   * único piso "Nivel 0" a cota 0 con todo dentro.
+   */
+  readonly levels?: readonly IfcLevelInput[];
+  /** Nombre de cada fase por id, para rotular la fase de cada elemento. */
+  readonly phaseNames?: ReadonlyMap<string, string>;
+  /** Antepecho (m sobre la base del muro) de cada vano, por id de Door/Window. */
+  readonly openingSills?: ReadonlyMap<string, number>;
+  /** Autor del archivo (operador). */
+  readonly author?: string;
+  /** Clave estable del proyecto: fija el GUID de IfcProject entre exportaciones. */
+  readonly projectKey?: string;
+}
+
+/** Nivel del proyecto tal como llega al exportador. */
+export interface IfcLevelInput {
+  readonly id: string;
+  readonly name: string;
+  /** Cota, m. */
+  readonly elevation: number;
+  readonly isBase?: boolean;
 }
 
 // ---------------------------------------------------------------------------

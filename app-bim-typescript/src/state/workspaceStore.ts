@@ -151,7 +151,7 @@ export function initialWorkspaceData(mode: WorkspaceMode = 'plan'): WorkspaceDat
     fab: FAB_CLOSED,
     activeTool: null,
     view: 'arquitectura',
-    filters: { muros: true, columnas: true, vanos: true, puertas: true, vigas: true, cotas: true, fotos: true },
+    filters: { muros: true, columnas: true, vanos: true, puertas: true, ventanas: true, vigas: true, cotas: true, fotos: true },
     layers: { arquitectonico: true, estructural: true, topografia: false, coordinacion: false },
     canvasTheme: 'claro',
     grid: { lines: true, dots: false, rotation: false },

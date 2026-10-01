@@ -25,6 +25,7 @@ import { Door } from '../../src/domain/objects/door';
 import { Room } from '../../src/domain/objects/room';
 import { meters } from '../../src/domain/geometry/types';
 import { MIN_SCALE } from '../../src/application/canvas/types';
+import { extent, uniformWall } from '../../src/domain/objects/vertical';
 
 const ROOM_ID: RoomId = roomId('editor-room');
 const ROOM_OBJECT_ID: RevitObjectId = revitObjectId('editor-room');
@@ -656,8 +657,9 @@ describe('EditorController', () => {
     const levels = (active: string, underlay: string[] = []) => ({
       active,
       base: 'L0',
-      all: new Set(['L0', 'L1']),
+      all: new Set(['L0', 'L1', 'L2']),
       underlay: new Set(underlay),
+      elevations: new Map([['L0', 0], ['L1', 3], ['L2', 6]]),
     });
     const phases = (active: string) => ({
       active,
@@ -708,6 +710,127 @@ describe('EditorController', () => {
       editor.setScope(null, phases('F0'));
       await editor.reload();
       expect(editor.walls).toHaveLength(0);
+    });
+
+    it('el muro nace con las restricciones del selector de base y tope', async () => {
+      editor.setScope(levels('L1'), phases('F0'));
+      editor.setSnapEnabled(false);
+      editor.setNodeSnapEnabled(false);
+      editor.setCreationVertical({ wall: uniformWall(extent({ baseLevelId: 'L1', topLevelId: 'L2', unconnectedHeight: 2.8 })) });
+      await drawWall(0, 0, 3, 0);
+      const stored = (await services.store.listObjects(ROOM_ID)).find((o): o is Wall => o instanceof Wall)!;
+      expect(stored.vertical?.start.topLevelId).toBe('L2');
+      expect(Number(stored.height)).toBeCloseTo(3);
+      expect(stored.properties.levelMarkerId).toBe('L1');
+      expect(editor.walls).toHaveLength(1);
+    });
+
+    it('punto a punto: cada extremo con su base y tope (perfil no rectangular)', async () => {
+      editor.setScope(levels('L0'), null);
+      editor.setSnapEnabled(false);
+      editor.setNodeSnapEnabled(false);
+      editor.setCreationMethod('wall', 'points');
+      editor.setCreationVertical({
+        wall: {
+          start: extent({ baseLevelId: 'L0', topLevelId: 'L1', unconnectedHeight: 3 }),
+          end: extent({ baseLevelId: 'L0', topLevelId: 'L2', unconnectedHeight: 3 }),
+        },
+      });
+      editor.setTool('wall');
+      await editor.handleTap(px(0), px(0), TOL_PX);
+      await editor.handleTap(px(4), px(0), TOL_PX);
+      const w = editor.walls[0];
+      const p = editor.wallProfile(w);
+      expect(p.start.top).toBeCloseTo(3);
+      expect(p.end.top).toBeCloseTo(6);
+      expect(Number(w.height)).toBeCloseTo(6);
+    });
+
+    it('rechaza un tope por debajo de la base y no crea nada', async () => {
+      editor.setScope(levels('L1'), null);
+      editor.setCreationVertical({
+        wall: uniformWall(extent({ baseLevelId: 'L1', topLevelId: 'L0', unconnectedHeight: 3 })),
+      });
+      await drawWall(0, 0, 3, 0);
+      expect(editor.getState().notice?.kind).toBe('error');
+      expect((await services.store.listObjects(ROOM_ID)).some((o) => o instanceof Wall)).toBe(false);
+    });
+
+    it('un muro de varios pisos se ve (y se toca) en cada planta que corta', async () => {
+      editor.setSnapEnabled(false);
+      editor.setNodeSnapEnabled(false);
+      editor.setScope(levels('L0'), null);
+      editor.setCreationVertical({ wall: uniformWall(extent({ baseLevelId: 'L0', topLevelId: 'L2', unconnectedHeight: 3 })) });
+      await drawWall(0, 0, 3, 0);
+      editor.setCreationVertical({ wall: uniformWall(extent({ baseLevelId: 'L0', topLevelId: 'L1', unconnectedHeight: 3 })) });
+      await drawWall(0, 2, 3, 2);
+
+      editor.setScope(levels('L1'), null);
+      await editor.reload();
+      expect(editor.walls).toHaveLength(1); // solo el que sube hasta L2
+      editor.setScope(levels('L2'), null);
+      await editor.reload();
+      expect(editor.walls).toHaveLength(0);
+    });
+
+    it('la puerta sigue al muro: se ve en las plantas donde se ve su muro', async () => {
+      editor.setSnapEnabled(false);
+      editor.setNodeSnapEnabled(false);
+      editor.setScope(levels('L0'), null);
+      editor.setCreationVertical({ wall: uniformWall(extent({ baseLevelId: 'L0', topLevelId: 'L2', unconnectedHeight: 3 })) });
+      await drawWall(0, 0, 4, 0);
+      editor.setTool('door');
+      await editor.handleTap(px(2), px(0), TOL_PX);
+      editor.setScope(levels('L1'), null);
+      await editor.reload();
+      expect(editor.scopedObjects.some((o) => o instanceof Door)).toBe(true);
+    });
+
+    it('editar las restricciones de un muro es un paso de deshacer, y rehacer lo reaplica', async () => {
+      editor.setSnapEnabled(false);
+      editor.setNodeSnapEnabled(false);
+      editor.setScope(levels('L0'), null);
+      await drawWall(0, 0, 3, 0); // de antes: altura desconectada 2.8
+      editor.setTool('select');
+      await editor.handleTap(px(1.5), px(0), TOL_PX);
+      const ok = await editor.updateSelectedVertical(
+        uniformWall(extent({ baseLevelId: 'L0', topLevelId: 'L1', topOffset: 0.2, unconnectedHeight: 2.8 })),
+      );
+      expect(ok).toBe(true);
+      const read = async () => (await services.store.listObjects(ROOM_ID)).find((o): o is Wall => o instanceof Wall)!;
+      expect(Number((await read()).height)).toBeCloseTo(3.2);
+
+      await editor.undo();
+      expect((await read()).vertical).toBeUndefined();
+      expect(Number((await read()).height)).toBeCloseTo(2.8);
+      await editor.redo();
+      expect((await read()).vertical?.start.topOffset).toBeCloseTo(0.2);
+      expect(Number((await read()).height)).toBeCloseTo(3.2);
+    });
+
+    it('una columna nace con su base y tope', async () => {
+      editor.setScope(levels('L1'), null);
+      editor.setCreationVertical({ column: extent({ baseLevelId: 'L1', topLevelId: 'L2', unconnectedHeight: 2.8 }) });
+      editor.setTool('column');
+      await editor.handleTap(px(1), px(1), TOL_PX);
+      const col = editor.getState().objects.find((o): o is Column => o instanceof Column)!;
+      expect(col.vertical?.topLevelId).toBe('L2');
+      expect(Number(col.height)).toBeCloseTo(3);
+      expect(editor.scopedObjects).toContain(col);
+    });
+
+    it('lo de una fase anterior se marca como existente', async () => {
+      editor.setSnapEnabled(false);
+      editor.setNodeSnapEnabled(false);
+      editor.setScope(null, phases('F0'));
+      await drawWall(0, 0, 3, 0);
+      editor.setScope(null, phases('F1'));
+      await drawWall(0, 2, 3, 2);
+      await editor.reload();
+      const existing = editor.existingIds;
+      expect(existing.size).toBe(1);
+      const old = editor.walls.find((w) => w.startPoint.y === 0)!;
+      expect(existing.has(old.id as string)).toBe(true);
     });
 
     it('el recinto que se guarda es el de la base, aunque se esté trazando en otro nivel', async () => {

@@ -28,7 +28,16 @@ export interface SelectionSummary {
 export type BpcContext =
   | { readonly kind: 'tool'; readonly tool: ActiveTool }
   | { readonly kind: 'selection'; readonly selection: SelectionSummary }
-  | { readonly kind: 'canvas'; readonly viewLabel: string; readonly scaleLabel: string; readonly zoomLabel: string };
+  | {
+      readonly kind: 'canvas';
+      readonly viewLabel: string;
+      readonly scaleLabel: string;
+      readonly zoomLabel: string;
+      /** Título del contexto vacío ("Lienzo" en planta, "Alzado" en alzado). */
+      readonly title?: string;
+      /** Datos extra del contexto vacío (el muro activo y su lado, en alzado). */
+      readonly items?: readonly string[];
+    };
 
 export interface BpcInput {
   readonly tool: ActiveTool | null;
@@ -36,6 +45,8 @@ export interface BpcInput {
   readonly viewLabel: string;
   readonly scaleDenominator: string;
   readonly zoomPercent: number;
+  readonly canvasTitle?: string;
+  readonly canvasItems?: readonly string[];
 }
 
 export function resolveBpcContext(input: BpcInput): BpcContext {
@@ -47,5 +58,7 @@ export function resolveBpcContext(input: BpcInput): BpcContext {
     viewLabel: input.viewLabel,
     scaleLabel: `1:${denom || '—'}`,
     zoomLabel: `${Math.round(input.zoomPercent)}%`,
+    ...(input.canvasTitle && { title: input.canvasTitle }),
+    ...(input.canvasItems && { items: input.canvasItems }),
   };
 }

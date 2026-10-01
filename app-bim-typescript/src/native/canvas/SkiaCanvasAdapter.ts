@@ -43,7 +43,7 @@ export interface ICanvasRenderer {
    * centro horizontal. Sin texto el editor no puede etiquetar cotas ni códigos
    * BIM, que es la mitad de la información útil de un plano.
    */
-  drawText(text: string, x: number, y: number, size?: number, align?: 'left' | 'center'): void;
+  drawText(text: string, x: number, y: number, size?: number, align?: 'left' | 'center' | 'right'): void;
   save(): void;
   restore(): void;
   setFillStyle(color: string): void;
@@ -172,7 +172,7 @@ export class SkiaCanvasAdapter implements ICanvasRenderer {
     x: number,
     y: number,
     size: number = 11,
-    align: 'left' | 'center' = 'left',
+    align: 'left' | 'center' | 'right' = 'left',
   ): void {
     const font = SkiaCanvasAdapter.fontOfSize(size);
     // Sin tipografía disponible no se dibuja nada: una etiqueta ausente es un
@@ -181,7 +181,8 @@ export class SkiaCanvasAdapter implements ICanvasRenderer {
     if (!font) return;
 
     this.syncFillPaint();
-    const drawX = align === 'center' ? x - this.measureTextWidth(text, size) / 2 : x;
+    const w = align === 'left' ? 0 : this.measureTextWidth(text, size);
+    const drawX = align === 'center' ? x - w / 2 : align === 'right' ? x - w : x;
     this.canvas.drawText(text, drawX, y, this.fillPaint, font);
   }
 

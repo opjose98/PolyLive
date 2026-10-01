@@ -119,6 +119,12 @@ export interface VerticalLevels {
   readonly leftHeight?: number;
   /** Altura en el final del muro (CSL X=longitud). `undefined` = coronación. */
   readonly rightHeight?: number;
+  /**
+   * Arranque de la base sobre el CSL 0 en cada extremo (base escalonada o
+   * inclinada, cuando los extremos se atan a niveles distintos). `undefined` = 0.
+   */
+  readonly leftBase?: number;
+  readonly rightBase?: number;
 }
 
 export function effectiveLeftHeight(levels: VerticalLevels): number {
@@ -130,7 +136,41 @@ export function effectiveRightHeight(levels: VerticalLevels): number {
 }
 
 export function hasHeightProfile(levels: VerticalLevels): boolean {
-  return levels.leftHeight !== undefined || levels.rightHeight !== undefined;
+  return (
+    levels.leftHeight !== undefined ||
+    levels.rightHeight !== undefined ||
+    (levels.leftBase ?? 0) !== 0 ||
+    (levels.rightBase ?? 0) !== 0
+  );
+}
+
+/** Cota de la base del muro en `localX` (0 salvo base inclinada). */
+export function baseAt(levels: VerticalLevels, localX: number, wallLength: number): number {
+  const l = levels.leftBase ?? 0;
+  const r = levels.rightBase ?? 0;
+  if (wallLength <= 0) return l;
+  const t = Math.max(0, Math.min(1, localX / wallLength));
+  return l + (r - l) * t;
+}
+
+/**
+ * Niveles del alzado a partir del perfil del muro en cotas absolutas (ver
+ * vertical.ts): el CSL 0 es la base más baja, y cada extremo lleva su base y
+ * su tope. Así el alzado dibuja y mide el muro real, no una altura suelta.
+ */
+export function levelsFromProfile(p: {
+  start: { base: number; top: number };
+  end: { base: number; top: number };
+}): VerticalLevels {
+  const y0 = Math.min(p.start.base, p.end.base);
+  const lt = p.start.top - y0;
+  const rt = p.end.top - y0;
+  const lb = p.start.base - y0;
+  const rb = p.end.base - y0;
+  const rect = Math.abs(lt - rt) < 1e-6 && Math.abs(lb) < 1e-6 && Math.abs(rb) < 1e-6;
+  return rect
+    ? { base: 0, coronacion: lt }
+    : { base: 0, coronacion: Math.max(lt, rt), leftHeight: lt, rightHeight: rt, leftBase: lb, rightBase: rb };
 }
 
 /** Altura del muro en la coordenada CSL `localX`, interpolada si hay culata. */
@@ -210,21 +250,25 @@ export function computeQuantification(
 ): WallQuantification {
   const { levels } = elevation;
 
+  // Trapecio: la media de las alturas netas (tope − base) de los extremos.
   const gross = hasHeightProfile(levels)
-    ? wallLength * ((effectiveLeftHeight(levels) + effectiveRightHeight(levels)) / 2)
+    ? wallLength *
+      ((effectiveLeftHeight(levels) - (levels.leftBase ?? 0) + (effectiveRightHeight(levels) - (levels.rightBase ?? 0))) / 2)
     : wallLength * levels.coronacion;
 
   const rects: Rect[] = [];
   for (const opening of elevation.openings) {
     const ceiling = heightAt(levels, openingCenterX(opening), wallLength);
+    const floor = baseAt(levels, openingCenterX(opening), wallLength);
     const effectiveTop = Math.max(0, Math.min(openingTop(opening), ceiling));
-    const effectiveHeight = Math.max(0, effectiveTop - opening.sillHeight);
+    const effectiveBottom = Math.max(opening.sillHeight, floor);
+    const effectiveHeight = Math.max(0, effectiveTop - effectiveBottom);
     if (effectiveHeight > 0 && opening.width > 0) {
       rects.push({
         x0: opening.xOffset,
-        y0: opening.sillHeight,
+        y0: effectiveBottom,
         x1: openingEnd(opening),
-        y1: opening.sillHeight + effectiveHeight,
+        y1: effectiveBottom + effectiveHeight,
       });
     }
   }

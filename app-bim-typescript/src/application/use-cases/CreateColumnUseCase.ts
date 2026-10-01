@@ -10,7 +10,9 @@ import {
   RoomId,
   WallId,
   generateId,
+  ObjectProperties,
 } from '../../domain/objects';
+import type { VerticalExtent } from '../../domain/objects/vertical';
 import { CommandStack } from '../state/CommandStack';
 import { CreateColumnCommand } from '../commands/CreateColumnCommand';
 import { CommandId } from '../commands/Command';
@@ -27,6 +29,10 @@ export interface CreateColumnInput {
   dimensionY?: Meters;
   embeddedInWallId?: WallId;
   material?: string;
+  /** Niveles de base y tope (ver domain/objects/vertical.ts). */
+  vertical?: VerticalExtent;
+  /** Propiedades libres con que nace (nivel y fase activos, p. ej.). */
+  properties?: ObjectProperties;
 }
 
 export interface CreateColumnOutput {
@@ -53,6 +59,8 @@ export class CreateColumnUseCase {
       height: input.height,
       embeddedInWallId: input.embeddedInWallId,
       material: input.material,
+      vertical: input.vertical,
+      properties: input.properties,
     });
 
     const validationResult = this.validationService.validateColumn(column);

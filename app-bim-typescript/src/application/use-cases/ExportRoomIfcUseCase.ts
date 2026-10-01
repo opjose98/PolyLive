@@ -19,6 +19,16 @@ import { IValidationService, IIFCSerializer, ValidationError } from './types';
 
 export interface ExportRoomIfcInput {
   roomId: RoomId;
+  /** Niveles del proyecto: cada uno será un piso (IfcBuildingStorey). */
+  levels?: readonly { id: string; name: string; elevation: number; isBase?: boolean }[];
+  /** Nombre de cada fase por id. */
+  phaseNames?: ReadonlyMap<string, string>;
+  /** Antepecho de cada vano (id de Door/Window → m sobre la base del muro). */
+  openingSills?: ReadonlyMap<string, number>;
+  projectName?: string;
+  /** Clave estable del proyecto (su id): fija el GUID de IfcProject. */
+  projectKey?: string;
+  author?: string;
 }
 
 export interface ExportRoomIfcOutput {
@@ -66,6 +76,12 @@ export class ExportRoomIfcUseCase {
       windows,
       columns,
       floor: floor ?? null,
+      levels: input.levels,
+      phaseNames: input.phaseNames,
+      openingSills: input.openingSills,
+      projectName: input.projectName,
+      projectKey: input.projectKey,
+      author: input.author,
     });
 
     const exportTime = Date.now() - startTime;

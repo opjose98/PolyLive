@@ -13,6 +13,7 @@ import {
   ObjectProperties,
   AuditPhotoId,
 } from './base';
+import type { VerticalExtent } from './vertical';
 
 /** Forma de la sección transversal de una columna. */
 export type ColumnSectionShape = 'circular' | 'rectangular';
@@ -63,6 +64,9 @@ export class Column extends RevitObjectBase {
   /** Rotación de la sección en radianes, desde el eje X positivo. 0 = sin rotar. */
   rotation: number;
 
+  /** Niveles de base y tope (ver vertical.ts). Sin ella: de su nivel a `height`. */
+  vertical?: VerticalExtent;
+
   constructor(params: {
     id: RevitObjectId;
     roomId: RoomId;
@@ -76,6 +80,7 @@ export class Column extends RevitObjectBase {
     height: Meters;
     embeddedInWallId?: WallId;
     material?: string;
+    vertical?: VerticalExtent;
     notes?: string;
     properties?: ObjectProperties;
     geometry_json?: string;
@@ -113,6 +118,7 @@ export class Column extends RevitObjectBase {
         : meters(0);
 
     this.rotation = params.rotation ?? 0;
+    this.vertical = params.vertical;
 
     this.geometry_json = JSON.stringify({ position: this.position });
   }

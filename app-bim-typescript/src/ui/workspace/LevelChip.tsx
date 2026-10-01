@@ -7,12 +7,14 @@ import { colors, spacing } from '../design/tokens';
 import { type } from '../design/typography';
 
 /** Rótulo discreto bajo la BPC: el nivel activo, donde nace lo que se crea. */
-export const LevelChip = React.memo(function LevelChip({ top }: { top: number }) {
+export const LevelChip = React.memo(function LevelChip({ top, wallName }: { top: number; wallName?: string }) {
   const level = useStore(workspaceStore, (s) => itemAt(s.levels, 'nivel').name);
   const phase = useStore(workspaceStore, (s) => itemAt(s.phases, 'nivel').name);
+  // En alzado el chip nombra el muro que se detalla (el mockup lo llama así).
   return (
     <Text style={[styles.chip, { top }]}>
-      Nivel: <Text style={styles.strong}>{level}</Text> · Fase: <Text style={styles.strong}>{phase}</Text>
+      {wallName ? 'Muro: ' : 'Nivel: '}
+      <Text style={styles.strong}>{wallName ?? level}</Text> · Fase: <Text style={styles.strong}>{phase}</Text>
     </Text>
   );
 });
