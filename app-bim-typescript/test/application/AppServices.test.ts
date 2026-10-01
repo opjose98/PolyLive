@@ -110,17 +110,4 @@ describe('createAppServices — composition root con implementaciones reales', (
     ).rejects.toThrow();
   });
 
-  it('guarda y recupera un borrador de trazo a través del mismo composition root', async () => {
-    const services = createAppServices(db);
-    const ROOM_ID = roomId('draft-room');
-
-    await services.useCases.saveRoomDraft.execute({
-      roomId: ROOM_ID,
-      vertices: [{ x: 0, y: 0 }, { x: 3, y: 0 }],
-      isClosed: false,
-    });
-
-    const recovered = await services.useCases.recoverRoomDraft.execute({ roomId: ROOM_ID });
-    expect(recovered.hasDraft).toBe(true);
-  });
 });

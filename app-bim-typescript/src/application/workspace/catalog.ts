@@ -48,9 +48,13 @@ export type PropValues = Partial<Record<PropKey, number>>;
 // FAB de creación
 // ---------------------------------------------------------------------------
 
+export type TopoAction = 'mojon' | 'punto-gps' | 'coordenada';
+
 export type ToolBinding =
   | { readonly kind: 'plan'; readonly tool: EditorTool }
-  | { readonly kind: 'elevation'; readonly opening: OpeningType };
+  | { readonly kind: 'elevation'; readonly opening: OpeningType }
+  /** Herramientas del modo Topografía (M2): no crean objetos BIM, crean mojones. */
+  | { readonly kind: 'topo'; readonly action: TopoAction };
 
 /** Forma de creación de una herramienta (nivel 3 del FAB). */
 export interface MethodDef {
@@ -121,6 +125,16 @@ const AUDITORIA: CategoryDef = {
 };
 
 /**
+ * En alzado la foto todavía no se ancla a la cara del muro: la herramienta se
+ * ve pero queda deshabilitada (antes salía habilitada con el binding de
+ * planta y no hacía nada).
+ */
+const AUDITORIA_ELEVATION: CategoryDef = {
+  ...AUDITORIA,
+  tools: [{ id: 'foto', label: 'Foto', icon: 'camera-outline' }],
+};
+
+/**
  * Puerta y Ventana no están en el mockup de planta, pero el motor ya las crea
  * sobre un muro: quitarlas sería una regresión.
  */
@@ -177,7 +191,7 @@ export const CATEGORIES_ELEVATION: readonly CategoryDef[] = [
       { id: 'correa', label: 'Correa', icon: 'view-sequential', props: { depth: 20 } },
     ],
   },
-  AUDITORIA,
+  AUDITORIA_ELEVATION,
 ];
 
 // ---------------------------------------------------------------------------
@@ -191,9 +205,9 @@ export const CATEGORIES_TOPOGRAPHY: readonly CategoryDef[] = [
     label: 'Puntos',
     icon: 'map-marker-multiple-outline',
     tools: [
-      { id: 'mojon', label: 'Mojón', icon: 'map-marker-star-outline' },
-      { id: 'punto-gps', label: 'Punto GPS', icon: 'crosshairs-gps' },
-      { id: 'coordenada', label: 'Coordenada', icon: 'map-marker-plus-outline' },
+      { id: 'mojon', label: 'Mojón', icon: 'map-marker-star-outline', binding: { kind: 'topo', action: 'mojon' } },
+      { id: 'punto-gps', label: 'Punto GPS', icon: 'crosshairs-gps', binding: { kind: 'topo', action: 'punto-gps' } },
+      { id: 'coordenada', label: 'Coordenada', icon: 'map-marker-plus-outline', binding: { kind: 'topo', action: 'coordenada' } },
     ],
   },
   {

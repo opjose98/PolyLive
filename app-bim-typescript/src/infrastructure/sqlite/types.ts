@@ -51,45 +51,6 @@ export interface AuditPhotoRow {
 }
 
 /**
- * Fila de la tabla `polygon_drafts` (para recuperación de polígonos en progreso).
- */
-export interface PolygonDraftRow {
-  id: string;
-  room_id: string;
-  vertices_json: string;       // JSON array de Point2D
-  is_closed: number;
-  saved_at: string;
-}
-
-/**
- * Fila de la tabla `sites` (Spike #7 — SiteCoordinateSystem, a lo sumo una
- * fila por site_id; ver invariante de inmutabilidad en schema.ts).
- */
-export interface SiteRow {
-  site_id: string;
-  origin_json: string;         // JSON de Point3D
-  north_rotation: number;
-  defined_at: string;          // ISO 8601
-  defined_by: string;
-}
-
-/**
- * Fila de la tabla `survey_control_points` (Spike #7 — SurveyControlPoint).
- */
-export interface SurveyControlPointRow {
-  id: string;
-  site_id: string;
-  local_coordinates_json: string; // JSON de Point3D
-  gps_json: string;                // JSON de GpsCoordinates
-  name: string | null;
-  notes: string | null;
-  captured_at: string;             // ISO 8601
-  is_deleted: number;
-  created_at: string;
-  updated_at: string;
-}
-
-/**
  * Fila de la tabla `operators` — ver domain/objects/operator.ts para el
  * alcance deliberadamente mínimo (solo nombre, sin autenticación).
  */

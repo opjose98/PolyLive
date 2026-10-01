@@ -14,7 +14,6 @@ import {
   Polygon,
   TriangulationResult,
   ValidationWarning,
-  SquareMeters,
   EPSILON,
   AREA_MINIMA_VALIDA,
   squareMeters,
@@ -171,18 +170,6 @@ function deduplicateVertices(vertices: Point2D[]): { result: Point2D[]; hadDupli
   }
 
   return { result, hadDuplicates };
-}
-
-/** Área de un polígono con Shoelace formula. */
-function polygonArea(vertices: Point2D[]): number {
-  let area = 0;
-  const n = vertices.length;
-  for (let i = 0; i < n; i++) {
-    const j = (i + 1) % n;
-    area += vertices[i].x * vertices[j].y;
-    area -= vertices[j].x * vertices[i].y;
-  }
-  return Math.abs(area) / 2;
 }
 
 // ---------------------------------------------------------------------------

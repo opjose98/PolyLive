@@ -12,8 +12,6 @@
 import * as Location from 'expo-location';
 import { ExpoGpsProvider } from '../../../src/native/location/ExpoGpsProvider';
 import { AppError, AppErrorCode } from '../../../src/shared/errors/AppError';
-import { SurveyControlPoint, siteId, surveyControlPointId } from '../../../src/domain/objects/survey';
-import { meters } from '../../../src/domain/geometry/types';
 
 const mockGetPermissions = Location.getForegroundPermissionsAsync as jest.Mock;
 const mockRequestPermissions = Location.requestForegroundPermissionsAsync as jest.Mock;
@@ -52,20 +50,11 @@ describe('ExpoGpsProvider', () => {
     expect(Number(coords.accuracy)).toBeCloseTo(5);
   });
 
-  it('el resultado satisface la invariante de SurveyControlPoint', async () => {
-    // Este es el punto de todo el archivo: que lo que sale de aquí se pueda
-    // meter directamente en el dominio sin que estalle.
+  it('la precisión es siempre > 0 (nunca se asume precisión perfecta)', async () => {
+    // Lo que sale de aquí alimenta mojones y fotos: una precisión 0 haría
+    // creer que el punto es exacto.
     const coords = await new ExpoGpsProvider().getCurrentPosition();
-
-    expect(
-      () =>
-        new SurveyControlPoint({
-          id: surveyControlPointId('cp-1'),
-          siteId: siteId('site-1'),
-          localCoordinates: { x: meters(0), y: meters(0), z: meters(0) },
-          gpsCoordinates: coords,
-        }),
-    ).not.toThrow();
+    expect(Number(coords.accuracy)).toBeGreaterThan(0);
   });
 
   it('pide el permiso si no lo tiene, y continúa si se concede', async () => {

@@ -1,6 +1,7 @@
 # 14 — Modos de trabajo, orientación y navegación
 
-> Estado: **M1 implementado** (rama `feat/ui-m1-modos`). M2–M4 y F6 planificados (ver §7).
+> Estado: **M1 y M2 implementados** (ramas `feat/ui-m1-modos`, `feat/ui-m2-topografia`). M2b–M4 y F6 planificados (ver §7).
+> Topografía en detalle: [15-TOPOGRAFIA.md](15-TOPOGRAFIA.md).
 > Código: `app-bim-typescript/src/application/workspace/catalog.ts`, `src/state/workspaceStore.ts`,
 > `src/ui/workspace/FabView.tsx`, `src/ui/workspace/AxisGizmo.tsx`, `src/ui/canvas/PlanCanvas.tsx`,
 > `src/domain/geometry/handedness.ts`.
@@ -35,15 +36,16 @@ Se reutilizan los mismos componentes (FAB +, FAB de vista, BPC, drawer ⋮); cam
 | Filtros | Muros, Columnas, Cotas, Fotos | Muros, Columnas, Vértices, Mojones, Rótulos de coordenadas, Cuadrícula de coordenadas, Mapa, Norte | Actividades del corte, Cortes anteriores, Cotas | Comentarios abiertos, Resueltos, Cotas |
 | Drawer ⋮ | Datos, modo y capas, zoom, snap, tema, cuadrícula, escala | + Configuración topográfica | + Actividades y cortes | + Comentarios |
 
-Las herramientas de Topografía, Avance y Revisión aparecen **deshabilitadas** ("próximamente") hasta su fase.
+Las herramientas aún sin fase (Medir de Topografía, Avance, Revisión) aparecen **deshabilitadas** ("próximamente").
+En Topografía ya funcionan Mojón, Punto GPS y Coordenada (M2).
 Fuente de verdad: `categoriesFor(mode, view)` y `filtersFor(mode, view)` en `catalog.ts`.
 
 ## 3. Menús
 
 - **☰ (izquierda)** — herramientas y configuración de la **app**: galería, exportar, operador, ajustes y respaldos…
-- **⋮ (derecha)** — configuración **contextual del proyecto** según el modo activo. La configuración de
-  Topografía (sistema de coordenadas, amarre, mojones, mapa) vivirá aquí; la pantalla Topografía del ☰ se
-  fusiona en el modo (M2).
+- **⋮ (derecha)** — configuración **contextual del proyecto** según el modo activo. En Topografía muestra
+  sistema, amarre, ajuste y segundos del GPS (`TopographyPanel`). La antigua pantalla Topografía del ☰
+  (`SurveyControlScreen`) se eliminó en M2: se fusionó en el modo.
 
 ## 4. Orientación: ejes, giro y norte
 
@@ -80,8 +82,9 @@ Esquina inferior izquierda, en planta y en alzado (`AxisGizmo`):
 
 ### 4.4 Norte
 
-En M1 la aguja **N** aparece en Topografía (filtro "Norte") apuntando al norte de cuadrícula (+Y local). En M2,
-con la georreferencia del proyecto, apuntará al norte real y también se verá en Levantamiento.
+Con el proyecto amarrado (M2), la aguja **N** apunta al norte de cuadrícula real (`northFromLocalY`) en Topografía y
+en Levantamiento (filtro "Norte"), y el giro de dos dedos engancha en "norte arriba" (`northUpViewRotation`). Sin
+amarre no se dibuja aguja.
 
 ## 5. Navegación (resumen)
 
@@ -107,7 +110,7 @@ Detalle completo en el plan del proyecto.
 
 | Fase | Contenido |
 |---|---|
-| M2 | Topografía (núcleo): georreferencia por proyecto (proj4), asistente de primera apertura, mojones, coordenadas en rótulos/tabla/toque |
+| M2 ✔ | Topografía (núcleo): georreferencia por proyecto (proj4), asistente de primera apertura, mojones, coordenadas en rótulos/tabla/toque |
 | M2b | Mapa de fondo con descarga, cuadrícula de coordenadas, inverso/área/replanteo, CSV/KML, IFC georreferenciado (IfcMapConversion) |
 | F6a | Herramienta Suelo (base de Avance en planta) |
 | M3 | Avance |

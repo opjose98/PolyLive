@@ -20,15 +20,11 @@ import {
 import { FAB_CLOSED, fabMainIcon, pickFabCategory, pressFabMain } from '../../src/application/workspace/fabMachine';
 import { valueFromDrag, nudgeProp } from '../../src/application/workspace/propDrag';
 import {
-  addItem,
   createRangeState,
   editableItems,
   indexFromTrackFraction,
   itemAt,
   moveThumb,
-  removeItem,
-  renameItem,
-  setItemValue,
   trackFractionOf,
   withItems,
 } from '../../src/application/workspace/rangeModel';
@@ -85,8 +81,12 @@ describe('catálogo', () => {
     expect(categoriesFor('levantamiento', 'elevation')).toBe(CATEGORIES_ELEVATION);
     expect(categoriesFor('avance', 'elevation')).toBe(CATEGORIES_PROGRESS);
     expect(filtersFor('topografia', 'plan').map((f) => f.id)).toContain('mojones');
-    // Las herramientas de los modos nuevos esperan su fase (sin dominio aún).
-    expect([...CATEGORIES_TOPOGRAPHY, ...CATEGORIES_PROGRESS, ...CATEGORIES_REVIEW].flatMap((c) => c.tools).some(isToolEnabled)).toBe(false);
+    // M2: los Puntos de Topografía funcionan; Medir, Avance y Revisión esperan su fase.
+    const enabled = [...CATEGORIES_TOPOGRAPHY, ...CATEGORIES_PROGRESS, ...CATEGORIES_REVIEW]
+      .flatMap((c) => c.tools)
+      .filter(isToolEnabled)
+      .map((t) => t.id);
+    expect(enabled).toEqual(['mojon', 'punto-gps', 'coordenada']);
   });
 });
 
@@ -140,18 +140,16 @@ describe('selector de rango', () => {
     expect(itemAt(s, 'inferior').id).toBe('inf-');
   });
 
-  it('agregar crea un valor único (máximo + 1) y conserva la selección', () => {
-    let s = createRangeState('Nivel 0');
-    s = addItem(s, 'Nivel', 'levels');
-    s = addItem(s, 'Nivel', 'levels');
-    expect(editableItems(s).map((i) => i.value)).toEqual([2, 1, 0]);
-    expect(editableItems(s)[0].name).toBe('Nivel 2');
-    expect(itemAt(s, 'nivel').id).toBe('base');
-    expect(itemAt(s, 'superior').id).toBe('inf+');
-  });
+  // Los elementos llegan siempre de MarkerStore (que valida cotas únicas y
+  // protege la base); el selector solo los ordena y conserva la selección.
+  const fromDb = (...values: number[]) =>
+    withItems(
+      createRangeState('N0'),
+      values.map((v) => ({ id: v === 0 ? 'base' : `L${v}`, name: `N${v}`, value: v, base: v === 0 })),
+    );
 
   it('inferior < nivel < superior y el central nunca toca ±∞', () => {
-    let s = addItem(addItem(createRangeState('N0'), 'N', 'l'), 'N', 'l'); // −∞,0,1,2,+∞
+    let s = fromDb(0, 1, 2); // −∞,0,1,2,+∞
     s = moveThumb(s, 'nivel', 99);
     expect(s.pos.nivel).toBe(s.pos.superior - 1);
     expect(Number.isFinite(itemAt(s, 'nivel').value)).toBe(true);
@@ -163,41 +161,23 @@ describe('selector de rango', () => {
     expect(s.pos.nivel).toBe(s.pos.inferior + 1);
   });
 
-  it('editar un valor reordena y conserva lo que cada deslizador tenía', () => {
-    let s = addItem(addItem(createRangeState('N0'), 'N', 'l'), 'N', 'l');
-    s = moveThumb(s, 'nivel', 3); // nivel = valor 2
-    const id = itemAt(s, 'nivel').id;
-    const r = setItemValue(s, id, -3);
-    expect(r.ok).toBe(true);
-    if (!r.ok) return;
-    expect(itemAt(r.state, 'nivel').id).toBe(id);
-    expect(r.state.items.map((i) => i.value)).toEqual([-Infinity, -3, 0, 1, Infinity]);
-    expect(r.state.pos.inferior).toBeLessThan(r.state.pos.nivel);
-    expect(r.state.pos.superior).toBeGreaterThan(r.state.pos.nivel);
+  it('una cota editada en la base de datos reordena y conserva lo que cada deslizador tenía', () => {
+    let s = moveThumb(fromDb(0, 1, 2), 'nivel', 3); // nivel = L2
+    s = withItems(s, [
+      { id: 'L2', name: 'N2', value: -3, base: false },
+      { id: 'base', name: 'N0', value: 0, base: true },
+      { id: 'L1', name: 'N1', value: 1, base: false },
+    ]);
+    expect(itemAt(s, 'nivel').id).toBe('L2');
+    expect(s.items.map((i) => i.value)).toEqual([-Infinity, -3, 0, 1, Infinity]);
+    expect(s.pos.inferior).toBeLessThan(s.pos.nivel);
+    expect(s.pos.superior).toBeGreaterThan(s.pos.nivel);
   });
 
-  it('rechaza valores duplicados y no deja cambiar la base', () => {
-    const s = addItem(createRangeState('N0'), 'N', 'l');
-    const other = editableItems(s)[0];
-    expect(setItemValue(s, other.id, 0)).toEqual({ ok: false, reason: 'duplicate' });
-    expect(setItemValue(s, 'base', 5)).toEqual({ ok: false, reason: 'base' });
-    expect(setItemValue(s, other.id, NaN)).toEqual({ ok: false, reason: 'invalid' });
-  });
-
-  it('la base y los extremos no se borran; la base sí se renombra', () => {
-    let s = createRangeState('N0');
-    expect(removeItem(s, 'base')).toBe(s);
-    expect(removeItem(s, 'inf+')).toBe(s);
-    s = renameItem(s, 'base', '  Planta baja ');
-    expect(itemAt(s, 'nivel').name).toBe('Planta baja');
-    expect(renameItem(s, 'base', '   ')).toBe(s);
-  });
-
-  it('borrar el elemento seleccionado devuelve el central a la base', () => {
-    let s = addItem(createRangeState('N0'), 'N', 'l');
-    s = moveThumb(s, 'nivel', 2);
-    const id = itemAt(s, 'nivel').id;
-    s = removeItem(s, id);
+  it('si se borra el nivel seleccionado, el central vuelve a la base', () => {
+    let s = moveThumb(fromDb(0, 1), 'nivel', 2);
+    expect(itemAt(s, 'nivel').id).toBe('L1');
+    s = withItems(s, [{ id: 'base', name: 'N0', value: 0, base: true }]);
     expect(itemAt(s, 'nivel').id).toBe('base');
   });
 
@@ -220,7 +200,7 @@ describe('selector de rango', () => {
   });
 
   it('valores altos arriba en el riel', () => {
-    const s = addItem(createRangeState('N0'), 'N', 'l');
+    const s = fromDb(0, 1);
     expect(indexFromTrackFraction(s, 0)).toBe(s.items.length - 1);
     expect(indexFromTrackFraction(s, 1)).toBe(0);
     expect(trackFractionOf(s, s.items.length - 1)).toBe(0);
@@ -335,7 +315,10 @@ describe('workspaceStore', () => {
 
   it('un deslizador bloqueado (S/N/I apagado) no se mueve', () => {
     const st = createWorkspaceStore();
-    st.getState().addRangeItem('levels');
+    st.getState().setRangeItems('levels', [
+      { id: 'n0', name: 'Nivel 0', value: 0, base: true },
+      { id: 'n1', name: 'Nivel 1', value: 3, base: false },
+    ]);
     st.getState().moveRangeThumb('levels', 'superior', 2);
     expect(st.getState().levels.pos.superior).toBe(3);
     st.getState().toggleRangeSlot('levels', 'superior');

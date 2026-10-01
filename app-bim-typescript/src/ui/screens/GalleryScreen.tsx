@@ -18,7 +18,7 @@
 //   pueden consultar (ObjectStore.listAuditPhotos), ligado al Recinto activo.
 // =============================================================================
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -75,13 +75,17 @@ const THUMB_SIZE = (SCREEN_WIDTH - GAP * (COLUMN_COUNT + 1)) / COLUMN_COUNT;
 export interface GalleryScreenProps {
   services: AppServices;
   roomId: RoomId;
+  /** Solo las fotos vinculadas a este objeto BIM (desde sus propiedades). */
+  objectId?: string;
+  /** Abre el visor en esta foto (al tocar su marcador en la planta). */
+  photoId?: string;
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export function GalleryScreen({ services, roomId }: GalleryScreenProps) {
+export function GalleryScreen({ services, roomId, objectId, photoId }: GalleryScreenProps) {
   const [photos, setPhotos] = useState<StoredPhoto[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -98,6 +102,7 @@ export function GalleryScreen({ services, roomId }: GalleryScreenProps) {
   // archivo de la rejilla con su metadata (ver el comentario de handlePhotoCaptured).
   const [auditPhotos, setAuditPhotos] = useState<Map<string, AuditPhoto>>(new Map());
   const [viewing, setViewing] = useState<StoredPhoto | null>(null);
+  const openedFocus = useRef(false);
 
   // -----------------------------------------------------------------------
   // Load photos
@@ -109,15 +114,30 @@ export function GalleryScreen({ services, roomId }: GalleryScreenProps) {
         fileSystem.listPhotos(),
         services.store.listAuditPhotos(roomId),
       ]);
-      setPhotos(list);
-      setAuditPhotos(new Map(audits.map((a) => [a.metadata.filename, a])));
+      // El directorio de fotos es uno solo para toda la app: se muestran las
+      // registradas en ESTE espacio (antes salían las de todos los proyectos).
+      const own = new Map(audits.map((a) => [a.metadata.filename, a]));
+      const shown = list.filter((p) => {
+        const a = own.get(p.filename);
+        return !!a && (!objectId || (a.linkedObjectId as string | undefined) === objectId);
+      });
+      setPhotos(shown);
+      setAuditPhotos(own);
+      if (photoId && !openedFocus.current) {
+        const target = audits.find((a) => (a.id as string) === photoId);
+        const file = target ? shown.find((p) => p.filename === target.metadata.filename) : undefined;
+        if (file) {
+          openedFocus.current = true;
+          setViewing(file);
+        }
+      }
     } catch (error: any) {
       alertDialog('Error', `No se pudieron cargar las fotos: ${error.message}`);
     }
-  }, [fileSystem, services, roomId]);
+  }, [fileSystem, services, roomId, objectId, photoId]);
 
   useEffect(() => {
-    loadPhotos();
+    void loadPhotos();
   }, [loadPhotos]);
 
   const onRefresh = useCallback(async () => {

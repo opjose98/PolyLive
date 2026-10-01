@@ -35,16 +35,5 @@ export { Room } from './room';
 export { Measurement, CaptureMethod } from './measurement';
 export { AuditPhoto, PhotoMetadata } from './audit-photo';
 
-// Topografía (Spike #7) — SurveyControlPoint y SiteCoordinateSystem
-// pertenecen a una Sede (Site), no a un Recinto (Room)
-export {
-  SurveyControlPoint,
-  SiteCoordinateSystem,
-  GpsCoordinates,
-  SiteId,
-  SurveyControlPointId,
-  OperatorId,
-  siteId,
-  surveyControlPointId,
-  operatorId,
-} from './survey';
+// La topografía vive en domain/geo (M2): georreferencia por proyecto y mojones.
+export { Operator, OperatorId, operatorId } from './operator';

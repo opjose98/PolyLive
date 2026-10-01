@@ -313,7 +313,7 @@ describe('WallElevationService', () => {
     await db.open();
     await db.migrate();
     services = createAppServices(db);
-    service = new WallElevationService(db, services.store, services.commandStack);
+    service = new WallElevationService(db, services.store);
 
     await services.store.createObject(
       new Room({

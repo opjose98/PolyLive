@@ -22,7 +22,8 @@ import {
 import { AppError } from '../../shared/errors/AppError';
 import { ActionButton, alertDialog } from '../primitives';
 import { ToggleRow, ReadonlyRow } from '../components/fields';
-import { colors, spacing, radius, typography, layout } from '../theme/tokens';
+import { colors, spacing, radius, sizes } from '../design/tokens';
+import { type } from '../design/typography';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -44,7 +45,6 @@ export interface SettingsScreenProps {
    */
   onRestored: (restoredFrom: string) => void;
   /** Abre la pantalla de topografía (puntos de control y sistema de coordenadas). */
-  onOpenSurveyControl?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -56,7 +56,6 @@ export function SettingsScreen({
   dbName,
   onOpenProfile,
   onRestored,
-  onOpenSurveyControl,
 }: SettingsScreenProps) {
   const [backups, setBackups] = useState<BackupEntry[]>([]);
   const [creating, setCreating] = useState(false);
@@ -212,22 +211,6 @@ export function SettingsScreen({
           )}
         </View>
 
-        {/* --- Topografía --- */}
-        {onOpenSurveyControl ? (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Topografía</Text>
-            <Text style={styles.subtitle}>
-              Sistema de coordenadas de la Sede y puntos de control (mojones) con referencia GPS.
-            </Text>
-            <ActionButton
-              label="Abrir topografía"
-              variant="secondary"
-              onPress={onOpenSurveyControl}
-              disabled={busy}
-            />
-          </View>
-        ) : null}
-
         {/* --- Operador --- */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Operador</Text>
@@ -268,63 +251,63 @@ function formatBytes(bytes: number): string {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.surface2,
+    backgroundColor: colors.background,
   },
   content: {
     padding: spacing.lg,
     gap: spacing.lg,
   },
   title: {
-    ...typography.title,
-    color: colors.textPrimary,
+    ...type.title,
+    color: colors.text,
   },
   card: {
     backgroundColor: colors.surface,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     padding: spacing.lg,
     gap: spacing.sm,
   },
   cardTitle: {
-    ...typography.heading,
-    color: colors.textPrimary,
+    ...type.heading,
+    color: colors.text,
   },
   subtitle: {
-    ...typography.caption,
+    ...type.caption,
     color: colors.textSecondary,
     marginBottom: spacing.sm,
   },
   listTitle: {
-    ...typography.label,
-    color: colors.textPrimary,
+    ...type.label,
+    color: colors.text,
     marginTop: spacing.md,
   },
   empty: {
-    ...typography.body,
+    ...type.body,
     color: colors.textDisabled,
   },
   backupRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    minHeight: layout.touchTargetMin,
+    minHeight: sizes.touchMin,
     paddingVertical: spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: colors.divider,
+    borderBottomColor: colors.border,
   },
   backupInfo: {
     flex: 1,
   },
   backupDate: {
-    ...typography.bodyStrong,
-    color: colors.textPrimary,
+    ...type.bodyStrong,
+    color: colors.text,
   },
   backupSize: {
-    ...typography.caption,
+    ...type.caption,
     color: colors.textSecondary,
   },
   backupAction: {
-    ...typography.label,
-    color: colors.navy,
+    ...type.label,
+    color: colors.amberDark,
   },
 });
 

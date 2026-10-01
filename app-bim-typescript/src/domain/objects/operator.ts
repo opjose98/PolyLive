@@ -2,9 +2,8 @@
 // operator.ts — Operator: perfil de la persona que realiza el levantamiento
 // =============================================================================
 //
-// GAP CERRADO: `OperatorId` (branded type) existía desde Spike #7 — se usa
-// como `SiteCoordinateSystem.definedBy` — pero ninguna entidad `Operator`
-// real, tabla, ni forma de crear/listar operadores existía en src/. Los
+// GAP CERRADO: `OperatorId` existía desde Spike #7 sin ninguna entidad
+// `Operator` real, tabla, ni forma de crear/listar operadores en src/. Los
 // wireframes planeados (docs/10-NEXT-PHASE-ROADMAP.md §3.2) especifican
 // `OperatorSelector` y `OperatorProfileManager`, que necesitan ambas cosas.
 //
@@ -19,7 +18,11 @@
 //   futuras operaciones que lo requieran), NO es una barrera de seguridad.
 // =============================================================================
 
-import { OperatorId } from './survey';
+export type OperatorId = string & { readonly __brand: 'OperatorId' };
+
+export function operatorId(value: string): OperatorId {
+  return value as OperatorId;
+}
 
 export class Operator {
   readonly id: OperatorId;

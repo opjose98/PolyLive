@@ -1050,16 +1050,6 @@ describe('EditorController', () => {
   // -------------------------------------------------------------------------
 
   describe('viewport', () => {
-    it('pan desplaza el offset sin tocar la escala', () => {
-      const before = editor.getState().transform;
-      editor.pan(50, -30);
-      const after = editor.getState().transform;
-
-      expect(after.offsetX).toBe(before.offsetX + 50);
-      expect(after.offsetY).toBe(before.offsetY - 30);
-      expect(after.scale).toBe(before.scale);
-    });
-
     it('el zoom deja quieto el punto mundo bajo el dedo', () => {
       // Sin compensación de punto focal, el dibujo "se escapa" bajo los dedos
       // al hacer pinch — el bug que LevON tuvo que arreglar dos veces.

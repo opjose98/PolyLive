@@ -29,19 +29,7 @@ import {
 } from '../application/workspace/catalog';
 import { FAB_CLOSED, FabState, openFabMethods, pickFabCategory, pressFabMain } from '../application/workspace/fabMachine';
 import type { ActiveTool } from '../application/workspace/bpcContext';
-import {
-  RangeSlot,
-  RangeState,
-  addItem,
-  createRangeState,
-  moveThumb,
-  removeItem,
-  renameItem,
-  setItemValue,
-  toggleSlotActive,
-  withItems,
-  SetValueResult,
-} from '../application/workspace/rangeModel';
+import { RangeSlot, RangeState, createRangeState, moveThumb, toggleSlotActive, withItems } from '../application/workspace/rangeModel';
 
 // ---------------------------------------------------------------------------
 // Tipos
@@ -126,12 +114,12 @@ export interface WorkspaceActions {
 
   moveRangeThumb(key: RangeKey, slot: RangeSlot, idx: number): void;
   toggleRangeSlot(key: RangeKey, slot: RangeSlot): void;
-  /** Carga los niveles o fases persistidos del proyecto. */
+  /**
+   * Carga los niveles o fases persistidos del proyecto. Es la ÚNICA forma de
+   * cambiar sus elementos: crear, renombrar, borrar o cambiar la cota se hace
+   * en MarkerStore (que valida) y se recarga aquí.
+   */
   setRangeItems(key: RangeKey, items: readonly { id: string; name: string; value: number; base: boolean }[]): void;
-  addRangeItem(key: RangeKey): void;
-  removeRangeItem(key: RangeKey, id: string): void;
-  renameRangeItem(key: RangeKey, id: string, name: string): void;
-  setRangeItemValue(key: RangeKey, id: string, value: number): SetValueResult;
 
   toggleElevationSide(): void;
   toggleMinimap(): void;
@@ -286,14 +274,6 @@ export function createWorkspaceStore(initial: Partial<WorkspaceData> = {}) {
       },
       toggleRangeSlot: (key, slot) => updateRange(key, (s) => toggleSlotActive(s, slot)),
       setRangeItems: (key, items) => updateRange(key, (s) => withItems(s, items)),
-      addRangeItem: (key) => updateRange(key, (s) => addItem(s, RANGE_LABELS[key].item, key)),
-      removeRangeItem: (key, id) => updateRange(key, (s) => removeItem(s, id)),
-      renameRangeItem: (key, id, name) => updateRange(key, (s) => renameItem(s, id, name)),
-      setRangeItemValue: (key, id, value) => {
-        const result = setItemValue(get()[key], id, value);
-        if (result.ok) set({ [key]: result.state } as Pick<WorkspaceData, RangeKey>);
-        return result;
-      },
 
       toggleElevationSide: () => set((p) => ({ elevationSide: p.elevationSide === 'A' ? 'B' : 'A' })),
       toggleMinimap: () => set((p) => ({ minimapExpanded: !p.minimapExpanded })),

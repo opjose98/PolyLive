@@ -19,7 +19,9 @@ import { View, Text, StyleSheet } from 'react-native';
 import { SkiaCanvas } from './SkiaCanvas';
 import type { ICanvasRenderer } from '../../native/canvas/SkiaCanvasAdapter';
 import type { Point2D, CanvasTransform } from '../../domain/geometry/types';
-import { colors, radius, typography } from '../theme/tokens';
+import { colors, radius } from '../design/tokens';
+import { type } from '../design/typography';
+import { CANVAS_PALETTES } from '../design/canvasThemes';
 
 export interface SpacePreviewProps {
   geometry: readonly Point2D[];
@@ -78,10 +80,10 @@ export function SpacePreview({ geometry, width, height }: SpacePreviewProps) {
       }));
 
       if (pts.length >= 3) {
-        r.setFillStyle(colors.roomFill);
+        r.setFillStyle(CANVAS_PALETTES.claro.roomFill);
         r.fillPolygon(pts);
       }
-      r.setStrokeStyle(colors.wallStroke);
+      r.setStrokeStyle(CANVAS_PALETTES.claro.ink);
       r.setLineWidth(1.5);
       if (pts.length >= 3) {
         r.strokePolygon(pts);
@@ -107,25 +109,25 @@ export function SpacePreview({ geometry, width, height }: SpacePreviewProps) {
 
   return (
     <View style={[styles.frame, { width, height }]} accessibilityLabel="Vista previa de la planta">
-      <SkiaCanvas width={width} height={height} onDraw={draw} backgroundColor={colors.canvasBg} />
+      <SkiaCanvas width={width} height={height} onDraw={draw} backgroundColor={CANVAS_PALETTES.claro.background} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   frame: {
-    borderRadius: radius.sm,
+    borderRadius: radius.md,
     overflow: 'hidden',
-    backgroundColor: colors.canvasBg,
+    backgroundColor: CANVAS_PALETTES.claro.background,
   },
   placeholder: {
-    borderRadius: radius.sm,
-    backgroundColor: colors.surface3,
+    borderRadius: radius.md,
+    backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
   },
   placeholderText: {
-    ...typography.caption,
+    ...type.caption,
     color: colors.textDisabled,
   },
 });

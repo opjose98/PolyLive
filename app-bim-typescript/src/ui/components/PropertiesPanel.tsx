@@ -26,7 +26,8 @@ import { Window } from '../../domain/objects/window';
 import type { Measurement } from '../../domain/objects/measurement';
 import { NumberField, TextField, SegmentedField, ReadonlyRow } from './fields';
 import { ActionButton } from '../primitives';
-import { colors, spacing, radius, typography } from '../theme/tokens';
+import { colors, spacing, radius } from '../design/tokens';
+import { type } from '../design/typography';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -439,10 +440,10 @@ const styles = StyleSheet.create({
   },
   empty: {
     padding: spacing.lg,
-    backgroundColor: colors.surface2,
+    backgroundColor: colors.background,
   },
   emptyText: {
-    ...typography.body,
+    ...type.body,
     color: colors.textSecondary,
     textAlign: 'center',
   },
@@ -453,18 +454,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: colors.divider,
+    borderBottomColor: colors.border,
     gap: spacing.md,
   },
   headerTitleWrap: {
     flex: 1,
   },
   headerTitle: {
-    ...typography.heading,
-    color: colors.textPrimary,
+    ...type.heading,
+    color: colors.text,
   },
   headerSubtitle: {
-    ...typography.caption,
+    ...type.caption,
     color: colors.textDisabled,
   },
   body: {
@@ -477,25 +478,25 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     padding: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: colors.divider,
-    backgroundColor: colors.surface2,
+    borderTopColor: colors.border,
+    backgroundColor: colors.background,
   },
   note: {
-    ...typography.caption,
+    ...type.caption,
     color: colors.textSecondary,
     marginTop: spacing.xs,
     marginBottom: spacing.md,
   },
   sectionTitle: {
-    ...typography.label,
-    color: colors.textPrimary,
+    ...type.label,
+    color: colors.text,
     marginTop: spacing.md,
     marginBottom: spacing.xs,
   },
   measurements: {
     marginBottom: spacing.md,
     padding: spacing.md,
-    backgroundColor: colors.surface2,
-    borderRadius: radius.sm,
+    backgroundColor: colors.background,
+    borderRadius: radius.md,
   },
 });

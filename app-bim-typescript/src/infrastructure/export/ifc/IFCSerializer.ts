@@ -14,10 +14,8 @@
 // entidad se explica en step-writer.ts.
 // =============================================================================
 
-import { Wall } from '../../../domain/objects/wall';
 import { Door } from '../../../domain/objects/door';
 import { Window } from '../../../domain/objects/window';
-import { Column } from '../../../domain/objects/column';
 import { RevitObjectBase } from '../../../domain/objects/base';
 import { LEVEL_PROP, PHASE_PROP } from '../../../domain/objects/marker';
 import { columnForExport, toLocal, wallForExport } from '../../../domain/geometry/handedness';

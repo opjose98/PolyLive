@@ -1,41 +1,21 @@
 // =============================================================================
-// SurveyScreen.tsx — Editor de planta
-// Basado en: Canvas2D-interacción.md, SurveyInteractionMode.md,
-//            arquitectura-expo-skia.md
+// SurveyScreen.tsx — Espacio de trabajo de un espacio (planta + alzado)
 // =============================================================================
 //
-// QUÉ CAMBIÓ Y POR QUÉ: esta pantalla concentraba estado de React, llamadas a
-// UseCases, transformaciones de coordenadas y dibujo, y solo sabía encadenar
-// muros con taps. Ahora es una VISTA: suscribe a EditorController, le manda
-// intenciones y renderiza su estado. Todo lo que se puede razonar sin pintar
-// (qué hace un tap, cómo se compensa el zoom, cómo se sincroniza el trazo con
-// lo persistido) vive en el controlador y tiene tests.
+// Es una VISTA: suscribe a EditorController (modelo y cámara de la planta),
+// a workspaceStore (cromo: modo, herramienta, filtros, niveles/fases) y le
+// manda intenciones. Lo que se puede razonar sin pintar vive en el
+// controlador, en application/workspace y en los hooks de cada modo
+// (useTopography), y tiene tests.
 //
-// SUPERFICIE QUE ESTA PANTALLA EXPONE (antes: solo "muro", "cerrar recinto",
-// "deshacer/rehacer" y un botón "Foto" que solo abría un Alert):
-//   · 7 herramientas: Seleccionar, Muro, Puerta, Ventana, Columna, Medir, Foto
-//   · paneo, pinch-zoom y encuadre automático
-//   · panel de propiedades del objeto seleccionado, con edición y borrado
-//   · arrastre de handles para mover muros y columnas
-//   · detección automática de recintos, con adopción del polígono sugerido
-//   · medición BLE y manual PERSISTIDAS, y aplicables como longitud del muro
-//   · toggles de snap angular, snap a nodos, rejilla y cotas
-//   · fotos de campo ancladas a un punto de la planta (SPDS), con código BIM
-//     y geolocalización cuando hay señal
+// Cromo: barra de estado, BPC, FAB + (catálogo del modo), FAB de modo,
+// selectores de nivel/fase, ejes, herramientas de esquina, drawer ⋮ y menú ☰.
+// Solo Levantamiento edita el modelo; los demás modos lo consultan y agregan
+// su propia capa (Topografía: mojones y coordenadas).
 // =============================================================================
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  Dimensions,
-  SafeAreaView,
-  TouchableOpacity,
-  Modal,
-  ScrollView,
-  BackHandler,
-} from 'react-native';
+import { View, Text, StyleSheet, Dimensions, Modal, BackHandler } from 'react-native';
 
 import { PlanCanvas } from '../canvas/PlanCanvas';
 import { BottomSheet, toast, alertDialog } from '../primitives';
@@ -58,9 +38,7 @@ import { CornerTools } from '../workspace/CornerTools';
 import { LevelChip } from '../workspace/LevelChip';
 import { ConfigDrawer } from '../workspace/ConfigDrawer';
 import { MainMenu, MainMenuItem } from '../workspace/MainMenu';
-import { RangeEditHandlers, RangeSelectors } from '../workspace/RangeSelector';
-import { itemAt, RangeState } from '../../application/workspace/rangeModel';
-import { MarkerKind, ProjectMarker } from '../../domain/objects/marker';
+import { RangeSelectors } from '../workspace/RangeSelector';
 import { DEFAULT_EDITOR_DEFAULTS } from '../../application/editor/EditorController';
 import { ConstraintSelector } from '../workspace/ConstraintSelector';
 import {
@@ -72,6 +50,11 @@ import {
 } from '../../application/workspace/constraintModel';
 import { isUniformWall, sameExtent } from '../../domain/objects/vertical';
 import { exportRevitIfc } from '../workspace/exportActions';
+import { useProjectLevels } from '../workspace/useProjectLevels';
+import { uniqueVertices, useTopography } from '../workspace/topo/useTopography';
+import { TopographySheets } from '../workspace/topo/TopographySheets';
+import { TopographyPanel } from '../workspace/topo/TopographyPanel';
+import { amarreSummary, coordinateInline } from '../../application/geo/coordinateText';
 import { ElevationEditor } from '../../application/elevation/ElevationEditor';
 import { ElevationView } from './ElevationView';
 import type { CanvasTransform } from '../../domain/geometry/types';
@@ -87,14 +70,8 @@ import { generateBimCode } from '../../domain/objects/project';
 import { ActionButton } from '../primitives';
 import { PropertiesPanel } from '../components/PropertiesPanel';
 import { NumberField } from '../components/fields';
-import {
-  HuepaDeviceManager,
-  type ConnectionState,
-  type BLEDevice,
-} from '../../native/ble/HuepaDeviceManager';
 import { AppServices } from '../../application/AppServices';
 import { EditorController, EditorState } from '../../application/editor/EditorController';
-import type { RoomSuggestion } from '../../application/use-cases/DetectRoomsUseCase';
 import { Wall } from '../../domain/objects/wall';
 import { Door } from '../../domain/objects/door';
 import { Window } from '../../domain/objects/window';
@@ -102,13 +79,10 @@ import { Measurement } from '../../domain/objects/measurement';
 import { RoomId, revitObjectId, wallId } from '../../domain/objects/base';
 import { AppError } from '../../shared/errors/AppError';
 import { meters } from '../../domain/geometry/types';
-import type { AppStore } from '../../state/appStore';
-import { colors, spacing, radius, typography, layout } from '../theme/tokens';
+import { colors, radius, spacing } from '../design/tokens';
+import { type } from '../design/typography';
 
 const CANVAS_TOUCH_TOLERANCE_PX = sizes.canvasTouchTolerance;
-
-/** El medidor láser queda para una versión posterior; la lógica BLE se conserva. */
-const BLE_ENABLED = false;
 
 // ---------------------------------------------------------------------------
 // Props
@@ -117,9 +91,10 @@ const BLE_ENABLED = false;
 export interface SurveyScreenProps {
   services: AppServices;
   roomId: RoomId;
-  appStore: AppStore;
   /** Abre la galería filtrada por el objeto indicado. */
   onOpenPhotos?: (objectId: string) => void;
+  /** Abre una foto concreta (al tocar su marcador en la planta). */
+  onOpenPhoto?: (photoId: string) => void;
   /** Proyecto al que pertenece el espacio: define sus niveles y fases. */
   projectId?: string;
   projectName?: string;
@@ -134,7 +109,7 @@ export interface SurveyScreenProps {
 }
 
 /** Pantallas que se abren desde el menú ☰, por encima del levantamiento. */
-export type MenuScreen = 'gallery' | 'export' | 'surveyControl' | 'settings' | 'profile';
+export type MenuScreen = 'gallery' | 'export' | 'settings' | 'profile';
 
 // ---------------------------------------------------------------------------
 // Componente
@@ -143,8 +118,8 @@ export type MenuScreen = 'gallery' | 'export' | 'surveyControl' | 'settings' | '
 export function SurveyScreen({
   services,
   roomId,
-  appStore,
   onOpenPhotos,
+  onOpenPhoto,
   projectId,
   projectName = 'Proyecto',
   projectCode = '',
@@ -169,7 +144,6 @@ export function SurveyScreen({
   );
 
   const [state, setState] = useState<EditorState>(() => editor.getState());
-  const [showLabels, setShowLabels] = useState(true);
   const [panelOpen, setPanelOpen] = useState(false);
   const [manualMeasureOpen, setManualMeasureOpen] = useState(false);
   const [manualValue, setManualValue] = useState(3);
@@ -201,12 +175,6 @@ export function SurveyScreen({
   const [photoFs] = useState(() => new ExpoFileSystem());
   const [gps] = useState(() => new ExpoGpsProvider());
 
-  // --- BLE: un manager por pantalla, conectado al store compartido ---
-  const [huepa] = useState(() => new HuepaDeviceManager({ useMock: false }));
-  const [bleState, setBleState] = useState<ConnectionState>('disconnected');
-  const [bleDevice, setBleDevice] = useState<BLEDevice | null>(null);
-  const [lastDistance, setLastDistance] = useState<number | undefined>();
-
   // -----------------------------------------------------------------------
   // Suscripción al controlador
   // -----------------------------------------------------------------------
@@ -229,7 +197,6 @@ export function SurveyScreen({
   // --- El cromo manda sobre el motor: snap, rejilla y herramienta activa ---
   useEffect(() => editor.setNodeSnapEnabled(wsState.snapNode), [editor, wsState.snapNode]);
   useEffect(() => editor.setSnapEnabled(wsState.snapAngle), [editor, wsState.snapAngle]);
-  useEffect(() => editor.setGridEnabled(gridLines || gridDots), [editor, gridLines, gridDots]);
 
   const activeTool = wsState.activeTool;
   useEffect(() => {
@@ -265,65 +232,22 @@ export function SurveyScreen({
   // Solo Levantamiento edita el modelo; los demás modos lo consultan (y en
   // M2–M4 agregan su propia capa: mojones, avance, marcas).
   const editable = wsState.workMode === 'levantamiento';
+  useEffect(() => {
+    if (!editable) setPanelOpen(false);
+  }, [editable]);
   // Avance solo se abre si hay algo que reportar.
   const hasObjects = state.objects.some((o) => !(o instanceof Room));
 
-  const levelsState = useStore(workspaceStore, (s) => s.levels);
-  const phasesState = useStore(workspaceStore, (s) => s.phases);
-  const [markersLoaded, setMarkersLoaded] = useState(false);
-
-  const loadMarkers = useCallback(async () => {
-    if (!projectId) return;
-    const toItem = (m: ProjectMarker) => ({ id: m.id, name: m.name, value: m.value, base: m.isBase });
-    const [lv, ph] = await Promise.all([
-      services.markers.list(projectId, 'level'),
-      services.markers.list(projectId, 'phase'),
-    ]);
-    const ws = workspaceStore.getState();
-    ws.setRangeItems('levels', lv.map(toItem));
-    ws.setRangeItems('phases', ph.map(toItem));
-    setMarkersLoaded(true);
-  }, [services, projectId]);
-
-  useEffect(() => {
-    loadMarkers().catch(() => toast('No se pudieron leer los niveles del proyecto.', { kind: 'error' }));
-  }, [loadMarkers]);
-
-  // Selector de la VISTA: el nivel activo es la planta que se ve y se edita;
-  // [inferior, superior], lo que se calca debajo. A qué niveles se atan los
-  // muros y columnas lo decide su propio selector (base/tope), más abajo.
-  const levelInfo = useMemo(() => {
-    const finite = (st: RangeState) => st.items.filter((it) => Number.isFinite(it.value));
-    const nivel = itemAt(levelsState, 'nivel');
-    const sup = itemAt(levelsState, 'superior');
-    const inf = itemAt(levelsState, 'inferior');
-    return { finite: finite(levelsState), nivel, sup, inf, phases: finite(phasesState), fase: itemAt(phasesState, 'nivel') };
-  }, [levelsState, phasesState]);
-
-  useEffect(() => {
-    if (!markersLoaded) return;
-    const { finite, nivel, sup, inf, phases, fase } = levelInfo;
-    editor.setScope(
-      {
-        active: nivel.id,
-        base: finite.find((i) => i.base)?.id ?? nivel.id,
-        all: new Set(finite.map((i) => i.id)),
-        underlay: new Set(finite.filter((i) => i.id !== nivel.id && i.value >= inf.value && i.value <= sup.value).map((i) => i.id)),
-        elevations: new Map(finite.map((i) => [i.id, i.value] as [string, number])),
-      },
-      {
-        active: fase.id,
-        base: phases.find((i) => i.base)?.id ?? fase.id,
-        all: new Set(phases.map((i) => i.id)),
-        order: new Map(phases.map((i) => [i.id, i.value] as [string, number])),
-      },
-    );
-  }, [editor, markersLoaded, levelInfo]);
+  const { loaded: markersLoaded, view: levelInfo, levelHandlers, phaseHandlers, projectLevels } = useProjectLevels({
+    services,
+    projectId,
+    editor,
+  });
 
   // --- Selector de base y tope (muros y columnas) ---
   const constraintLevels = useMemo<ConstraintLevel[]>(
-    () => sortLevels(levelInfo.finite.map((i) => ({ id: i.id, name: i.name, value: i.value }))),
-    [levelInfo.finite],
+    () => sortLevels(levelInfo.levels.map((i) => ({ id: i.id, name: i.name, value: i.value }))),
+    [levelInfo.levels],
   );
   const levelsKey = constraintLevels.map((l) => `${l.id}:${l.value}`).join('|');
   const unconnectedDefault = DEFAULT_EDITOR_DEFAULTS.wallHeight as number;
@@ -333,9 +257,9 @@ export function SurveyScreen({
   // arriba; cambiar de planta (o la lista de niveles) lo reinicia.
   useEffect(() => {
     if (!markersLoaded || constraintLevels.length === 0) return;
-    const e = defaultExtent(constraintLevels, levelInfo.nivel.id, unconnectedDefault);
+    const e = defaultExtent(constraintLevels, levelInfo.active.id, unconnectedDefault);
     setCreationEdit({ a: e, b: e, linked: true, editing: 'a' });
-  }, [markersLoaded, levelInfo.nivel.id, levelsKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [markersLoaded, levelInfo.active.id, levelsKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const wallMethod = activeTool?.toolId === 'muro' ? ((activeTool.methodId as 'drag' | 'points' | undefined) ?? 'drag') : null;
   const isColumnTool = !!activeTool?.toolId.startsWith('columna');
@@ -375,51 +299,22 @@ export function SurveyScreen({
     });
   }, [editor, creationEdit]);
 
-  const makeMarkerHandlers = useCallback(
-    (kind: MarkerKind, label: string): RangeEditHandlers => ({
-      onAdd: () => {
-        if (!projectId) return;
-        void services.markers.add(projectId, kind, label).then(() => {
-          haptic.commit();
-          return loadMarkers();
-        });
-      },
-      onRemove: (id) => {
-        void services.markers.remove(id).then((ok) => {
-          if (ok) toast(`${label} eliminado: lo que tenía pasa a la base`, { kind: 'info' });
-          return loadMarkers();
-        });
-      },
-      onRename: (id, name) => void services.markers.rename(id, name).then(loadMarkers),
-      onSetValue: async (id, value) => {
-        const r = await services.markers.setValue(id, value);
-        if (r.ok) {
-          await loadMarkers();
-          return null;
-        }
-        return r.reason === 'not-found' ? 'invalid' : r.reason;
-      },
-    }),
-    [services, projectId, loadMarkers],
-  );
-  const levelHandlers = useMemo(() => makeMarkerHandlers('level', 'Nivel'), [makeMarkerHandlers]);
-  const phaseHandlers = useMemo(() => makeMarkerHandlers('phase', 'Fase'), [makeMarkerHandlers]);
+  // --- Topografía (M2): mojones, amarre y coordenadas reales ---
+  const topo = useTopography({
+    services,
+    projectId,
+    spaceId: roomId as unknown as string,
+    editor,
+    levelZ: Number.isFinite(levelInfo.active.value) ? levelInfo.active.value : 0,
+    operatorName,
+    touchTolerancePx: CANVAS_TOUCH_TOLERANCE_PX,
+  });
+
+  const topoBack = topo.back;
 
   // --- Alzado (F4): vive encima de la planta, que queda intacta debajo ---
   const [elevWallId, setElevWallId] = useState<string | null>(null);
   const planCamera = useRef<CanvasTransform | null>(null);
-  const projectLevels = useMemo<ProjectMarker[]>(
-    () =>
-      levelInfo.finite.map((i) => ({
-        id: i.id,
-        projectId: projectId ?? '',
-        kind: 'level' as const,
-        name: i.name,
-        value: i.value,
-        isBase: !!i.base,
-      })),
-    [levelInfo.finite, projectId],
-  );
   const elevEditor = useMemo(
     () => (elevWallId ? new ElevationEditor({ services, wallId: elevWallId, levels: projectLevels }) : null),
     [services, elevWallId], // eslint-disable-line react-hooks/exhaustive-deps
@@ -463,6 +358,7 @@ export function SurveyScreen({
   useEffect(() => {
     if (elevWallId) return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (topoBack()) return true;
       if (panelOpen) {
         setPanelOpen(false);
         return true;
@@ -484,7 +380,7 @@ export function SurveyScreen({
       return false;
     });
     return () => sub.remove();
-  }, [elevWallId, onExit, panelOpen]);
+  }, [elevWallId, onExit, panelOpen, topoBack]);
 
   const closeElevation = useCallback(() => {
     setElevWallId(null);
@@ -492,21 +388,8 @@ export function SurveyScreen({
     if (planCamera.current) editor.setTransform(planCamera.current);
     planCamera.current = null;
     // Lo hecho en el alzado (puertas, ventanas, alturas) se ve al volver.
-    void editor.reload();
+    editor.refresh();
   }, [editor]);
-
-  // Reflejar la selección y la vista en el store global. GAP CERRADO: el
-  // `uiSlice` de appStore (selectedObjectId, propertyPanelOpen, canvasTransform,
-  // snapAngularEnabled) existía desde el principio y NINGÚN componente lo
-  // escribía — era estado muerto.
-  useEffect(() => {
-    const store = appStore.getState();
-    store.setSelectedObjectId(state.selectedId);
-    store.setPropertyPanelOpen(panelOpen);
-    store.updateCanvasTransform(state.transform);
-    store.setSnapAngularEnabled(state.snapEnabled);
-    store.setMode(state.tool === 'select' ? 'move' : state.tool === 'measure' ? 'measure' : 'draw');
-  }, [appStore, state.selectedId, state.transform, state.snapEnabled, state.tool, panelOpen]);
 
   // Historial de mediciones del muro seleccionado — GAP CERRADO: las
   // mediciones se escribían en SQLite y no había ninguna vista que las leyera.
@@ -597,20 +480,32 @@ export function SurveyScreen({
         wsNow.closeWindow();
         return;
       }
+      if (topo.handleTap(x, y)) return;
+      // Un marcador de foto (visible) abre su foto, con la herramienta de selección.
+      if (onOpenPhoto && wsNow.filters.fotos && editor.getState().tool === 'select') {
+        const marker = editor.photoMarkerAt(x, y, CANVAS_TOUCH_TOLERANCE_PX);
+        if (marker) {
+          haptic.select();
+          onOpenPhoto(marker.id);
+          return;
+        }
+      }
       const before = editor.getState().selectedId;
       void editor.handleTap(x, y, CANVAS_TOUCH_TOLERANCE_PX).then(() => {
         const after = editor.getState().selectedId;
         if (editor.getState().tool === 'select' && after && after !== before) haptic.select();
       });
     },
-    [editor],
+    [editor, topo.handleTap, onOpenPhoto],
   );
 
+  // Propiedades (con edición y borrado) solo donde se edita el modelo: en los
+  // demás modos el toque largo solo selecciona y la BPC informa.
   const handleLongPress = useCallback(
     (x: number, y: number) => {
-      if (editor.selectAt(x, y, CANVAS_TOUCH_TOLERANCE_PX)) setPanelOpen(true);
+      if (editor.selectAt(x, y, CANVAS_TOUCH_TOLERANCE_PX) && editable) setPanelOpen(true);
     },
-    [editor],
+    [editor, editable],
   );
 
   const handleDoubleTap = useCallback(
@@ -639,94 +534,15 @@ export function SurveyScreen({
   }, [editor]);
 
   // -----------------------------------------------------------------------
-  // BLE
-  // -----------------------------------------------------------------------
-
-  const handleConnect = useCallback(async () => {
-    try {
-      setBleState('scanning');
-      const devices = await huepa.scan();
-      if (devices.length === 0) {
-        setBleState('disconnected');
-        alertDialog('Sin dispositivo', 'No se encontró un dispositivo Huepa.');
-        return;
-      }
-      setBleState('connecting');
-      await huepa.connect(devices[0].id);
-      setBleState('connected');
-      const device = huepa.getConnectedDevice();
-      setBleDevice(device);
-      appStore.getState().setBleEnabled(true);
-      if (device) appStore.getState().setBleDevice({ id: device.id, name: device.name });
-    } catch (error: any) {
-      setBleState('disconnected');
-      alertDialog('Error BLE', error?.message ?? 'No se pudo conectar.');
-    }
-  }, [huepa, appStore]);
-
-  const handleDisconnect = useCallback(async () => {
-    await huepa.disconnect();
-    setBleState('disconnected');
-    setBleDevice(null);
-    appStore.getState().setBleEnabled(false);
-    appStore.getState().setBleDevice(null);
-  }, [huepa, appStore]);
-
-  /**
-   * Mide con el láser y PERSISTE el resultado contra el muro destino.
-   *
-   * GAP CERRADO: antes esto solo pintaba el número y lo guardaba en el store de
-   * Zustand. Nada llegaba a la tabla `measurements`: la medición se perdía al
-   * cerrar la app, aunque CaptureMeasurementUseCase existía desde el principio.
-   */
-  const handleMeasure = useCallback(async () => {
-    if (!state.measureTargetId) {
-      alertDialog(
-        'Elige el muro',
-        'Selecciona la herramienta Medir y toca el muro que vas a medir con el Huepa.',
-      );
-      return;
-    }
-
-    try {
-      setBleState('measuring');
-      const result = await huepa.measure();
-      setLastDistance(result.distance);
-      setBleState('connected');
-      appStore.getState().setLastMeasurement({
-        distance: meters(result.distance),
-        timestamp: result.timestamp,
-        samples: result.samples.length,
-      });
-
-      // Las 7 muestras ya vienen en la ráfaga: se le pasan al UseCase para que
-      // no vuelva a pedir 7 ráfagas más (49 disparos del láser).
-      const average = await editor.captureMeasurement('ble', undefined, result.samples);
-      if (average == null) return;
-
-      alertDialog(
-        'Medición guardada',
-        `${Number(average).toFixed(3)} m. ¿Aplicarla como longitud del muro?`,
-        [
-          { text: 'Solo guardar', style: 'cancel' },
-          { text: 'Aplicar al muro', onPress: () => void editor.applyMeasurementToWall(average) },
-        ],
-      );
-    } catch (error: any) {
-      setBleState('connected');
-      alertDialog('Error medición', error?.message ?? 'La medición falló.');
-    }
-  }, [huepa, appStore, editor, state.measureTargetId]);
-
-  // -----------------------------------------------------------------------
   // Panel de propiedades
   // -----------------------------------------------------------------------
 
   const selected = editor.selected;
   const displayObjects = useMemo(() => editor.displayObjects, [editor, state.objects, state.dragPreview]);
+  // Los handles invitan a arrastrar: solo donde se puede (Levantamiento).
   const handles = useMemo(
-    () => editor.selectedHandles,
-    [editor, state.objects, state.selectedId, state.dragPreview],
+    () => (editable ? editor.selectedHandles : []),
+    [editor, editable, state.objects, state.selectedId, state.dragPreview],
   );
   const roomName = useMemo(() => {
     const room = state.objects.find((o) => o.type === 'Room');
@@ -742,7 +558,6 @@ export function SurveyScreen({
       objects: displayObjects,
       selectedId: state.selectedId,
       handles,
-      showLabels,
       rooms: state.rooms,
       roomName,
       wallDraft: state.wallDraft,
@@ -753,7 +568,7 @@ export function SurveyScreen({
       snapIndicator,
     }),
     [
-      displayObjects, state.selectedId, handles, showLabels, state.rooms, roomName, state.wallDraft,
+      displayObjects, state.selectedId, handles, state.rooms, roomName, state.wallDraft,
       state.tool, state.measureTargetId, state.photoMarkers, snapIndicator,
     ],
   );
@@ -795,8 +610,13 @@ export function SurveyScreen({
       objects: visibleObjects,
       showLabels: filters.cotas,
       photoMarkers: filters.fotos ? canvasScene.photoMarkers : [],
+      benchmarks: topo.planBenchmarks,
+      selectedBenchmarkId: topo.selectedBenchmark?.id ?? null,
+      coordLabels: topo.coordLabels,
+      // Topografía no dibuja: los nodos se ven para tocarlos y leer coordenadas.
+      showNodes: canvasScene.showNodes || (topo.active && filters.vertices),
     }),
-    [canvasScene, underlay, existingIds, visibleObjects, filters.cotas, filters.fotos],
+    [canvasScene, underlay, existingIds, visibleObjects, filters.cotas, filters.fotos, topo.planBenchmarks, topo.selectedBenchmark, topo.coordLabels, topo.active, filters.vertices],
   );
 
   // --- Selector de base y tope: qué edita ---
@@ -885,6 +705,18 @@ export function SurveyScreen({
   // --- BPC: contexto, píldoras y acciones ---
   const selectionSummary = useMemo((): SelectionSummary | null => {
     const sel = selected;
+    if (topo.active) {
+      const b = topo.selectedBenchmark;
+      if (b) {
+        const pos = topo.positionOf(b);
+        return { typeLabel: `Mojón ${b.name}`, detail: pos ? coordinateInline(topo.benchmarkReal(b), pos.p, topo.display) : 'Sin coordenadas', props: {} };
+      }
+      if (topo.probe) return { typeLabel: 'Vértice', detail: coordinateInline(topo.realOf(topo.probe), topo.probe, topo.display), props: {} };
+      if (sel instanceof Wall) {
+        return { typeLabel: 'Muro', detail: `Inicio ${coordinateInline(topo.realOf(sel.startPoint), sel.startPoint, topo.display)}`, props: {} };
+      }
+      if (sel) return { typeLabel: sel.type, props: {} };
+    }
     if (!sel) return null;
     const cm = (m: unknown) => Math.round(Number(m) * 100);
     if (sel instanceof Wall) {
@@ -905,7 +737,7 @@ export function SurveyScreen({
       return { typeLabel: 'Recinto', detail: state.rooms[0] ? `${state.rooms[0].area.toFixed(2)} m²` : 'abierto', props: {} };
     }
     return { typeLabel: sel.type, props: {} };
-  }, [editor, selected, state.rooms, levelInfo]);
+  }, [editor, selected, state.rooms, levelInfo, topo.active, topo.selectedBenchmark, topo.probe, topo.geo, topo.display]);
 
   const zoomPercent = (state.transform.scale / DEFAULT_SCALE) * 100;
   const bpcContext = resolveBpcContext({
@@ -914,6 +746,7 @@ export function SurveyScreen({
     viewLabel: workModeDef(wsState.workMode).label,
     scaleDenominator: wsState.denominator,
     zoomPercent,
+    ...(topo.active && { canvasTitle: 'Topografía', canvasItems: amarreSummary(topo.geo) }),
   });
 
   const commitSelectionProp = useCallback(
@@ -938,7 +771,7 @@ export function SurveyScreen({
           value,
           onCommit: (v) => workspaceStore.getState().setToolProp(key, v),
         }))
-      : bpcContext.kind === 'selection'
+      : bpcContext.kind === 'selection' && editable
         ? (Object.entries(bpcContext.selection.props) as [PropKey, number][]).map(([key, value]) => ({
             key,
             value,
@@ -947,7 +780,13 @@ export function SurveyScreen({
         : [];
 
   const bpcActions: BpcAction[] = [];
-  if (bpcContext.kind === 'selection') {
+  if (topo.active) {
+    if (topo.picking?.kind === 'place' || topo.picking?.kind === 'stand') {
+      bpcActions.push({ icon: 'close-circle-outline', label: 'Cancelar', onPress: topo.cancelPick });
+    }
+    bpcActions.push({ icon: 'table', label: 'Coordenadas', onPress: topo.openCoords });
+    bpcActions.push({ icon: 'map-marker-radius', label: 'Amarre', onPress: topo.openSetup });
+  } else if (bpcContext.kind === 'selection' && editable) {
     bpcActions.push({ icon: 'tune-variant', label: 'Propiedades', onPress: () => setPanelOpen(true) });
   }
   if (state.tool === 'wall' && state.wallDraft?.start) {
@@ -1007,12 +846,13 @@ export function SurveyScreen({
       ...(onExit ? [{ icon: 'view-grid-outline', label: 'Otros espacios del proyecto', onPress: onExit }] : []),
       { section: 'Exportar', icon: 'file-export-outline', label: 'IFC para Revit', detail: 'Pisos por nivel y restricciones', onPress: () => void handleExportIfc() },
       { icon: 'file-cad', label: 'IFC y DXF del recinto', onPress: go('export') },
-      { section: 'Proyecto', icon: 'map-marker-radius-outline', label: 'Topografía', detail: 'Sistema de coordenadas y puntos de control', onPress: go('surveyControl') },
-      ...(onExitProject ? [{ icon: 'folder-outline', label: 'Cambiar de proyecto', onPress: onExitProject }] : []),
+      ...(onExitProject ? [{ section: 'Proyecto', icon: 'folder-outline', label: 'Cambiar de proyecto', onPress: onExitProject }] : []),
       { section: 'App', icon: 'account-circle-outline', label: 'Operador', detail: operatorName || undefined, onPress: go('profile') },
       { icon: 'cog-outline', label: 'Ajustes y respaldos', onPress: go('settings') },
     ];
   }, [onExit, onExitProject, onNavigate, handleZoom, handleExportIfc, operatorName]);
+
+  const topoVertices = useMemo(() => uniqueVertices(editor.walls), [editor, state.objects, levelInfo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const chromeTop = chromeSpacing.sm;
   const belowBpc = chromeTop + chromeSizes.bpcHeight + chromeSpacing.sm;
@@ -1052,6 +892,7 @@ export function SurveyScreen({
           dragEnabled={editable && state.tool === 'select' && !state.busy}
           drawEnabled={editable && state.tool === 'wall'}
           doubleTapEnabled={state.tool === 'select' && wsState.workMode !== 'topografia'}
+          rotationSnaps={topo.rotationSnaps}
           longPressEnabled
           snapped={state.dragSnappedToNode || !!state.wallDraft?.snappedToNode}
           onTap={handleTap}
@@ -1100,7 +941,7 @@ export function SurveyScreen({
             <AxisGizmo
               kind="plan"
               rotation={state.transform.rotation ?? 0}
-              northAngle={wsState.workMode === 'topografia' && wsState.filters.norte ? 0 : null}
+              northAngle={topo.northAngle}
               bottom={chromeSpacing.xl + chromeSizes.fabCreate + chromeSpacing.md}
               onPress={() => editor.setRotation(0, canvasSize.w / 2, canvasSize.h / 2)}
             />
@@ -1115,6 +956,7 @@ export function SurveyScreen({
           onZoom={handleZoom}
           info={fileInfo}
           hasObjects={hasObjects}
+          modeSection={topo.active && projectId ? <TopographyPanel topo={topo} /> : undefined}
         />
         <MainMenu
           top={0}
@@ -1160,6 +1002,8 @@ export function SurveyScreen({
             }
           />
       </BottomSheet>
+
+      {projectId ? <TopographySheets topo={topo} vertices={topoVertices} /> : null}
 
       {/* --- Cámara anclada a la planta --- */}
       <Modal
@@ -1220,145 +1064,17 @@ export function SurveyScreen({
 }
 
 // ---------------------------------------------------------------------------
-// Piezas locales
-// ---------------------------------------------------------------------------
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.stat}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Styles
 // ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
-  methodRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    backgroundColor: colors.surface,
-  },
-  container: {
-    flex: 1,
-    backgroundColor: colors.surface,
-  },
-  stage: {
-    flex: 1,
-    overflow: 'hidden',
-  },
-  lowerPane: {
-    flex: 1,
-  },
-  lowerPaneContent: {
-    padding: spacing.md,
-    gap: spacing.md,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  stat: {
-    flex: 1,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.sm,
-    backgroundColor: colors.surface2,
-    alignItems: 'center',
-  },
-  statValue: {
-    ...typography.heading,
-    color: colors.navy,
-  },
-  statLabel: {
-    ...typography.caption,
-    color: colors.textSecondary,
-  },
-  sectionTitle: {
-    ...typography.label,
-    color: colors.textPrimary,
-    marginBottom: spacing.xs,
-  },
-  suggestions: {
-    padding: spacing.md,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    borderColor: colors.selectStroke,
-    backgroundColor: colors.surface2,
-    gap: spacing.xs,
-  },
-  suggestionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: layout.touchTargetMin,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.sm,
-    backgroundColor: colors.surface,
-  },
-  suggestionText: {
-    ...typography.body,
-    color: colors.textPrimary,
-  },
-  suggestionAction: {
-    ...typography.label,
-    color: colors.selectStroke,
-  },
-  selectionBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: layout.touchTargetMin,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.sm,
-    backgroundColor: colors.surface3,
-  },
-  selectionBannerText: {
-    ...typography.bodyStrong,
-    color: colors.textPrimary,
-  },
-  selectionBannerAction: {
-    ...typography.label,
-    color: colors.navy,
-  },
-  actionsGrid: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  modalRoot: {
-    flex: 1,
-    backgroundColor: colors.surface,
-  },
-  dialogScrim: {
-    flex: 1,
-    backgroundColor: colors.overlayScrim,
-    justifyContent: 'center',
-    padding: spacing.xl,
-  },
-  dialog: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    padding: spacing.lg,
-  },
-  dialogTitle: {
-    ...typography.title,
-    color: colors.textPrimary,
-    marginBottom: spacing.sm,
-  },
-  dialogBody: {
-    ...typography.body,
-    color: colors.textSecondary,
-    marginBottom: spacing.lg,
-  },
-  dialogActions: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
+  container: { flex: 1, backgroundColor: colors.surface },
+  stage: { flex: 1, overflow: 'hidden' },
+  dialogScrim: { flex: 1, backgroundColor: colors.scrim, justifyContent: 'center', padding: spacing.xl },
+  dialog: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.lg, gap: spacing.md },
+  dialogTitle: { ...type.title, color: colors.text },
+  dialogBody: { ...type.body, color: colors.textSecondary },
+  dialogActions: { flexDirection: 'row', gap: spacing.sm },
 });
 
 export default SurveyScreen;

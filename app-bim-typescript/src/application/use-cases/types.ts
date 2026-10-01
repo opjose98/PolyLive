@@ -3,7 +3,6 @@
 // =============================================================================
 
 import { ValidationWarning } from '../../domain/geometry/types';
-import { CommandId } from '../commands/Command';
 
 /** Resultado de validación genérico. */
 export interface ValidationResult {

@@ -28,18 +28,17 @@ import { SurveyScreen, MenuScreen } from './screens/SurveyScreen';
 import { GalleryScreen } from './screens/GalleryScreen';
 import { ExportScreen } from './screens/ExportScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
-import { SurveyControlScreen } from './screens/SurveyControlScreen';
 import { PermissionsManager } from '../native/permissions/PermissionsManager';
 import { ExpoSQLiteDatabase } from '../native/sqlite/ExpoSQLiteDatabase';
 import { ExpoBackupDatabaseUseCase } from '../native/backup/ExpoBackupDatabaseUseCase';
 import { createAppServices, AppServices } from '../application/AppServices';
-import { createAppStore } from '../state/appStore';
 import { RoomId } from '../domain/objects';
 import { Operator } from '../domain/objects/operator';
 import { Project } from '../domain/objects/project';
 import { AppError } from '../shared/errors/AppError';
-import { colors, typography } from './theme/tokens';
 import { alertDialog, ScreenShell } from './primitives';
+import { colors } from './design/tokens';
+import { type } from './design/typography';
 
 const DB_NAME = 'polylive.db';
 
@@ -61,13 +60,14 @@ export default function App() {
   const [permissionsReady, setPermissionsReady] = useState(false);
   const [permManager] = useState(() => new PermissionsManager());
   const [boot, setBoot] = useState<BootStatus>({ phase: 'loading' });
-  const [appStore] = useState(() => createAppStore());
 
   const [operator, setOperator] = useState<Operator | null>(null);
   const [project, setProject] = useState<Project | null>(null);
   const [activeRoomId, setActiveRoomId] = useState<RoomId | null>(null);
   /** Pantalla del menú ☰ abierta por encima (null = ninguna). */
   const [screen, setScreen] = useState<MenuScreen | null>(null);
+  /** Galería abierta desde la planta: fotos de un objeto, o una foto concreta. */
+  const [galleryFocus, setGalleryFocus] = useState<{ objectId?: string; photoId?: string } | null>(null);
 
   // -----------------------------------------------------------------------
   // Permisos
@@ -227,7 +227,14 @@ export default function App() {
     setProject(null);
     setActiveRoomId(null);
   };
-  const closeScreen = () => setScreen(null);
+  const closeScreen = () => {
+    setScreen(null);
+    setGalleryFocus(null);
+  };
+  const openGallery = (focus: { objectId?: string; photoId?: string }) => {
+    setGalleryFocus(focus);
+    setScreen('gallery');
+  };
 
   /** Pantallas del menú ☰: se deslizan por encima de lo que haya debajo. */
   const renderScreen = () => {
@@ -244,12 +251,6 @@ export default function App() {
             />
           </ScreenShell>
         );
-      case 'surveyControl':
-        return (
-          <ScreenShell title="Topografía" subtitle="Sistema de coordenadas y puntos de control" onBack={closeScreen} scroll={false}>
-            <SurveyControlScreen services={services} operator={operator} appStore={appStore} />
-          </ScreenShell>
-        );
       case 'settings':
         return (
           <ScreenShell title="Ajustes y respaldos" onBack={closeScreen} scroll={false}>
@@ -257,15 +258,24 @@ export default function App() {
               services={services}
               dbName={DB_NAME}
               onOpenProfile={() => setScreen('profile')}
-              onOpenSurveyControl={() => setScreen('surveyControl')}
               onRestored={handleRestored}
             />
           </ScreenShell>
         );
       case 'gallery':
         return activeRoomId ? (
-          <ScreenShell title="Galería de fotos" subtitle={project?.name} onBack={closeScreen} scroll={false}>
-            <GalleryScreen services={services} roomId={activeRoomId} />
+          <ScreenShell
+            title={galleryFocus?.objectId ? 'Fotos del objeto' : 'Galería de fotos'}
+            subtitle={project?.name}
+            onBack={closeScreen}
+            scroll={false}
+          >
+            <GalleryScreen
+              services={services}
+              roomId={activeRoomId}
+              objectId={galleryFocus?.objectId}
+              photoId={galleryFocus?.photoId}
+            />
           </ScreenShell>
         ) : null;
       case 'export':
@@ -320,7 +330,6 @@ export default function App() {
       <SurveyScreen
         services={services}
         roomId={activeRoomId}
-        appStore={appStore}
         projectId={project.id as unknown as string}
         projectName={project.name}
         projectCode={project.bimCode}
@@ -331,6 +340,8 @@ export default function App() {
           setProject(null);
         }}
         onNavigate={setScreen}
+        onOpenPhotos={(objectId) => openGallery({ objectId })}
+        onOpenPhoto={(photoId) => openGallery({ photoId })}
       />
       {renderScreen()}
     </View>
@@ -344,7 +355,7 @@ export default function App() {
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
-    backgroundColor: colors.surface2,
+    backgroundColor: colors.background,
   },
   loadingContainer: {
     flex: 1,
@@ -353,7 +364,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   loadingText: {
-    ...typography.body,
+    ...type.body,
     color: colors.textSecondary,
   },
 });

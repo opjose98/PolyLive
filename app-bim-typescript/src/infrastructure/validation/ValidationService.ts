@@ -27,8 +27,7 @@ import { ValidationResult, IValidationService } from '../../application/use-case
 
 const MIN_WALL_THICKNESS = 0.1; // metros — docs/09-PRODUCTION-READINESS.md §5.4
 const MAX_WALL_THICKNESS = 1.0;
-const MIN_HEIGHT = 0.1;
-const MAX_HEIGHT = 10; // límite de sentido común para un Recinto interior
+// Sin tope de altura: un muro atado a niveles puede subir varios pisos (Revit).
 
 function ok(): ValidationResult {
   return { valid: true, warnings: [] };

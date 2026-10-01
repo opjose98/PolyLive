@@ -11,6 +11,8 @@
 // de React que se perdía al desmontar el componente.
 // =============================================================================
 
+import { TopographyService } from './geo/TopographyService';
+import { GeoStore } from '../infrastructure/sqlite/GeoStore';
 import { MarkerStore } from '../infrastructure/sqlite/MarkerStore';
 import { IDatabase } from '../infrastructure/sqlite/database';
 import { LevelId, levelId } from '../domain/objects/base';
@@ -32,12 +34,8 @@ import {
   LinkPhotoToObjectUseCase,
   CaptureMeasurementUseCase,
   ExportRoomIfcUseCase,
-  SaveRoomDraftUseCase,
-  RecoverRoomDraftUseCase,
   DetectRoomsUseCase,
   UpdateObjectPropertyUseCase,
-  CreateControlPointUseCase,
-  DefineSiteCoordinateSystemUseCase,
 } from './use-cases';
 import { ExportRoomDxfUseCase } from './use-cases/ExportRoomDxfUseCase';
 import { WallElevationService } from './elevation/WallElevationService';
@@ -68,6 +66,10 @@ export interface AppServices {
   defaultLevelId: LevelId;
   /** Niveles y fases de cada proyecto. */
   markers: MarkerStore;
+  /** Topografía: georreferencia del proyecto y mojones. */
+  geo: GeoStore;
+  /** Amarres, mojones y coordenadas reales (usa `geo`). */
+  topography: TopographyService;
   useCases: {
     createWall: CreateWallUseCase;
     createDoor: CreateDoorUseCase;
@@ -83,17 +85,11 @@ export interface AppServices {
     exportRoomIfc: ExportRoomIfcUseCase;
     /** Exportación a DXF R2000 (portada de LevON). */
     exportRoomDxf: ExportRoomDxfUseCase;
-    saveRoomDraft: SaveRoomDraftUseCase;
-    recoverRoomDraft: RecoverRoomDraftUseCase;
     /**
      * Detección automática de recintos (motor portado de LevON).
      * Devuelve SUGERENCIAS: `closeRoom` sigue siendo quien cierra el recinto.
      */
     detectRooms: DetectRoomsUseCase;
-
-    // Topografía (Spike #7) — alcanzables desde SurveyControlScreen.
-    createControlPoint: CreateControlPointUseCase;
-    defineSiteCoordinateSystem: DefineSiteCoordinateSystemUseCase;
   };
 }
 
@@ -110,6 +106,7 @@ export function createAppServices(db: IDatabase): AppServices {
   const cdt = new CDTAdapter();
   const ifcSerializer = new IFCSerializerAdapter();
   const projectStore = new ProjectStore(db);
+  const geoStore = new GeoStore(db);
   const defaultLevelId = levelId('level-1');
 
   return {
@@ -120,9 +117,11 @@ export function createAppServices(db: IDatabase): AppServices {
     cdt,
     projectStore,
     projects: new ProjectService(projectStore, store, defaultLevelId),
-    elevations: new WallElevationService(db, store, commandStack),
+    elevations: new WallElevationService(db, store),
     defaultLevelId,
     markers: new MarkerStore(db),
+    geo: geoStore,
+    topography: new TopographyService(geoStore),
     useCases: {
       createWall: new CreateWallUseCase(store, commandStack, validationService),
       createDoor: new CreateDoorUseCase(store, commandStack, validationService),
@@ -137,12 +136,8 @@ export function createAppServices(db: IDatabase): AppServices {
       captureMeasurement: new CaptureMeasurementUseCase(store),
       exportRoomIfc: new ExportRoomIfcUseCase(store, validationService, ifcSerializer),
       exportRoomDxf: new ExportRoomDxfUseCase(store),
-      saveRoomDraft: new SaveRoomDraftUseCase(store),
-      recoverRoomDraft: new RecoverRoomDraftUseCase(store),
       // Sin dependencias: es una función pura sobre una lista de muros.
       detectRooms: new DetectRoomsUseCase(),
-      createControlPoint: new CreateControlPointUseCase(store),
-      defineSiteCoordinateSystem: new DefineSiteCoordinateSystemUseCase(store),
     },
   };
 }

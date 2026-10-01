@@ -157,38 +157,3 @@ export function withItems(
   const fix = (id: string) => (id === BASE_ID && baseId ? baseId : id);
   return reorder(state, items, { superior: fix(prev.superior), nivel: fix(prev.nivel), inferior: fix(prev.inferior) });
 }
-
-export function addItem(state: RangeState, itemLabel: string, idPrefix: string): RangeState {
-  const max = Math.max(...state.items.filter(isFiniteItem).map((it) => it.value));
-  const value = max + 1;
-  const seq = state.seq + 1;
-  const item: RangeItem = { id: `${idPrefix}-${seq}`, name: `${itemLabel} ${value}`, value };
-  return reorder({ ...state, seq }, [...state.items, item], selectionOf(state));
-}
-
-export function removeItem(state: RangeState, id: string): RangeState {
-  const it = state.items.find((i) => i.id === id);
-  if (!it || it.base || it.fixed) return state;
-  return reorder(state, state.items.filter((i) => i.id !== id), selectionOf(state));
-}
-
-export function renameItem(state: RangeState, id: string, name: string): RangeState {
-  const trimmed = name.trim();
-  const it = state.items.find((i) => i.id === id);
-  if (!it || it.fixed || !trimmed) return state;
-  return { ...state, items: state.items.map((i) => (i.id === id ? { ...i, name: trimmed } : i)) };
-}
-
-export type SetValueResult =
-  | { readonly ok: true; readonly state: RangeState }
-  | { readonly ok: false; readonly reason: 'not-found' | 'base' | 'invalid' | 'duplicate' };
-
-export function setItemValue(state: RangeState, id: string, value: number): SetValueResult {
-  const it = state.items.find((i) => i.id === id);
-  if (!it || it.fixed) return { ok: false, reason: 'not-found' };
-  if (it.base) return { ok: false, reason: 'base' };
-  if (!Number.isFinite(value)) return { ok: false, reason: 'invalid' };
-  if (state.items.some((o) => o.id !== id && o.value === value)) return { ok: false, reason: 'duplicate' };
-  const items = state.items.map((i) => (i.id === id ? { ...i, value } : i));
-  return { ok: true, state: reorder(state, items, selectionOf(state)) };
-}

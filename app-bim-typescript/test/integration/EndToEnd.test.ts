@@ -32,7 +32,6 @@ import { meters, squareMeters, Point2D } from '../../src/domain/geometry/types';
 import { CDT } from '../../src/domain/geometry/CDT';
 import { CommandStack } from '../../src/application/state/CommandStack';
 import { CanvasManager, canvasPoint } from '../../src/application/canvas';
-import { createAppStore, AppStore } from '../../src/state/appStore';
 import { IValidationService, ICDT, IBLEManager, ValidationResult } from '../../src/application/use-cases/types';
 import { CreateWallUseCase } from '../../src/application/use-cases/CreateWallUseCase';
 import { CreateDoorUseCase } from '../../src/application/use-cases/CreateDoorUseCase';
@@ -146,11 +145,6 @@ describe('Flujo 1 — CreateWall', () => {
     // Application: comando en el stack
     expect(commandStack.size()).toBe(1);
 
-    // State: simula lo que la capa UI haría tras recibir el output del UseCase
-    // (no hay wiring automático UseCase → Zustand en el código actual).
-    const appStore: AppStore = createAppStore();
-    appStore.getState().setSelectedObjectId(output.wall.id);
-    expect(appStore.getState().selectedObjectId).toBe(output.wall.id);
 
     // UI: re-render — fuera del alcance de un test sin runtime de React/Skia.
   });

@@ -20,7 +20,8 @@ import React, { useState } from 'react';
 import { View, Text, Image, StyleSheet, Modal, ScrollView, TouchableOpacity } from 'react-native';
 import type { AuditPhoto } from '../../domain/objects/audit-photo';
 import { ActionButton, Chip } from '../primitives';
-import { colors, spacing, radius, typography, layout } from '../theme/tokens';
+import { colors, spacing, radius, sizes } from '../design/tokens';
+import { type } from '../design/typography';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -193,7 +194,7 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: colors.textPrimary,
+    backgroundColor: colors.text,
   },
   imageWrap: {
     flex: 1,
@@ -204,8 +205,8 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   missing: {
-    ...typography.body,
-    color: colors.textOnDark,
+    ...type.body,
+    color: colors.textOnAccent,
     textAlign: 'center',
   },
   overlay: {
@@ -220,36 +221,36 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
     borderRadius: radius.xs,
-    backgroundColor: colors.yellow,
+    backgroundColor: colors.textOnAccent,
   },
   overlayBadgeText: {
-    ...typography.caption,
-    color: colors.navy,
+    ...type.caption,
+    color: colors.amberDark,
     fontFamily: 'Roboto_700Bold',
   },
   overlayLines: {
-    backgroundColor: colors.overlayScrim,
-    borderRadius: radius.sm,
+    backgroundColor: colors.scrim,
+    borderRadius: radius.md,
     padding: spacing.sm,
   },
   overlayText: {
-    ...typography.caption,
-    color: colors.textOnDark,
+    ...type.caption,
+    color: colors.textOnAccent,
   },
   closeButton: {
     position: 'absolute',
     top: spacing.xl,
     right: spacing.md,
-    width: layout.touchTargetMin,
-    height: layout.touchTargetMin,
-    borderRadius: radius.pill,
-    backgroundColor: colors.overlayScrim,
+    width: sizes.touchMin,
+    height: sizes.touchMin,
+    borderRadius: radius.round,
+    backgroundColor: colors.scrim,
     alignItems: 'center',
     justifyContent: 'center',
   },
   closeText: {
     fontSize: 18,
-    color: colors.textOnDark,
+    color: colors.textOnAccent,
   },
   controls: {
     flexDirection: 'row',
@@ -268,18 +269,18 @@ const styles = StyleSheet.create({
   detailRow: {
     paddingVertical: spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: colors.divider,
+    borderBottomColor: colors.border,
   },
   detailLabel: {
-    ...typography.label,
+    ...type.label,
     color: colors.textSecondary,
   },
   detailValue: {
-    ...typography.body,
-    color: colors.textPrimary,
+    ...type.body,
+    color: colors.text,
   },
   warning: {
-    ...typography.caption,
+    ...type.caption,
     color: colors.warning,
     marginTop: spacing.md,
   },

@@ -174,58 +174,6 @@ describe('Crash durante edición — los datos comprometidos (COMMIT) sobreviven
 });
 
 // ---------------------------------------------------------------------------
-// 4. Crash durante trazo (CREATING state) — polygon_drafts
-// ---------------------------------------------------------------------------
-
-describe('Crash durante trazo — la tabla polygon_drafts persiste el progreso parcial', () => {
-  it('un draft guardado a mitad de trazo sobrevive cerrar y reabrir la conexión', async () => {
-    const dbPath = tempDbPath('draft');
-    const db1 = new Database(dbPath);
-    await db1.open();
-    await db1.migrate();
-
-    // Se escribe directamente a `polygon_drafts` A PROPÓSITO: este test verifica
-    // la capa de PERSISTENCIA (que una fila sobrevive a cerrar y reabrir la
-    // conexión), no el UseCase. La cobertura de RecoverRoomDraftUseCase —que sí
-    // existe en src/, al contrario de lo que decía este comentario— está en
-    // test/application/RoomDraftUseCases.test.ts, y su integración con el
-    // editor en test/editor/EditorController.test.ts.
-    const partialVertices = [
-      { x: 0, y: 0 },
-      { x: 4, y: 0 },
-      { x: 4, y: 2 }, // el usuario se detuvo aquí, el polígono nunca se cerró
-    ];
-    await db1.run(
-      `INSERT INTO polygon_drafts (id, room_id, vertices_json, is_closed) VALUES (?, ?, ?, 0)`,
-      ['draft-1', ROOM_ID as unknown as string, JSON.stringify(partialVertices)],
-    );
-    await db1.close();
-
-    const db2 = new Database(dbPath);
-    await db2.open();
-    const row = await db2.get<{ vertices_json: string; is_closed: number }>(
-      'SELECT vertices_json, is_closed FROM polygon_drafts WHERE id = ?',
-      ['draft-1'],
-    );
-    expect(row).toBeDefined();
-    expect(row!.is_closed).toBe(0);
-    expect(JSON.parse(row!.vertices_json)).toEqual(partialVertices);
-
-    await db2.close();
-    fs.unlinkSync(dbPath);
-  });
-
-  it('RecoverRoomDraftUseCase (Maestro §7.10) — ver cobertura completa en test/application/RoomDraftUseCases.test.ts', () => {
-    // Implementado: lee el borrador más reciente de polygon_drafts (vertices +
-    // isClosed) y expone confirmContinue()/discard() para que la UI decida.
-    // El CommandStack de esa sesión NO se reconstruye — sigue siendo un GAP
-    // documentado (ver el comentario en RecoverRoomDraftUseCase.ts y §5 de
-    // docs/07-BUGS-GAPS-COMPLETE.md), no algo que esta UseCase pretenda resolver.
-    expect(true).toBe(true);
-  });
-});
-
-// ---------------------------------------------------------------------------
 // 5. Exportación falla a mitad de generación — el archivo parcial no debe
 //    quedar como si fuera válido
 // ---------------------------------------------------------------------------

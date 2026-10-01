@@ -4,7 +4,7 @@
 // =============================================================================
 
 import { Meters } from '../geometry/types';
-import { RevitObjectId, RoomId, WallId, MeasurementId } from './base';
+import { RoomId, WallId, MeasurementId } from './base';
 
 /**
  * Tipo de captura de medición.
