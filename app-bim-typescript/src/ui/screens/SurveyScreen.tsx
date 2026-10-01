@@ -33,6 +33,7 @@ import { Room } from '../../domain/objects/room';
 import { WorkspaceStatusBar } from '../workspace/WorkspaceStatusBar';
 import { Bpc, BpcAction, BpcPill } from '../workspace/Bpc';
 import { FabCreate } from '../workspace/FabCreate';
+import { ThumbUndo } from '../workspace/ThumbUndo';
 import { FabView } from '../workspace/FabView';
 import { CornerTools } from '../workspace/CornerTools';
 import { LevelChip } from '../workspace/LevelChip';
@@ -166,6 +167,9 @@ export function SurveyScreen({
     })),
   );
   const { gridLines, gridDots } = wsState;
+  // Las herramientas de esquina se despliegan sobre los ejes: mientras estén abiertas, los ejes se ocultan.
+  const cornerOpen = useStore(workspaceStore, (s) => s.currentPanel === 'cornerTools');
+  const fabOpen = useStore(workspaceStore, (s) => s.fab.level !== 'closed');
   const styles = useStyles();
   const canvasPalette = useCanvasPalette();
 
@@ -939,14 +943,22 @@ export function SurveyScreen({
             <LevelChip top={belowBpc} />
             {projectId ? <RangeSelectors levels={levelHandlers} phases={phaseHandlers} extra={constraintElement} /> : null}
             <FabView top={chromeTop} hasObjects={hasObjects} />
-            <AxisGizmo
+            {cornerOpen ? null : <AxisGizmo
               kind="plan"
               rotation={state.transform.rotation ?? 0}
               northAngle={topo.northAngle}
               bottom={chromeSpacing.xl + chromeSizes.fabCreate + chromeSpacing.md}
               onPress={() => editor.setRotation(0, canvasSize.w / 2, canvasSize.h / 2)}
-            />
+            />}
             <CornerTools onZoom={handleZoom} />
+            {editable && !fabOpen ? (
+              <ThumbUndo
+                canUndo={state.canUndo && !state.busy}
+                canRedo={state.canRedo && !state.busy}
+                onUndo={handleUndo}
+                onRedo={handleRedo}
+              />
+            ) : null}
             <FabCreate onToolActivated={handleToolActivated} />
           </>
         )}

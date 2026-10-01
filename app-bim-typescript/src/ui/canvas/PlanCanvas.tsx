@@ -650,7 +650,10 @@ export function PlanCanvas(props: PlanCanvasProps) {
         if (!g.pinching) finishCamera();
       });
 
-    return Gesture.Simultaneous(Gesture.Exclusive(longPress, doubleTap, tap), pan, pinch, rotation);
+    // El toque responde AL INSTANTE: no espera a descartar un doble toque
+    // (eso sumaba ~300 ms a cada selección). El doble toque se reconoce en
+    // paralelo; el primer toque solo selecciona, que es inofensivo.
+    return Gesture.Simultaneous(Gesture.Exclusive(longPress, Gesture.Simultaneous(tap, doubleTap)), pan, pinch, rotation);
     // Los gestos solo se reconstruyen cuando cambia qué está habilitado.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.doubleTapEnabled, props.longPressEnabled, !!props.onDoubleTap, !!props.onLongPress]);

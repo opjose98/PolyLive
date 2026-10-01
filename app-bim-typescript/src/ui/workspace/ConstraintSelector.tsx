@@ -389,7 +389,7 @@ const useStyles = themedStyles((colors) => ({
     maxWidth: 190,
   },
   tipDrag: { backgroundColor: colors.accentText },
-  tipText: { ...type.caption, color: colors.textOnAccent },
+  tipText: { ...type.caption, color: colors.tooltipText },
   cfgWindow: { left: spacing.lg + WIDTH + spacing.md, bottom: 96, width: 250 },
   cfgBlock: { gap: spacing.xs, marginBottom: spacing.sm },
   cfgEnd: { ...type.label, color: colors.accentText },

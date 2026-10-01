@@ -46,6 +46,8 @@ export interface ChromeColors {
   /** Etiquetas oscuras flotantes: rótulos del FAB, toasts. */
   readonly tooltip: string;
   readonly tooltipText: string;
+  /** Acento legible SOBRE el rótulo flotante (que va invertido respecto del tema). */
+  readonly tooltipAccent: string;
   readonly scrim: string;
   /** Superficie translúcida para rótulos que flotan sobre el lienzo. */
   readonly glass: string;
@@ -86,7 +88,7 @@ const ACCENTS: Record<WorkModeId, Record<CanvasThemeId, Tone>> = {
   },
 };
 
-const BASES: Record<CanvasThemeId, Omit<ChromeColors, 'accent' | 'accentText' | 'accentSoft' | 'textOnAccent' | 'sideB'>> = {
+const BASES: Record<CanvasThemeId, Omit<ChromeColors, 'accent' | 'accentText' | 'accentSoft' | 'textOnAccent' | 'sideB' | 'tooltipAccent'>> = {
   claro: {
     surface: '#FFFFFF',
     background: '#FAFAFA',
@@ -160,6 +162,7 @@ export function chromeColors(theme: CanvasThemeId, mode: WorkModeId): ChromeColo
       accentText: a.text,
       accentSoft: a.soft,
       textOnAccent: a.onFill,
+      tooltipAccent: theme === 'oscuro' ? ACCENTS[mode].claro.text : ACCENTS[mode].oscuro.text,
       sideB: mode === 'avance' ? SIDE_B_ALT[theme] : SIDE_B[theme],
     };
     chromeCache.set(key, c);

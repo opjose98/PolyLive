@@ -131,7 +131,7 @@ const useStyles = themedStyles((colors) => ({
     maxWidth: 420,
     ...elevation[2],
   },
-  message: { ...type.body, color: colors.textOnAccent, flexShrink: 1 },
+  message: { ...type.body, color: colors.tooltipText, flexShrink: 1 },
   action: { paddingHorizontal: spacing.xs },
-  actionText: { ...type.label, color: colors.accent, textTransform: 'uppercase' },
+  actionText: { ...type.label, color: colors.tooltipAccent, textTransform: 'uppercase' },
 }));

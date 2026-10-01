@@ -74,3 +74,31 @@ describe('faceSegments', () => {
     close(segs[0][0], -0.1, 0.1);
   });
 });
+
+describe('hatchSegments — trama de mampostería', () => {
+  const { hatchSegments } = require('../../src/ui/canvas/wallGeometry');
+  it('recorta las líneas al polígono y respeta el paso', () => {
+    const square = [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }];
+    const segs = hatchSegments(square, 10, 0); // horizontales
+    expect(segs.length).toBe(10);
+    for (const [a, b] of segs) {
+      expect(a.x).toBeCloseTo(0);
+      expect(b.x).toBeCloseTo(100);
+    }
+  });
+  it('a 45° todos los extremos quedan dentro o en el borde', () => {
+    const rect = [{ x: 0, y: 0 }, { x: 200, y: 0 }, { x: 200, y: 20 }, { x: 0, y: 20 }];
+    const segs = hatchSegments(rect, 8);
+    expect(segs.length).toBeGreaterThan(15); // (200 + 20)·sin45° / 8 ≈ 19
+    for (const seg of segs) for (const p of seg) {
+      expect(p.x).toBeGreaterThan(-1e-6);
+      expect(p.x).toBeLessThan(200 + 1e-6);
+      expect(p.y).toBeGreaterThan(-1e-6);
+      expect(p.y).toBeLessThan(20 + 1e-6);
+    }
+  });
+  it('polígono degenerado o paso inválido: nada', () => {
+    expect(hatchSegments([{ x: 0, y: 0 }, { x: 1, y: 1 }], 5)).toEqual([]);
+    expect(hatchSegments([{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }], 0)).toEqual([]);
+  });
+});

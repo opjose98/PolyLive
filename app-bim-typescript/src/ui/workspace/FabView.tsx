@@ -23,7 +23,7 @@ import { FloatWindow, IconButton, Tappable, Icon, toast } from '../primitives';
 import { radius, sizes, spacing } from '../design/tokens';
 import { type } from '../design/typography';
 import { STAGGER_MS } from '../design/motion';
-import { themedStyles, useTheme } from '../design/theme';
+import { chromeColors, themedStyles, useTheme } from '../design/theme';
 
 /** Entra a un modo si se puede; si no, explica por qué (toast). */
 export function selectWorkMode(id: WorkModeId, hasObjects: boolean): boolean {
@@ -48,9 +48,9 @@ export function selectWorkMode(id: WorkModeId, hasObjects: boolean): boolean {
 export const FabView = React.memo(function FabView({ top, hasObjects = true }: { top: number; hasObjects?: boolean }) {
   const styles = useStyles();
   const colors = useTheme();
-  const { open, workMode, mode, windowId } = useStore(
+  const { open, workMode, mode, windowId, theme } = useStore(
     workspaceStore,
-    useShallow((s) => ({ open: s.currentPanel === 'fabView', workMode: s.workMode, mode: s.mode, windowId: s.currentWindow?.id })),
+    useShallow((s) => ({ open: s.currentPanel === 'fabView', workMode: s.workMode, mode: s.mode, windowId: s.currentWindow?.id, theme: s.canvasTheme })),
   );
   const ws = workspaceStore.getState;
   const active = workModeDef(workMode);
@@ -62,18 +62,20 @@ export const FabView = React.memo(function FabView({ top, hasObjects = true }: {
         <Tappable
           onPress={() => ws().togglePanel('fabView')}
           haptic="select"
-          style={[styles.main, { borderColor: active.color }, open && { backgroundColor: active.color }]}
+          style={[styles.main, { borderColor: colors.accent }, open && { backgroundColor: colors.accent }]}
           accessibilityLabel={`Modo: ${active.label}. Cambiar de modo`}
           accessibilityState={{ expanded: open }}
         >
           <Animated.View key={active.id} entering={ZoomIn.duration(180)}>
-            <Icon name={active.icon} size={22} color={open ? colors.textOnAccent : active.color} />
+            <Icon name={active.icon} size={22} color={open ? colors.textOnAccent : colors.accentText} />
           </Animated.View>
         </Tappable>
         {open ? (
           <View style={styles.minis}>
             {modes.map((m, i) => {
               const on = workMode === m.id;
+              // Cada modo se ve con SU color en el tema actual.
+              const mc = chromeColors(theme, m.id);
               const blocked = modeBlock(m.id, { view: mode, hasObjects }) !== null;
               return (
                 <Animated.View key={m.id} entering={ZoomIn.delay(i * STAGGER_MS).springify().damping(15)} exiting={FadeOut.duration(80)}>
@@ -84,11 +86,11 @@ export const FabView = React.memo(function FabView({ top, hasObjects = true }: {
                     accessibilityLabel={m.label}
                     accessibilityState={{ selected: on, disabled: blocked }}
                   >
-                    <View style={[styles.tip, on && { backgroundColor: m.color }]}>
-                      <Text style={styles.tipText}>{m.label}</Text>
+                    <View style={[styles.tip, on && { backgroundColor: mc.accent }]}>
+                      <Text style={[styles.tipText, on && { color: mc.textOnAccent }]}>{m.label}</Text>
                     </View>
-                    <View style={[styles.miniBtn, on && { backgroundColor: m.color, borderColor: m.color }]}>
-                      <Icon name={m.icon} size={18} color={on ? colors.textOnAccent : m.color} />
+                    <View style={[styles.miniBtn, on && { backgroundColor: mc.accent, borderColor: mc.accent }]}>
+                      <Icon name={m.icon} size={18} color={on ? mc.textOnAccent : mc.accentText} />
                     </View>
                   </Tappable>
                 </Animated.View>
@@ -173,7 +175,7 @@ const useStyles = themedStyles((colors) => ({
   minis: { marginTop: spacing.sm, gap: spacing.sm, alignItems: 'flex-end' },
   miniRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   tip: { backgroundColor: colors.tooltip, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 3 },
-  tipText: { ...type.caption, color: colors.textOnAccent },
+  tipText: { ...type.caption, color: colors.tooltipText },
   miniBtn: {
     width: 36,
     height: 36,

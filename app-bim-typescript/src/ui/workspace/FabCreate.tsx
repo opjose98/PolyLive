@@ -149,7 +149,7 @@ const useStyles = themedStyles((colors) => ({
   mini: {},
   miniRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   tip: { backgroundColor: colors.tooltip, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 4 },
-  tipText: { ...type.label, color: colors.textOnAccent },
+  tipText: { ...type.label, color: colors.tooltipText },
   miniBtn: {
     width: sizes.fabMini,
     height: sizes.fabMini,

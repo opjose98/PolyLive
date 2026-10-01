@@ -159,7 +159,8 @@ export const ElevationCanvas = React.memo(function ElevationCanvas(props: Elevat
         cb.current.onLongPress(e.x, e.y);
       });
 
-    return Gesture.Simultaneous(Gesture.Exclusive(longPress, doubleTap, tap), pan, pinch);
+    // Toque inmediato (sin esperar al doble toque); ver PlanCanvas.
+    return Gesture.Simultaneous(Gesture.Exclusive(longPress, Gesture.Simultaneous(tap, doubleTap)), pan, pinch);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

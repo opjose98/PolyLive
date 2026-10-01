@@ -188,3 +188,42 @@ export function faceSegments(
   if (hi > cursor) segments.push([at(cursor), at(hi)]);
   return segments;
 }
+
+/**
+ * Trama de un polígono (en px de pantalla): segmentos paralelos a `angle`
+ * (rad) cada `spacing` px, recortados por el polígono (par/impar, sirve para
+ * cuadriláteros a inglete aunque no sean convexos). Es la trama de 45° con
+ * que se representa la mampostería cortada.
+ */
+export function hatchSegments(
+  polygon: readonly Point2D[],
+  spacing: number,
+  angle = Math.PI / 4,
+): [Point2D, Point2D][] {
+  if (polygon.length < 3 || spacing <= 0) return [];
+  // Se trabaja en un marco girado: las líneas de trama son horizontales.
+  const c = Math.cos(-angle);
+  const s = Math.sin(-angle);
+  const rot = polygon.map((p) => ({ x: p.x * c - p.y * s, y: p.x * s + p.y * c }));
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const p of rot) {
+    minY = Math.min(minY, p.y);
+    maxY = Math.max(maxY, p.y);
+  }
+  const out: [Point2D, Point2D][] = [];
+  const back = (x: number, y: number): Point2D => ({ x: x * c + y * s, y: -x * s + y * c });
+  // Las líneas caen en múltiplos de `spacing` del marco girado: dos muros
+  // vecinos comparten la misma trama y se leen como uno.
+  for (let y = Math.ceil(minY / spacing) * spacing; y <= maxY; y += spacing) {
+    const xs: number[] = [];
+    for (let i = 0; i < rot.length; i++) {
+      const a = rot[i];
+      const b = rot[(i + 1) % rot.length];
+      if ((a.y <= y && b.y > y) || (b.y <= y && a.y > y)) xs.push(a.x + ((y - a.y) / (b.y - a.y)) * (b.x - a.x));
+    }
+    xs.sort((m, n) => m - n);
+    for (let k = 0; k + 1 < xs.length; k += 2) out.push([back(xs[k], y), back(xs[k + 1], y)]);
+  }
+  return out;
+}
