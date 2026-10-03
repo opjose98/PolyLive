@@ -341,8 +341,8 @@ describe('modos en el store', () => {
     expect(st.getState().activeTool).not.toBeNull();
     st.getState().setWorkMode('revision');
     expect(st.getState().activeTool).toBeNull();
-    // En Revisión el FAB + ofrece marcas (todavía deshabilitadas).
-    expect(st.getState().activateTool('marcas', 'trazo')).toEqual({ ok: false, reason: 'disabled' });
+    // En Revisión el FAB + ofrece las marcas (M4).
+    expect(st.getState().activateTool('marcas', 'trazo')).toMatchObject({ ok: true, tool: { toolId: 'trazo' } });
   });
 
   it('pasar a alzado desde Topografía vuelve a Levantamiento', () => {
