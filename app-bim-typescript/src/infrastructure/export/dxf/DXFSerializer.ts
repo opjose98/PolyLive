@@ -81,6 +81,20 @@ export interface DXFExportData {
   readonly elevations?: readonly WallElevation[];
   /** Decimales de las coordenadas. 4 = décima de milímetro. */
   readonly precision?: number;
+  /**
+   * Recintos con identidad (T0): contorno a cara interior y rótulo por cada
+   * uno. Con recintos no se dibuja el contorno único del espacio.
+   */
+  readonly zones?: readonly DXFZone[];
+}
+
+export interface DXFZone {
+  readonly code: string;
+  readonly name: string;
+  readonly polygon: readonly { x: number; y: number }[];
+  readonly netArea: number;
+  /** Dónde va el rótulo (un punto interior). */
+  readonly label: { x: number; y: number };
 }
 
 export class DXFExportError extends Error {
@@ -382,8 +396,14 @@ export class DXFSerializer {
     this.pair('0', 'SECTION');
     this.pair('2', 'ENTITIES');
 
-    // El contorno del recinto primero: es la referencia de todo lo demás.
-    if (data.room && data.room.geometry.length >= 3) {
+    // Los contornos de recinto primero: son la referencia de todo lo demás.
+    const zones = (data.zones ?? []).filter((z) => z.polygon.length >= 3);
+    for (const z of zones) {
+      this.lwPolyline(DXF_LAYERS.roomBoundary, z.polygon, true);
+      this.text(DXF_LAYERS.annotation, z.label, `${z.code} ${z.name}`, 0.25);
+      this.text(DXF_LAYERS.annotation, { x: z.label.x, y: z.label.y + 0.35 }, `${z.netArea.toFixed(2)} m2`, 0.2);
+    }
+    if (zones.length === 0 && data.room && data.room.geometry.length >= 3) {
       this.lwPolyline(DXF_LAYERS.roomBoundary, data.room.geometry, true);
       if (data.room.area != null) {
         const label = `${(data.room.properties.name as string | undefined) ?? 'Recinto'} — ${Number(

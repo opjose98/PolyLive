@@ -38,7 +38,11 @@ import { Room } from '../../domain/objects/room';
 import { Column } from '../../domain/objects/column';
 import { Door } from '../../domain/objects/door';
 import { Window } from '../../domain/objects/window';
-import { distanceToSegment } from '../../domain/geometry/polygon-utils';
+import { distanceToSegment, isPointInPolygon } from '../../domain/geometry/polygon-utils';
+import { generateId } from '../../domain/objects/base';
+import { interiorPoint, netGeometry } from '../../domain/objects/zone';
+import { reconcileZones } from '../topology/reconcileZones';
+import type { ZoneEdit } from '../../infrastructure/sqlite/ZoneStore';
 import { lineShape } from '../../domain/geometry/shapes';
 import { LEVEL_PROP, PHASE_PROP } from '../../domain/objects/marker';
 import {
@@ -121,11 +125,25 @@ export interface WallDraft {
   readonly snappedToNode: boolean;
 }
 
-/** Recinto cerrado detectado automáticamente a partir de los muros. */
+/**
+ * Recinto cerrado que forman los muros del nivel activo. `area` y `polygon`
+ * son al eje (lo que detecta la topología); `id` y lo demás vienen del
+ * recinto PERSISTIDO que le corresponde (ver reconcileZones). Sin `id` solo
+ * en el instante previo a reconciliar.
+ */
 export interface DetectedRoom {
   readonly polygon: readonly Point2D[];
   readonly area: number;
+  /** Punto interior donde va el rótulo. */
   readonly centroid: Point2D;
+  readonly id?: string;
+  readonly number?: number;
+  readonly name?: string;
+  readonly use?: string;
+  readonly notes?: string;
+  readonly netPolygon?: readonly Point2D[];
+  readonly netArea?: number;
+  readonly perimeter?: number;
 }
 
 /**
@@ -174,6 +192,8 @@ export interface EditorState {
   /** Recintos cerrados que forman los muros, recalculados en cada cambio. */
   readonly rooms: readonly DetectedRoom[];
   readonly selectedId: RevitObjectId | null;
+  /** Recinto seleccionado (tocar dentro de él sin tocar un objeto). Excluye a `selectedId`. */
+  readonly selectedZoneId: string | null;
   /** Muro elegido como destino de la próxima medición (herramienta `measure`). */
   readonly measureTargetId: WallId | null;
   /**
@@ -261,6 +281,7 @@ export class EditorController {
   private dragOrigin: Point2D | null = null;
   private dragTolerancePx = 22;
   private wallCommits: Promise<void> = Promise.resolve();
+  private zoneQueue: Promise<unknown> = Promise.resolve();
   private levelScope: LevelScope | null = null;
   private phaseScope: PhaseScope | null = null;
   private creationVertical: CreationVertical = { wall: null, column: null };
@@ -303,6 +324,7 @@ export class EditorController {
       wallDraft: null,
       rooms: [],
       selectedId: null,
+      selectedZoneId: null,
       measureTargetId: null,
       pendingPhotoPoint: null,
       photoMarkers: [],
@@ -366,6 +388,15 @@ export class EditorController {
   /** Objetos del nivel activo, sin lo creado en fases posteriores a la activa. */
   get scopedObjects(): readonly RevitObjectBase[] {
     return this.scope().scoped;
+  }
+
+  /**
+   * Lo que se toca para seleccionar: todo menos el Room contenedor. Tocar
+   * dentro de un espacio cerrado selecciona su RECINTO (con identidad), no el
+   * contenedor del levantamiento.
+   */
+  private get pickable(): readonly RevitObjectBase[] {
+    return this.scopedObjects.filter((o) => !(o instanceof Room));
   }
 
   private scope(): NonNullable<EditorController['scopeCache']> {
@@ -596,7 +627,8 @@ export class EditorController {
         .execute({ walls })
         .suggestions.map((r) => ({ polygon: r.polygon, area: r.area as number, centroid: r.centroid }))
         .sort((a, b) => b.area - a.area);
-    const rooms = detect(objects.filter((o): o is Wall => o instanceof Wall && this.inScope(o)));
+    const scopedWalls = objects.filter((o): o is Wall => o instanceof Wall && this.inScope(o));
+    const rooms = await this.syncZones(detect(scopedWalls), scopedWalls);
     // El Recinto persistido (el que exportan IFC y DXF) es el de su nivel, la
     // base: navegar a otro nivel no debe reescribir su geometría.
     const lv = this.levelScope;
@@ -616,7 +648,81 @@ export class EditorController {
       // Una selección apuntando a un objeto que ya no está (borrado, o
       // deshecho) dejaría el panel de propiedades mostrando un fantasma.
       selectedId: objects.some((o) => o.id === this.state.selectedId) ? this.state.selectedId : null,
+      selectedZoneId: rooms.some((r) => r.id === this.state.selectedZoneId) ? this.state.selectedZoneId : null,
     });
+  }
+
+  /**
+   * Liga los contornos detectados a sus recintos persistidos (crea los nuevos,
+   * desliga los que dejaron de cerrarse) y devuelve los recintos a dibujar.
+   * En cola: dos recargas simultáneas crearían el mismo recinto dos veces.
+   */
+  private syncZones(contours: readonly DetectedRoom[], walls: readonly Wall[]): Promise<DetectedRoom[]> {
+    const run = async (): Promise<DetectedRoom[]> => {
+      const zones = this.services.zones;
+      const space = this.roomId as unknown as string;
+      const lv = this.levelScope;
+      const level = lv?.active ?? '';
+      const all = await zones.list(space);
+      // Lo creado antes de cargar los niveles (nivel '') es de la base.
+      const mine = all.filter((z) => z.levelId === level || (z.levelId === '' && (!lv || level === lv.base)));
+      const thick = walls.map((w) => ({ start: w.startPoint, end: w.endPoint, thickness: w.thickness as number }));
+      const { assigned, changed } = reconcileZones({
+        zones: mine,
+        detected: contours.map((c) => ({ polygon: c.polygon, area: c.area, ...netGeometry(c.polygon, thick) })),
+        spaceId: space,
+        levelId: level,
+        nextNumber: Math.max(0, ...all.map((z) => z.number)) + 1,
+        newId: () => generateId() as unknown as string,
+        now: new Date().toISOString(),
+      });
+      await zones.saveGeometry(changed);
+      return assigned.map((z, i) => ({
+        polygon: contours[i].polygon,
+        area: contours[i].area,
+        centroid: interiorPoint(z.netPolygon.length >= 3 ? z.netPolygon : z.polygon),
+        id: z.id,
+        number: z.number,
+        name: z.name,
+        use: z.use,
+        notes: z.notes,
+        netPolygon: z.netPolygon,
+        netArea: z.netArea,
+        perimeter: z.perimeter,
+      }));
+    };
+    const next = this.zoneQueue.then(run, run);
+    this.zoneQueue = next.catch(() => undefined);
+    return next.catch(() => [...contours]);
+  }
+
+  // -------------------------------------------------------------------------
+  // Recintos con identidad: selección y edición
+  // -------------------------------------------------------------------------
+
+  /** Recinto bajo un punto de pantalla (el más pequeño que lo contenga), o `null`. */
+  zoneAt(screenX: number, screenY: number): DetectedRoom | null {
+    const p = this.screenToWorld(screenX, screenY);
+    const hits = this.state.rooms.filter((r) => r.id && r.polygon.length >= 3 && isPointInPolygon(p, r.polygon));
+    return hits.sort((a, b) => a.area - b.area)[0] ?? null;
+  }
+
+  get selectedZone(): DetectedRoom | null {
+    return this.state.rooms.find((r) => r.id === this.state.selectedZoneId) ?? null;
+  }
+
+  selectZone(id: string | null): void {
+    this.patch({ selectedZoneId: id, ...(id && { selectedId: null }) });
+  }
+
+  /** Cambia nombre, uso o notas del recinto (metadatos: no entran al historial de deshacer). */
+  async editZone(id: string, edit: ZoneEdit): Promise<void> {
+    try {
+      await this.services.zones.edit(id, edit);
+      await this.reload();
+    } catch (err) {
+      this.fail(err, 'No se pudo guardar el recinto.');
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -661,7 +767,7 @@ export class EditorController {
   }
 
   select(id: RevitObjectId | null): void {
-    this.patch({ selectedId: id });
+    this.patch({ selectedId: id, selectedZoneId: null });
   }
 
   /**
@@ -672,8 +778,8 @@ export class EditorController {
   selectAt(screenX: number, screenY: number, touchTolerancePx: number): RevitObjectBase | null {
     const world = this.screenToWorld(screenX, screenY);
     const tol = touchToleranceMeters(touchTolerancePx, this.state.transform.scale);
-    const hit = this.selection.hitTest({ worldPoint: world, objects: this.scopedObjects, thresholdMeters: tol });
-    if (hit) this.patch({ selectedId: hit.id });
+    const hit = this.selection.hitTest({ worldPoint: world, objects: this.pickable, thresholdMeters: tol });
+    if (hit) this.patch({ selectedId: hit.id, selectedZoneId: null });
     return hit ?? null;
   }
 
@@ -820,11 +926,13 @@ export class EditorController {
     const tol = touchToleranceMeters(touchTolerancePx, this.state.transform.scale);
 
     switch (this.state.tool) {
-      case 'select':
-        this.patch({
-          selectedId: this.selection.hitTest({ worldPoint: world, objects: this.scopedObjects, thresholdMeters: tol })?.id ?? null,
-        });
+      case 'select': {
+        // Un objeto bajo el dedo gana; si no hay, el recinto que lo contiene.
+        const hit = this.selection.hitTest({ worldPoint: world, objects: this.pickable, thresholdMeters: tol });
+        const zone = hit ? null : this.zoneAt(screenX, screenY);
+        this.patch({ selectedId: hit?.id ?? null, selectedZoneId: zone?.id ?? null });
         return;
+      }
       case 'wall':
         return this.wallTap(screenX, screenY);
       case 'door':

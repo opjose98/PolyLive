@@ -33,6 +33,8 @@ export interface ExportRoomDxfInput {
    * porque viven en otro store; sin ellas el DXF sale sin puertas ni ventanas.
    */
   elevations?: readonly WallElevation[];
+  /** Recintos con identidad: contorno y rótulo por recinto. */
+  zones?: DXFExportData['zones'];
 }
 
 export interface ExportRoomDxfOutput {
@@ -73,6 +75,7 @@ export class ExportRoomDxfUseCase {
       columns,
       elevations: input.elevations,
       precision: input.precision,
+      zones: input.zones,
     };
 
     const dxfContent = new DXFSerializer().serialize(data);

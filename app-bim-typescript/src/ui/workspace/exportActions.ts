@@ -17,6 +17,7 @@ import { AppError } from '../../shared/errors/AppError';
 import { saveTextToUserFolder } from '../../native/export/saveToUserFolder';
 import { toast } from '../primitives';
 import { haptic } from '../design/haptics';
+import { dxfZones, ifcZones } from '../../application/topology/zoneExport';
 
 export interface ExportContext {
   readonly roomId: RoomId;
@@ -74,10 +75,11 @@ export async function exportRevitIfc(services: AppServices, ctx: ExportContext):
   toast('Generando IFC…', { kind: 'info', durationMs: 1200 });
   try {
     const none = Promise.resolve([] as ProjectMarker[]);
-    const [lv, ph, elevs] = await Promise.all([
+    const [lv, ph, elevs, zones] = await Promise.all([
       ctx.projectId ? services.markers.list(ctx.projectId, 'level') : none,
       ctx.projectId ? services.markers.list(ctx.projectId, 'phase') : none,
       services.elevations.listElevations(ctx.roomId),
+      services.zones.list(ctx.roomId as unknown as string),
     ]);
     const sills = new Map<string, number>();
     for (const e of elevs) for (const o of e.openings) if (o.vanoId) sills.set(o.vanoId, o.sillHeight);
@@ -89,8 +91,9 @@ export async function exportRevitIfc(services: AppServices, ctx: ExportContext):
       projectName: ctx.projectName,
       projectKey: ctx.projectId,
       author: ctx.author,
+      zones: ifcZones(zones),
     });
-    return await save(ctx, 'ifc', out.ifcContent, `${lv.length || 1} nivel(es)`);
+    return await save(ctx, 'ifc', out.ifcContent, `${lv.length || 1} nivel(es), ${ifcZones(zones).length} recinto(s)`);
   } catch (err) {
     console.warn('[export-ifc]', err);
     const message = failureMessage(err, 'No se pudo exportar el IFC.');
@@ -104,7 +107,10 @@ export async function exportPlanDxf(services: AppServices, ctx: ExportContext): 
   try {
     // Las elevaciones van explícitas: sin ellas el DXF saldría sin huecos.
     const elevations = await services.elevations.listElevations(ctx.roomId);
-    const r = await services.useCases.exportRoomDxf.execute({ roomId: ctx.roomId, title: ctx.spaceName, elevations });
+    // La planta del DXF es la del nivel base: sus recintos (los de otros niveles se superpondrían).
+    const base = ctx.projectId ? (await services.markers.list(ctx.projectId, 'level')).find((m) => m.isBase)?.id : undefined;
+    const zones = dxfZones(await services.zones.list(ctx.roomId as unknown as string), base ?? '');
+    const r = await services.useCases.exportRoomDxf.execute({ roomId: ctx.roomId, title: ctx.spaceName, elevations, zones });
     const detail =
       `${r.stats.walls} muro(s), ${r.stats.columns} columna(s), ${r.stats.openings} hueco(s)` +
       (r.stats.roomClosed ? ', recinto cerrado' : ', recinto sin cerrar');

@@ -224,6 +224,39 @@ CREATE TABLE IF NOT EXISTS project_benchmarks (
 );
 `;
 
+/**
+ * Tabla: zones
+ * Recintos con identidad (T0): el espacio cerrado que forman los muros de un
+ * nivel, con id estable, número, nombre y uso. Ver domain/objects/zone.ts.
+ *
+ * - space_id: el espacio (contenedor, el `room_id` de lo dibujado)
+ * - bound = 0: hoy no hay contorno cerrado que le corresponda (se conserva
+ *   para recuperarlo al deshacer)
+ * - polygon_json / net_polygon_json: contorno al eje y a cara interior
+ */
+export const CREATE_ZONES = `
+CREATE TABLE IF NOT EXISTS zones (
+  id                TEXT PRIMARY KEY NOT NULL,
+  space_id          TEXT NOT NULL,
+  level_id          TEXT NOT NULL DEFAULT '',
+  number            INTEGER NOT NULL,
+  name              TEXT NOT NULL,
+  use_label         TEXT NOT NULL DEFAULT '',
+  notes             TEXT NOT NULL DEFAULT '',
+  polygon_json      TEXT NOT NULL DEFAULT '[]',
+  net_polygon_json  TEXT NOT NULL DEFAULT '[]',
+  seed_x            REAL NOT NULL,
+  seed_y            REAL NOT NULL,
+  area              REAL NOT NULL DEFAULT 0,
+  net_area          REAL NOT NULL DEFAULT 0,
+  perimeter         REAL NOT NULL DEFAULT 0,
+  bound             INTEGER NOT NULL DEFAULT 1 CHECK(bound IN (0, 1)),
+  is_deleted        INTEGER NOT NULL DEFAULT 0 CHECK(is_deleted IN (0, 1)),
+  created_at        TEXT NOT NULL,
+  updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
+);
+`;
+
 // ---------------------------------------------------------------------------
 // Índices para consultas frecuentes
 // ---------------------------------------------------------------------------
@@ -261,6 +294,9 @@ CREATE INDEX IF NOT EXISTS idx_project_spaces_room
 
 CREATE INDEX IF NOT EXISTS idx_wall_elevations_room
   ON wall_elevations(room_id) WHERE is_deleted = 0;
+
+CREATE INDEX IF NOT EXISTS idx_zones_space
+  ON zones(space_id, level_id) WHERE is_deleted = 0;
 `;
 
 // ---------------------------------------------------------------------------
@@ -279,5 +315,6 @@ export const ALL_DDL: string[] = [
   CREATE_PROJECT_GEOREFERENCE,
   CREATE_BENCHMARKS,
   CREATE_PROJECT_BENCHMARKS,
+  CREATE_ZONES,
   CREATE_INDEXES,
 ];

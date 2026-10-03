@@ -148,18 +148,54 @@ export class IFCSerializer {
     // ------------------------------------------------------------------
     // 4a. Espacio (Room) y losa, en el piso base
     // ------------------------------------------------------------------
+    /** Alto libre de un espacio: hasta el nivel de arriba, o 3 m en el último. */
+    const heightAbove = (storey: Storey) => {
+      const above = levels.find((l) => l.elevation > storey.level.elevation);
+      return above ? above.elevation - storey.level.elevation : 3;
+    };
+    const zones = (input.zones ?? []).filter((z) => z.netPolygon.length >= 3);
+    // Un IfcSpace por recinto (habitación de Revit), en el piso de su nivel y a cara interior.
+    const spacesByStorey = new Map<Storey, number[]>();
+    for (const z of zones) {
+      const storey = storeyOf(z.levelId);
+      const height = heightAbove(storey);
+      const body = w.bodyShape([w.extrusion(w.polygonProfile(z.netPolygon.map(toLocal)), w.origin3Axis, height)]);
+      const placement = w.placementAt(storey.placement, 0, 0, 0);
+      const space = w.add(
+        `IFCSPACE('${stableGuid(`zone:${z.id}`)}',${oh},${stepString(z.code)},$,$,${ref(placement)},${ref(w.productShape([body]))},${stepString(z.name)},.ELEMENT.,.INTERNAL.,$)`,
+      );
+      spacesByStorey.set(storey, [...(spacesByStorey.get(storey) ?? []), space]);
+      w.propertySet(`zone:${z.id}`, 'Pset_SpaceCommon', space, [
+        ['Reference', { identifier: z.code }],
+        ['PolyLiveId', { identifier: z.id }],
+      ]);
+      w.quantities(`zone:${z.id}`, 'Qto_SpaceBaseQuantities', space, {
+        lengths: [
+          ['Height', height],
+          ['NetPerimeter', z.perimeter],
+        ],
+        areas: [
+          ['NetFloorArea', z.netArea],
+          ['GrossFloorArea', z.grossArea],
+        ],
+      });
+      products++;
+    }
+    for (const [storey, spaces] of spacesByStorey) w.aggregates(`spaces:${storey.entity}`, storey.entity, spaces);
+
     const polygon = input.room.geometry.map(toLocal);
     if (polygon.length >= 3) {
-      const above = levels.find((l) => l.elevation > baseLevel.elevation);
-      const spaceHeight = above ? above.elevation - baseLevel.elevation : 3;
-      const body = w.bodyShape([w.extrusion(w.polygonProfile(polygon), w.origin3Axis, spaceHeight)]);
-      const placement = w.placementAt(baseStorey.placement, 0, 0, 0);
-      const name = (input.room.properties.name as string | undefined) ?? 'Recinto';
-      const space = w.add(
-        `IFCSPACE('${stableGuid(input.room.id as string)}',${oh},${stepString(name)},$,$,${ref(placement)},${ref(w.productShape([body]))},${stepString(name)},.ELEMENT.,.INTERNAL.,$)`,
-      );
-      w.aggregates(`space:${space}`, baseStorey.entity, [space]);
-      products++;
+      if (zones.length === 0) {
+        const spaceHeight = heightAbove(baseStorey);
+        const body = w.bodyShape([w.extrusion(w.polygonProfile(polygon), w.origin3Axis, spaceHeight)]);
+        const placement = w.placementAt(baseStorey.placement, 0, 0, 0);
+        const name = (input.room.properties.name as string | undefined) ?? 'Recinto';
+        const space = w.add(
+          `IFCSPACE('${stableGuid(input.room.id as string)}',${oh},${stepString(name)},$,$,${ref(placement)},${ref(w.productShape([body]))},${stepString(name)},.ELEMENT.,.INTERNAL.,$)`,
+        );
+        w.aggregates(`space:${space}`, baseStorey.entity, [space]);
+        products++;
+      }
 
       if (floor) {
         const thickness = (floor.thickness as number) || 0.2;

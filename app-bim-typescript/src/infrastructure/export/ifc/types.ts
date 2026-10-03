@@ -156,9 +156,31 @@ export interface SerializeInput {
   readonly author?: string;
   /** Clave estable del proyecto: fija el GUID de IfcProject entre exportaciones. */
   readonly projectKey?: string;
+  /**
+   * Recintos del espacio. Con recintos, cada uno es un IfcSpace; sin ellos se
+   * exporta el contorno del espacio como un único IfcSpace (comportamiento anterior).
+   */
+  readonly zones?: readonly IfcZoneInput[];
 }
 
 /** Nivel del proyecto tal como llega al exportador. */
+/**
+ * Recinto con identidad (T0) → un IfcSpace en el piso de su nivel, con su
+ * contorno a cara interior (la habitación de Revit).
+ */
+export interface IfcZoneInput {
+  readonly id: string;
+  /** Código corto (R-01): el `Name` del IfcSpace, el número de habitación en Revit. */
+  readonly code: string;
+  /** Nombre (Cocina, Baño…): el `LongName`. */
+  readonly name: string;
+  readonly levelId: string;
+  readonly netPolygon: readonly { x: number; y: number }[];
+  readonly netArea: number;
+  readonly grossArea: number;
+  readonly perimeter: number;
+}
+
 export interface IfcLevelInput {
   readonly id: string;
   readonly name: string;

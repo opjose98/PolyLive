@@ -14,6 +14,7 @@
 import { TopographyService } from './geo/TopographyService';
 import { GeoStore } from '../infrastructure/sqlite/GeoStore';
 import { MarkerStore } from '../infrastructure/sqlite/MarkerStore';
+import { ZoneStore } from '../infrastructure/sqlite/ZoneStore';
 import { IDatabase } from '../infrastructure/sqlite/database';
 import { LevelId, levelId } from '../domain/objects/base';
 import { ObjectStore } from '../infrastructure/sqlite/ObjectStore';
@@ -67,6 +68,8 @@ export interface AppServices {
   defaultLevelId: LevelId;
   /** Niveles y fases de cada proyecto. */
   markers: MarkerStore;
+  /** Recintos con identidad (T0): nombre, uso y contorno de cada espacio cerrado. */
+  zones: ZoneStore;
   /** Topografía: georreferencia del proyecto y mojones. */
   geo: GeoStore;
   /** Amarres, mojones y coordenadas reales (usa `geo`). */
@@ -123,6 +126,7 @@ export function createAppServices(db: IDatabase): AppServices {
     elevations: new WallElevationService(db, store),
     defaultLevelId,
     markers: new MarkerStore(db),
+    zones: new ZoneStore(db),
     geo: geoStore,
     topography: new TopographyService(geoStore),
     useCases: {

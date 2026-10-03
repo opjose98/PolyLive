@@ -16,6 +16,7 @@ import {
 } from '../../domain/objects';
 import { Window } from '../../domain/objects';
 import { IValidationService, IIFCSerializer, ValidationError } from './types';
+import type { IfcZoneInput } from '../../infrastructure/export/ifc/types';
 
 export interface ExportRoomIfcInput {
   roomId: RoomId;
@@ -29,6 +30,8 @@ export interface ExportRoomIfcInput {
   /** Clave estable del proyecto (su id): fija el GUID de IfcProject. */
   projectKey?: string;
   author?: string;
+  /** Recintos con identidad: un IfcSpace por recinto (T0). */
+  zones?: readonly IfcZoneInput[];
 }
 
 export interface ExportRoomIfcOutput {
@@ -82,6 +85,7 @@ export class ExportRoomIfcUseCase {
       projectName: input.projectName,
       projectKey: input.projectKey,
       author: input.author,
+      zones: input.zones,
     });
 
     const exportTime = Date.now() - startTime;
