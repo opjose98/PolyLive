@@ -1,5 +1,9 @@
 # 18 — Informe de herramientas: estado y capítulos
 
+> **Actualización 2026-10-03:** Suelo, Topografía M2b (inverso, área, replanteo, cuadrícula, CSV/KML,
+> IFC georreferenciado), Avance (M3) y Revisión (M4) ya funcionan; recintos con identidad y uniones de muros.
+> Ver `docs/20-T0-SUELO-M2b-M3-M4.md`.
+
 > Fecha: 2026-10-01 · Base: `main` + PR #11 (tema, fluidez, dibujo).
 > Fuente: el catálogo real (`application/workspace/catalog.ts`), las pantallas y el código que responde a
 > cada control. Nada de este informe sale de la memoria: cada estado se verificó en el código y, donde se
