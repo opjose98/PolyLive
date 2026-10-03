@@ -10,8 +10,8 @@
 
 import React from 'react';
 import { ScrollView, Text, View } from 'react-native';
-import { TextField, ReadonlyRow } from '../components/fields';
-import { Chip } from '../primitives';
+import { TextField, ReadonlyRow, NumberField } from '../components/fields';
+import { ActionButton, Chip } from '../primitives';
 import { themedStyles } from '../design/theme';
 import { spacing } from '../design/tokens';
 import { type } from '../design/typography';
@@ -26,9 +26,14 @@ export interface ZoneSheetProps {
   levelName?: string;
   editable: boolean;
   onEdit: (edit: { name?: string; use?: string; notes?: string }) => void;
+  /** Suelo del recinto (F6a): espesor en m, o `null` si no tiene. */
+  floorThickness: number | null;
+  onAddFloor: () => void;
+  onRemoveFloor: () => void;
+  onFloorThickness: (m: number) => void;
 }
 
-export function ZoneSheet({ zone, levelName, editable, onEdit }: ZoneSheetProps) {
+export function ZoneSheet({ zone, levelName, editable, onEdit, floorThickness, onAddFloor, onRemoveFloor, onFloorThickness }: ZoneSheetProps) {
   const styles = useStyles();
   const m2 = (v?: number) => (v === undefined ? '—' : `${v.toFixed(2)} m²`);
   return (
@@ -47,6 +52,26 @@ export function ZoneSheet({ zone, levelName, editable, onEdit }: ZoneSheetProps)
       <ReadonlyRow label="Perímetro neto" value={zone.perimeter === undefined ? '—' : `${zone.perimeter.toFixed(2)} m`} />
       <ReadonlyRow label="Área al eje de muros" value={m2(zone.area)} />
       {levelName ? <ReadonlyRow label="Nivel" value={levelName} /> : null}
+      <Text style={styles.section}>Suelo</Text>
+      {floorThickness !== null ? (
+        <>
+          <NumberField
+            label="Espesor del suelo"
+            unit="cm"
+            decimals={0}
+            min={1}
+            max={100}
+            value={Math.round(floorThickness * 100)}
+            disabled={!editable}
+            onCommit={(cm) => onFloorThickness(cm / 100)}
+          />
+          {editable ? <ActionButton label="Quitar suelo" variant="secondary" onPress={onRemoveFloor} /> : null}
+        </>
+      ) : editable ? (
+        <ActionButton label="Poner suelo" onPress={onAddFloor} />
+      ) : (
+        <ReadonlyRow label="Suelo" value="Sin suelo" />
+      )}
       <TextField label="Notas" value={zone.notes ?? ''} multiline disabled={!editable} commitOn="blur" onCommit={(n) => onEdit({ notes: n })} />
     </ScrollView>
   );
@@ -56,4 +81,5 @@ const useStyles = themedStyles((colors) => ({
   body: { padding: spacing.lg, gap: spacing.md },
   code: { ...type.title, color: colors.accentText },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
+  section: { ...type.label, color: colors.textSecondary, marginTop: spacing.sm },
 }));

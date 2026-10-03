@@ -733,6 +733,44 @@ describe('EditorController', () => {
       expect(editor.getState().rooms.map((r) => r.id)).toEqual([id]);
     });
 
+    it('Suelo: tocar un recinto le pone suelo con su contorno neto, que sigue a los muros', async () => {
+      await drawRectangle();
+      editor.setTool('floor');
+      await editor.handleTap(px(2), px(1.5), TOL_PX);
+      const zoneId = editor.getState().rooms[0].id!;
+      expect(editor.floorOfZone(zoneId)).not.toBeNull();
+      expect(editor.floorViews).toHaveLength(1);
+      expect(editor.floorViews[0].thickness).toBeCloseTo(0.1);
+
+      // Un segundo toque no duplica.
+      await editor.handleTap(px(2), px(1.5), TOL_PX);
+      expect(editor.getState().objects.filter((o) => o.type === 'Floor')).toHaveLength(1);
+
+      // Mover un muro: el suelo toma el nuevo contorno.
+      editor.setTool('select');
+      await editor.handleTap(px(2), px(0), TOL_PX);
+      editor.beginDrag(px(2), px(0), TOL_PX);
+      await editor.endDrag(px(2), px(-1));
+      const ys = editor.floorViews[0].polygon.map((p) => p.y);
+      expect(Math.min(...ys)).toBeCloseTo(-1 + 0.075);
+
+      // Espesor, quitar y deshacer.
+      await editor.setZoneFloorThickness(zoneId, meters(0.2));
+      expect(editor.floorViews[0].thickness).toBeCloseTo(0.2);
+      await editor.removeZoneFloor(zoneId);
+      expect(editor.floorViews).toHaveLength(0);
+      await editor.undo();
+      expect(editor.floorViews).toHaveLength(1);
+    });
+
+    it('Suelo fuera de un recinto avisa y no crea nada', async () => {
+      await drawRectangle();
+      editor.setTool('floor');
+      await editor.handleTap(px(8), px(8), TOL_PX);
+      expect(editor.getState().objects.some((o) => o.type === 'Floor')).toBe(false);
+      expect(editor.getState().notice?.kind).toBe('info');
+    });
+
     it('tocar dentro de un recinto lo selecciona; tocar un muro selecciona el muro', async () => {
       await drawRectangle();
       editor.setTool('select');

@@ -233,7 +233,8 @@ export function SurveyScreen({
     if (!p) return;
     const cm = (v: number | undefined) => (v === undefined ? undefined : meters(v / 100));
     editor.setDefaults({
-      ...(p.thickness !== undefined && { wallThickness: cm(p.thickness)! }),
+      ...(p.thickness !== undefined && activeTool?.toolId === 'muro' && { wallThickness: cm(p.thickness)! }),
+      ...(p.thickness !== undefined && activeTool?.toolId === 'suelo' && { floorThickness: cm(p.thickness)! }),
       ...(p.side !== undefined && { columnDiameter: cm(p.side)! }),
       ...(p.width !== undefined && activeTool?.toolId === 'puerta' && { doorWidth: cm(p.width)! }),
       ...(p.width !== undefined && activeTool?.toolId === 'ventana' && { windowWidth: cm(p.width)! }),
@@ -583,6 +584,7 @@ export function SurveyScreen({
       rooms: state.rooms,
       roomName,
       selectedZoneId: state.selectedZoneId,
+      floors: editor.floorViews,
       showNodes: state.tool === 'wall',
       measureTargetId: state.measureTargetId as unknown as string | null,
       photoMarkers: state.photoMarkers,
@@ -1053,6 +1055,20 @@ export function SurveyScreen({
               const id = editor.selectedZone?.id;
               if (id) void editor.editZone(id, edit);
             }}
+            floorThickness={(() => {
+              const f = editor.selectedZone?.id ? editor.floorOfZone(editor.selectedZone.id) : null;
+              return f ? ((f.thickness as number | undefined) ?? 0) : null;
+            })()}
+            onAddFloor={() => editor.selectedZone?.id && void editor.addFloorToZone(editor.selectedZone.id)}
+            onRemoveFloor={() => {
+              const id = editor.selectedZone?.id;
+              if (!id) return;
+              haptic.destroy();
+              void editor.removeZoneFloor(id).then(() =>
+                toast('Suelo quitado', { action: { label: 'Deshacer', onPress: () => void editor.undo() } }),
+              );
+            }}
+            onFloorThickness={(m) => editor.selectedZone?.id && void editor.setZoneFloorThickness(editor.selectedZone.id, meters(m))}
           />
         ) : null}
       </BottomSheet>

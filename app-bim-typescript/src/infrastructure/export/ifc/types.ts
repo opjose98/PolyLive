@@ -161,6 +161,11 @@ export interface SerializeInput {
    * exporta el contorno del espacio como un único IfcSpace (comportamiento anterior).
    */
   readonly zones?: readonly IfcZoneInput[];
+  /**
+   * Suelos ligados a recintos (F6a): un IfcSlab por suelo, con el contorno
+   * neto de su recinto, bajo la cota de su piso.
+   */
+  readonly zoneFloors?: readonly Floor[];
 }
 
 /** Nivel del proyecto tal como llega al exportador. */

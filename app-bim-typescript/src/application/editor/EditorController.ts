@@ -38,6 +38,7 @@ import { Room } from '../../domain/objects/room';
 import { Column } from '../../domain/objects/column';
 import { Door } from '../../domain/objects/door';
 import { Window } from '../../domain/objects/window';
+import { Floor, floorZoneId } from '../../domain/objects/floor';
 import { distanceToSegment, isPointInPolygon } from '../../domain/geometry/polygon-utils';
 import { generateId } from '../../domain/objects/base';
 import { interiorPoint, netGeometry } from '../../domain/objects/zone';
@@ -82,7 +83,7 @@ export interface PhotoMarkerView {
 // Herramientas y estado
 // ---------------------------------------------------------------------------
 
-export type EditorTool = 'select' | 'wall' | 'door' | 'window' | 'column' | 'measure' | 'photo';
+export type EditorTool = 'select' | 'wall' | 'door' | 'window' | 'column' | 'floor' | 'measure' | 'photo';
 
 /** Valores por defecto de los objetos que el editor crea. Editables en Ajustes. */
 export interface EditorDefaults {
@@ -94,6 +95,7 @@ export interface EditorDefaults {
   windowHeight: Meters;
   columnDiameter: Meters;
   columnHeight: Meters;
+  floorThickness: Meters;
 }
 
 export const DEFAULT_EDITOR_DEFAULTS: EditorDefaults = {
@@ -105,6 +107,7 @@ export const DEFAULT_EDITOR_DEFAULTS: EditorDefaults = {
   windowHeight: meters(1.0),
   columnDiameter: meters(0.4),
   columnHeight: meters(2.8),
+  floorThickness: meters(0.1),
 };
 
 /** Formas de creación (nivel 3 del FAB): cómo se dibuja cada herramienta. */
@@ -941,6 +944,8 @@ export class EditorController {
         return this.addVano('window', world, tol);
       case 'column':
         return this.addColumn(world);
+      case 'floor':
+        return this.addFloor(screenX, screenY);
       case 'measure':
         return this.pickMeasureTarget(world, tol);
       case 'photo':
@@ -1373,6 +1378,91 @@ export class EditorController {
     } finally {
       this.patch({ busy: false });
     }
+  }
+
+  // --- Suelo (F6a) -------------------------------------------------------
+
+  /** Suelo vivo del recinto, o `null`. */
+  floorOfZone(zoneId: string): Floor | null {
+    return (this.state.objects.find((o) => o instanceof Floor && floorZoneId(o) === zoneId) as Floor | undefined) ?? null;
+  }
+
+  /**
+   * Suelos a dibujar: los del alcance cuyo recinto está cerrado, con el
+   * contorno NETO de ese recinto (el suelo no tiene contorno propio).
+   */
+  get floorViews(): { id: string; zoneId: string; polygon: readonly Point2D[]; thickness: number }[] {
+    const out: { id: string; zoneId: string; polygon: readonly Point2D[]; thickness: number }[] = [];
+    for (const o of this.scopedObjects) {
+      if (!(o instanceof Floor)) continue;
+      const zoneId = floorZoneId(o);
+      const room = zoneId ? this.state.rooms.find((r) => r.id === zoneId) : undefined;
+      const polygon = room?.netPolygon?.length ? room.netPolygon : room?.polygon;
+      if (!zoneId || !polygon || polygon.length < 3) continue;
+      out.push({ id: o.id as string, zoneId, polygon, thickness: (o.thickness as number | undefined) ?? 0 });
+    }
+    return out;
+  }
+
+  /** Tocar un recinto con la herramienta Suelo le pone suelo (uno por recinto). */
+  private async addFloor(screenX: number, screenY: number): Promise<void> {
+    const zone = this.zoneAt(screenX, screenY);
+    if (!zone?.id) {
+      this.notify('info', 'Toca dentro de un recinto cerrado para ponerle suelo.');
+      return;
+    }
+    await this.addFloorToZone(zone.id);
+  }
+
+  /** Pone suelo a un recinto (desde la herramienta o desde la hoja del recinto). */
+  async addFloorToZone(zoneId: string): Promise<void> {
+    const zone = this.state.rooms.find((r) => r.id === zoneId);
+    if (!zone?.id) return;
+    if (this.floorOfZone(zone.id)) {
+      this.patch({ selectedZoneId: zone.id, selectedId: null });
+      this.notify('info', `${zone.name ?? 'El recinto'} ya tiene suelo.`);
+      return;
+    }
+    this.patch({ busy: true });
+    try {
+      await this.services.useCases.createFloor.execute({
+        roomId: this.roomId,
+        zoneId: zone.id,
+        thickness: this.defaults.floorThickness,
+        properties: this.scopeProps(),
+      });
+      await this.reload();
+      this.patch({ selectedZoneId: zone.id, selectedId: null });
+      this.notify('success', `Suelo en ${zone.name ?? 'el recinto'}.`);
+    } catch (err) {
+      this.fail(err, 'No se pudo crear el suelo.');
+    } finally {
+      this.patch({ busy: false });
+    }
+  }
+
+  /** Quita el suelo de un recinto (un paso de deshacer). */
+  async removeZoneFloor(zoneId: string): Promise<void> {
+    const floor = this.floorOfZone(zoneId);
+    if (!floor) return;
+    this.patch({ busy: true });
+    try {
+      await this.services.useCases.deleteObject.execute({ objectId: floor.id });
+      await this.reload();
+    } catch (err) {
+      this.fail(err, 'No se pudo quitar el suelo.');
+    } finally {
+      this.patch({ busy: false });
+    }
+  }
+
+  /** Espesor del suelo del recinto (un paso de deshacer). */
+  async setZoneFloorThickness(zoneId: string, thickness: Meters): Promise<void> {
+    const floor = this.floorOfZone(zoneId);
+    if (!floor) return;
+    this.select(floor.id);
+    await this.updateSelectedProperty('thickness', thickness);
+    this.selectZone(zoneId);
   }
 
   private pickMeasureTarget(world: Point2D, tol: Meters): void {

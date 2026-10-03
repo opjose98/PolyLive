@@ -348,3 +348,26 @@ describe('IFCSerializer — recintos con identidad (T0)', () => {
     expect(ofType(r.content, 'IFCSPACE')).toHaveLength(1);
   });
 });
+
+describe('IFCSerializer — suelos de recinto (F6a)', () => {
+  it('un IfcSlab por suelo ligado, con el contorno neto de su recinto', async () => {
+    const { Floor } = await import('../../src/domain/objects/floor');
+    const z = {
+      id: 'za',
+      code: 'R-01',
+      name: 'Cocina',
+      levelId: 'n1',
+      netPolygon: [{ x: 0.1, y: 0.1 }, { x: 4.9, y: 0.1 }, { x: 4.9, y: 3.9 }, { x: 0.1, y: 3.9 }],
+      netArea: 18.24,
+      grossArea: 20,
+      perimeter: 17.2,
+    };
+    const f = new Floor({ id: revitObjectId('f1'), roomId: roomId('room-1'), isImplicit: false, thickness: meters(0.12), properties: { zoneId: 'za' } });
+    const r = await serialize({ zones: [z], zoneFloors: [f] });
+    expect(lintIfc(r.content)).toEqual([]);
+    const slabs = ofType(r.content, 'IFCSLAB');
+    expect(slabs).toHaveLength(1);
+    expect(slabs[0].args[0]).toBe(`'${stableGuid('f1')}'`);
+    expect(slabs[0].args[2]).toBe("'Suelo R-01'");
+  });
+});

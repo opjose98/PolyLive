@@ -40,6 +40,7 @@ import {
 } from './use-cases';
 import { ExportRoomDxfUseCase } from './use-cases/ExportRoomDxfUseCase';
 import { ReshapeWallsUseCase } from './use-cases/ReshapeWallsUseCase';
+import { CreateFloorUseCase } from './use-cases/CreateFloorUseCase';
 import { WallElevationService } from './elevation/WallElevationService';
 import { IFCSerializerAdapter } from '../infrastructure/export/ifc/IFCSerializerAdapter';
 
@@ -79,6 +80,8 @@ export interface AppServices {
     createDoor: CreateDoorUseCase;
     createWindow: CreateWindowUseCase;
     createColumn: CreateColumnUseCase;
+    /** Suelo ligado a un recinto (F6a). */
+    createFloor: CreateFloorUseCase;
     moveObject: MoveObjectUseCase;
     updateObjectProperty: UpdateObjectPropertyUseCase;
     /** Mover extremos de varios muros unidos en un paso de deshacer (uniones). */
@@ -134,6 +137,7 @@ export function createAppServices(db: IDatabase): AppServices {
       createDoor: new CreateDoorUseCase(store, commandStack, validationService),
       createWindow: new CreateWindowUseCase(store, commandStack, validationService),
       createColumn: new CreateColumnUseCase(store, commandStack, validationService),
+      createFloor: new CreateFloorUseCase(store, commandStack),
       moveObject: new MoveObjectUseCase(store, commandStack),
       updateObjectProperty: new UpdateObjectPropertyUseCase(store, commandStack, validationService),
       reshapeWalls: new ReshapeWallsUseCase(store, commandStack),

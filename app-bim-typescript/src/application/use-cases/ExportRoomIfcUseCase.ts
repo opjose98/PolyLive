@@ -15,6 +15,7 @@ import {
   RevitObjectId,
 } from '../../domain/objects';
 import { Window } from '../../domain/objects';
+import { floorZoneId } from '../../domain/objects/floor';
 import { IValidationService, IIFCSerializer, ValidationError } from './types';
 import type { IfcZoneInput } from '../../infrastructure/export/ifc/types';
 
@@ -69,7 +70,9 @@ export class ExportRoomIfcUseCase {
     const doors = allObjects.filter((o) => o instanceof Door) as Door[];
     const windows = allObjects.filter((o) => o instanceof Window) as Window[];
     const columns = allObjects.filter((o) => o instanceof Column) as Column[];
-    const floor = allObjects.find((o) => o instanceof Floor) as Floor | undefined;
+    const floors = allObjects.filter((o): o is Floor => o instanceof Floor);
+    // El suelo "del espacio" anterior a F6a es el que no está ligado a un recinto.
+    const floor = floors.find((f) => floorZoneId(f) === null);
 
     // 3. Generar IFC
     const ifcContent = await this.ifcSerializer.serialize({
@@ -86,6 +89,7 @@ export class ExportRoomIfcUseCase {
       projectKey: input.projectKey,
       author: input.author,
       zones: input.zones,
+      zoneFloors: floors.filter((f) => floorZoneId(f) !== null),
     });
 
     const exportTime = Date.now() - startTime;
