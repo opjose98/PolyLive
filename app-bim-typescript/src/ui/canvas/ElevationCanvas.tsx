@@ -40,6 +40,12 @@ export interface ElevationCanvasProps {
    * (alrededor del origen de pantalla) respecto de la grabada.
    */
   onViewDelta(s: number, dx: number, dy: number): void;
+  /** Un dedo dibuja (pincel de Avance, marca de Revisión); la vista se mueve con la pinza. */
+  readonly drawEnabled?: boolean;
+  onDrawBegin?(x: number, y: number): void;
+  onDrawMove?(x: number, y: number): void;
+  onDrawEnd?(x: number, y: number): void;
+  onDrawCancel?(): void;
 }
 
 export const ElevationCanvas = React.memo(function ElevationCanvas(props: ElevationCanvasProps) {
@@ -76,6 +82,7 @@ export const ElevationCanvas = React.memo(function ElevationCanvas(props: Elevat
 
   const gesture = useMemo(() => {
     let dragging = false;
+    let drawing = false;
     let pinchLast = 1;
     let moving = 0;
     const publish = () => {
@@ -93,11 +100,21 @@ export const ElevationCanvas = React.memo(function ElevationCanvas(props: Elevat
       .maxPointers(1)
       .minDistance(4)
       .onStart((e) => {
+        if (cb.current.drawEnabled) {
+          drawing = true;
+          cb.current.onDrawBegin?.(e.x - e.translationX, e.y - e.translationY);
+          cb.current.onDrawMove?.(e.x, e.y);
+          return;
+        }
         dragging = cb.current.onDragStart(e.x - e.translationX, e.y - e.translationY);
         if (dragging) haptic.grab();
         else moving++;
       })
       .onChange((e) => {
+        if (drawing) {
+          cb.current.onDrawMove?.(e.x, e.y);
+          return;
+        }
         if (dragging) {
           cb.current.onDragMove(e.x, e.y);
           return;
@@ -106,13 +123,24 @@ export const ElevationCanvas = React.memo(function ElevationCanvas(props: Elevat
         delta.y += e.changeY;
         publish();
       })
-      .onEnd(() => {
+      .onEnd((e) => {
+        if (drawing) {
+          haptic.commit();
+          cb.current.onDrawEnd?.(e.x, e.y);
+          drawing = false;
+          return;
+        }
         if (dragging) {
           haptic.commit();
           cb.current.onDragEnd();
         }
       })
       .onFinalize((_e, ok) => {
+        if (drawing) {
+          drawing = false;
+          cb.current.onDrawCancel?.();
+          return;
+        }
         if (dragging) {
           if (!ok) cb.current.onDragCancel();
         } else release();

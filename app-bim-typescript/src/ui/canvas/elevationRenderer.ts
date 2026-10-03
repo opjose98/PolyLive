@@ -37,6 +37,7 @@ import {
 } from '../../domain/objects/wall-elevation';
 import type { ElevationSeverity, ElevationViewport } from '../../application/elevation/WallElevationService';
 import { CANVAS_PALETTES, CanvasPalette } from '../design/canvasThemes';
+import { drawSketch, SketchShape, withAlpha } from './sketch';
 
 export interface ElevationScene {
   readonly elevation: WallElevation;
@@ -57,6 +58,16 @@ export interface ElevationScene {
   readonly palette?: CanvasPalette;
   /** Filtros de la vista: qué tipos de hueco se ven (todos si falta). */
   readonly visibleTypes?: ReadonlySet<string>;
+  /** Avance (M3): celdas pintadas de esta cara, en (u, v) del muro. */
+  readonly progressLayers?: readonly {
+    readonly color: string;
+    readonly opacity: number;
+    readonly runs: readonly { x: number; y: number; w: number; h: number }[];
+  }[];
+  /** Marcas de revisión (M4) de esta cara, en (u, v). */
+  readonly markups?: readonly SketchShape[];
+  /** Trazo en curso (pincel o marca), en (u, v). */
+  readonly sketch?: readonly SketchShape[];
 }
 
 type ToScreen = (p: { x: number; y: number }) => { x: number; y: number };
@@ -88,10 +99,30 @@ export function drawElevation(r: ICanvasRenderer, scene: ElevationScene): void {
   if (scene.showGrid) drawHeightGrid(ctx);
   drawLevelLines(ctx);
   drawWallSilhouette(ctx);
+  if (scene.progressLayers?.length) drawFaceProgress(ctx);
   for (const o of openings) drawOpening(ctx, o);
   drawReferenceLines(ctx);
   if (scene.showLabels) drawElevationLabels(ctx);
   drawLevelLabels(ctx);
+  if (scene.markups?.length) drawSketch(r, scene.markups, toScreen, viewport.scale);
+  if (scene.sketch?.length) drawSketch(r, scene.sketch, toScreen, viewport.scale);
+}
+
+/** Avance sobre la cara: cada corrida de celdas como un rectángulo (respeta el espejo del lado B). */
+function drawFaceProgress({ r, scene, toScreen }: Ctx): void {
+  for (const layer of scene.progressLayers ?? []) {
+    r.setFillStyle(withAlpha(layer.color, 0.55 * layer.opacity));
+    for (const run of layer.runs) {
+      r.fillPolygon(
+        [
+          { x: run.x, y: run.y },
+          { x: run.x + run.w, y: run.y },
+          { x: run.x + run.w, y: run.y + run.h },
+          { x: run.x, y: run.y + run.h },
+        ].map(toScreen),
+      );
+    }
+  }
 }
 
 /** Contorno del muro en CSL: su perfil (base y tope de cada extremo). */

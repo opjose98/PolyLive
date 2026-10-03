@@ -257,6 +257,47 @@ CREATE TABLE IF NOT EXISTS zones (
 );
 `;
 
+/**
+ * Avance de obra (M3): catálogo de actividades y cortes por proyecto, y las
+ * marcas pintadas por espacio. Las marcas guardan su soporte (suelo de un
+ * recinto o cara de muro) y su forma como JSON. Ver domain/progress.
+ */
+export const CREATE_PROGRESS = `
+CREATE TABLE IF NOT EXISTS progress_activities (
+  id           TEXT PRIMARY KEY NOT NULL,
+  project_id   TEXT NOT NULL,
+  name         TEXT NOT NULL,
+  color        TEXT NOT NULL,
+  unit         TEXT NOT NULL DEFAULT 'm2',
+  order_index  INTEGER NOT NULL DEFAULT 0,
+  is_deleted   INTEGER NOT NULL DEFAULT 0 CHECK(is_deleted IN (0, 1)),
+  created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS progress_cuts (
+  id           TEXT PRIMARY KEY NOT NULL,
+  project_id   TEXT NOT NULL,
+  date         TEXT NOT NULL,
+  label        TEXT NOT NULL DEFAULT '',
+  is_deleted   INTEGER NOT NULL DEFAULT 0 CHECK(is_deleted IN (0, 1)),
+  created_at   TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS progress_marks (
+  id           TEXT PRIMARY KEY NOT NULL,
+  space_id     TEXT NOT NULL,
+  cut_id       TEXT NOT NULL,
+  activity_id  TEXT NOT NULL,
+  target_json  TEXT NOT NULL,
+  shape_json   TEXT NOT NULL,
+  erase        INTEGER NOT NULL DEFAULT 0 CHECK(erase IN (0, 1)),
+  operator     TEXT NOT NULL DEFAULT '',
+  is_deleted   INTEGER NOT NULL DEFAULT 0 CHECK(is_deleted IN (0, 1)),
+  created_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_progress_marks_space ON progress_marks(space_id) WHERE is_deleted = 0;
+CREATE INDEX IF NOT EXISTS idx_progress_activities_project ON progress_activities(project_id) WHERE is_deleted = 0;
+CREATE INDEX IF NOT EXISTS idx_progress_cuts_project ON progress_cuts(project_id) WHERE is_deleted = 0;
+`;
+
 // ---------------------------------------------------------------------------
 // Índices para consultas frecuentes
 // ---------------------------------------------------------------------------
@@ -316,5 +357,6 @@ export const ALL_DDL: string[] = [
   CREATE_BENCHMARKS,
   CREATE_PROJECT_BENCHMARKS,
   CREATE_ZONES,
+  CREATE_PROGRESS,
   CREATE_INDEXES,
 ];

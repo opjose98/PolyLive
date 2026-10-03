@@ -60,6 +60,7 @@ import type { CanvasTransform } from '../../domain/geometry/types';
 import { MAX_SCALE, MIN_SCALE } from '../../application/canvas/types';
 import { drawPlan, drawPlanOverlay, PlanScene } from './planRenderer';
 import type { LiveSource } from './liveOverlay';
+import { drawSketch, EMPTY_SKETCH, SketchSource } from './sketch';
 import { CANVAS_PALETTES, CanvasPalette } from '../design/canvasThemes';
 import { sizes } from '../design/tokens';
 import { duration, LONG_PRESS_MS } from '../design/motion';
@@ -93,6 +94,8 @@ export interface PlanCanvasProps {
   live: LiveSource;
   /** Espesor (m) con que se previsualiza el muro en curso. */
   draftThickness?: number;
+  /** Trazo a mano en curso (pincel de Avance, marca de Revisión): capa viva propia. */
+  sketch?: SketchSource;
   /**
    * Ángulos (rad) a los que se engancha el giro con dos dedos, además de los
    * múltiplos de 90°: p. ej. el que deja el norte arriba.
@@ -273,11 +276,14 @@ export function PlanCanvas(props: PlanCanvasProps) {
   recRef.current = recScale;
 
   const liveState = useSyncExternalStore(props.live.subscribe, props.live.get);
+  const sketchSource = props.sketch ?? EMPTY_SKETCH;
+  const sketchShapes = useSyncExternalStore(sketchSource.subscribe, sketchSource.get);
   const draftThickness = props.draftThickness ?? 0.15;
   const {
     objects, selectedId, handles, showLabels, rooms, roomName, showNodes,
     measureTargetId, photoMarkers, selectedPhotoMarkerId, underlay,
     existingIds, benchmarks, selectedBenchmarkId, coordLabels, selectedZoneId, floors, measure, coordGrid,
+    progressLayers, markups,
   } = scene;
   const picture = useMemo(
     () =>
@@ -287,6 +293,7 @@ export function PlanCanvas(props: PlanCanvasProps) {
           objects, selectedId, handles, showLabels, rooms, roomName, showNodes,
           measureTargetId, photoMarkers, selectedPhotoMarkerId, underlay, existingIds,
           benchmarks, selectedBenchmarkId, coordLabels, selectedZoneId, floors, measure, coordGrid,
+          progressLayers, markups,
           transform: { scale: recScale, offsetX: 0, offsetY: 0 },
           width,
           height,
@@ -295,7 +302,7 @@ export function PlanCanvas(props: PlanCanvasProps) {
         });
       }, WORLD_BOUNDS),
     [objects, selectedId, handles, showLabels, rooms, roomName, showNodes, measureTargetId, photoMarkers,
-      selectedPhotoMarkerId, underlay, existingIds, benchmarks, selectedBenchmarkId, coordLabels, selectedZoneId, floors, measure, coordGrid, recScale, width, height, palette],
+      selectedPhotoMarkerId, underlay, existingIds, benchmarks, selectedBenchmarkId, coordLabels, selectedZoneId, floors, measure, coordGrid, progressLayers, markups, recScale, width, height, palette],
   );
   const overlay = useMemo(
     () =>
@@ -316,8 +323,11 @@ export function PlanCanvas(props: PlanCanvasProps) {
           palette,
           showGrid: false,
         });
+        if (sketchShapes.length) {
+          drawSketch(new SkiaCanvasAdapter(canvas), sketchShapes, (p) => ({ x: p.x * recScale, y: p.y * recScale }), recScale);
+        }
       }, WORLD_BOUNDS),
-    [liveState, draftThickness, existingIds, recScale, width, height, palette],
+    [liveState, sketchShapes, draftThickness, existingIds, recScale, width, height, palette],
   );
 
   const camera = useDerivedValue(() => [
