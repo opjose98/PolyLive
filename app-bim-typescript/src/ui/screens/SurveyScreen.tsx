@@ -56,6 +56,8 @@ import { createLiveSource, draggedIds, isDragging, sameStructure } from '../canv
 import { uniqueVertices, useTopography } from '../workspace/topo/useTopography';
 import { TopographySheets } from '../workspace/topo/TopographySheets';
 import { TopographyPanel } from '../workspace/topo/TopographyPanel';
+import { useTopoTools } from '../workspace/topo/useTopoTools';
+import { StakeoutSheet } from '../workspace/topo/StakeoutSheet';
 import { amarreSummary, coordinateInline } from '../../application/geo/coordinateText';
 import { ElevationEditor } from '../../application/elevation/ElevationEditor';
 import { ElevationView } from './ElevationView';
@@ -323,6 +325,18 @@ export function SurveyScreen({
     touchTolerancePx: CANVAS_TOUCH_TOLERANCE_PX,
   });
 
+  // --- Topografía de apoyo (M2b): inverso, área, replanteo, cuadrícula, CSV/KML ---
+  const topoTools = useTopoTools({
+    services,
+    projectId,
+    spaceId: roomId as unknown as string,
+    projectName,
+    editor,
+    topo,
+    touchTolerancePx: CANVAS_TOUCH_TOLERANCE_PX,
+    operatorName,
+  });
+
   const topoBack = topo.back;
 
   // --- Alzado (F4): vive encima de la planta, que queda intacta debajo ---
@@ -493,6 +507,7 @@ export function SurveyScreen({
         wsNow.closeWindow();
         return;
       }
+      if (topoTools.handleTap(x, y)) return;
       if (topo.handleTap(x, y)) return;
       // Un marcador de foto (visible) abre su foto, con la herramienta de selección.
       if (onOpenPhoto && wsNow.filters.fotos && editor.getState().tool === 'select') {
@@ -509,7 +524,7 @@ export function SurveyScreen({
         if (editor.getState().tool === 'select' && after && after !== before) haptic.select();
       });
     },
-    [editor, topo.handleTap, onOpenPhoto],
+    [editor, topo.handleTap, topoTools.handleTap, onOpenPhoto],
   );
 
   // Propiedades (con edición y borrado) solo donde se edita el modelo: en los
@@ -621,6 +636,10 @@ export function SurveyScreen({
     () => (markersLoaded ? editor.existingIds : new Set<string>()),
     [editor, markersLoaded, state.objects, levelInfo],
   );
+  const topoGrid = useMemo(
+    () => topoTools.gridFor(canvasSize.w, canvasSize.h),
+    [topoTools.gridFor, canvasSize, state.transform], // eslint-disable-line react-hooks/exhaustive-deps
+  );
   const sceneForCanvas = useMemo(
     () => ({
       ...canvasScene,
@@ -634,8 +653,10 @@ export function SurveyScreen({
       coordLabels: topo.coordLabels,
       // Topografía no dibuja: los nodos se ven para tocarlos y leer coordenadas.
       showNodes: canvasScene.showNodes || (topo.active && filters.vertices),
+      measure: topoTools.overlay,
+      coordGrid: topoGrid,
     }),
-    [canvasScene, underlay, existingIds, visibleObjects, filters.cotas, filters.fotos, topo.planBenchmarks, topo.selectedBenchmark, topo.coordLabels, topo.active, filters.vertices],
+    [canvasScene, underlay, existingIds, visibleObjects, filters.cotas, filters.fotos, topo.planBenchmarks, topo.selectedBenchmark, topo.coordLabels, topo.active, filters.vertices, topoTools.overlay, topoGrid],
   );
 
   // --- Selector de base y tope: qué edita ---
@@ -807,7 +828,10 @@ export function SurveyScreen({
         : [];
 
   const bpcActions: BpcAction[] = [];
-  if (topo.active) {
+  if (topoTools.tool) {
+    if (topoTools.canUndoPoint) bpcActions.push({ icon: 'undo-variant', label: 'Quitar punto', onPress: topoTools.undoPoint });
+    bpcActions.push({ icon: 'restart', label: 'Reiniciar', onPress: topoTools.reset });
+  } else if (topo.active) {
     if (topo.picking?.kind === 'place' || topo.picking?.kind === 'stand') {
       bpcActions.push({ icon: 'close-circle-outline', label: 'Cancelar', onPress: topo.cancelPick });
     }
@@ -961,7 +985,13 @@ export function SurveyScreen({
           <>
             <Bpc
               context={bpcContext}
-              toolDetail={constraintTarget === 'creation' ? constraintSummary(creationEdit) : undefined}
+              toolDetail={
+                topoTools.summary
+                  ? topoTools.summary.detail
+                  : constraintTarget === 'creation'
+                    ? constraintSummary(creationEdit)
+                    : undefined
+              }
               pills={bpcPills}
               actions={bpcActions}
               onExitTool={() => workspaceStore.getState().clearTool()}
@@ -997,7 +1027,7 @@ export function SurveyScreen({
           onZoom={handleZoom}
           info={fileInfo}
           hasObjects={hasObjects}
-          modeSection={topo.active && projectId ? <TopographyPanel topo={topo} /> : undefined}
+          modeSection={topo.active && projectId ? <TopographyPanel topo={topo} tools={topoTools} /> : undefined}
         />
         <MainMenu
           top={0}
@@ -1074,6 +1104,13 @@ export function SurveyScreen({
       </BottomSheet>
 
       {projectId ? <TopographySheets topo={topo} vertices={topoVertices} /> : null}
+      <StakeoutSheet
+        open={!!topoTools.stakeTargetGrid}
+        target={topoTools.stakeTargetGrid}
+        targetName={topoTools.stakeTarget?.label ?? 'punto'}
+        crs={topo.geo?.crs ?? 'EPSG:9377'}
+        onClose={topoTools.closeStakeout}
+      />
 
       {/* --- Cámara anclada a la planta --- */}
       <Modal

@@ -48,7 +48,7 @@ export type PropValues = Partial<Record<PropKey, number>>;
 // FAB de creación
 // ---------------------------------------------------------------------------
 
-export type TopoAction = 'mojon' | 'punto-gps' | 'coordenada';
+export type TopoAction = 'mojon' | 'punto-gps' | 'coordenada' | 'inverso' | 'area' | 'replanteo';
 
 export type ToolBinding =
   | { readonly kind: 'plan'; readonly tool: EditorTool }
@@ -215,9 +215,9 @@ export const CATEGORIES_TOPOGRAPHY: readonly CategoryDef[] = [
     label: 'Medir',
     icon: 'ruler',
     tools: [
-      { id: 'inverso', label: 'Inverso', icon: 'vector-line' },
-      { id: 'area', label: 'Área', icon: 'vector-square' },
-      { id: 'replanteo', label: 'Replanteo', icon: 'target' },
+      { id: 'inverso', label: 'Inverso', icon: 'vector-line', binding: { kind: 'topo', action: 'inverso' } },
+      { id: 'area', label: 'Área', icon: 'vector-square', binding: { kind: 'topo', action: 'area' } },
+      { id: 'replanteo', label: 'Replanteo', icon: 'target', binding: { kind: 'topo', action: 'replanteo' } },
     ],
   },
 ];
@@ -386,7 +386,7 @@ export const FILTERS_TOPOGRAPHY: readonly OptionDef<FilterId>[] = [
   { id: 'mojones', label: 'Mojones' },
   { id: 'coordenadas', label: 'Rótulos de coordenadas' },
   { id: 'cuadricula', label: 'Cuadrícula de coordenadas' },
-  { id: 'mapa', label: 'Mapa de fondo' },
+  { id: 'mapa', label: 'Mapa de fondo (pendiente de licencia)' },
   { id: 'norte', label: 'Norte' },
 ];
 

@@ -86,7 +86,7 @@ describe('catálogo', () => {
       .flatMap((c) => c.tools)
       .filter(isToolEnabled)
       .map((t) => t.id);
-    expect(enabled).toEqual(['mojon', 'punto-gps', 'coordenada']);
+    expect(enabled).toEqual(['mojon', 'punto-gps', 'coordenada', 'inverso', 'area', 'replanteo']);
   });
 });
 

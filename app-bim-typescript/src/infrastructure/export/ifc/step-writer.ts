@@ -300,12 +300,43 @@ export class StepWriter {
     return context;
   }
 
+  /** Unidad de longitud (la usa IfcProjectedCRS como unidad del plano). */
+  lengthUnit = 0;
+
   writeUnits(): number {
     const len = this.add(`IFCSIUNIT(*,.LENGTHUNIT.,$,.METRE.)`);
+    this.lengthUnit = len;
     const area = this.add(`IFCSIUNIT(*,.AREAUNIT.,$,.SQUARE_METRE.)`);
     const vol = this.add(`IFCSIUNIT(*,.VOLUMEUNIT.,$,.CUBIC_METRE.)`);
     const angle = this.add(`IFCSIUNIT(*,.PLANEANGLEUNIT.,$,.RADIAN.)`);
     return this.add(`IFCUNITASSIGNMENT(${refs([len, area, vol, angle])})`);
+  }
+
+  /**
+   * Georreferencia (IFC4): el sistema proyectado y la conversión del sistema
+   * local del modelo a él. Revit lo lee como "coordenadas compartidas".
+   */
+  mapConversion(
+    context: number,
+    mc: {
+      crsName: string;
+      crsDescription: string;
+      geodeticDatum: string;
+      eastings: number;
+      northings: number;
+      orthogonalHeight: number;
+      xAxisAbscissa: number;
+      xAxisOrdinate: number;
+      scale: number;
+    },
+  ): number {
+    const crs = this.add(
+      `IFCPROJECTEDCRS(${stepString(mc.crsName)},${stepString(mc.crsDescription)},${stepString(mc.geodeticDatum)},$,$,$,${ref(this.lengthUnit)})`,
+    );
+    return this.add(
+      `IFCMAPCONVERSION(${ref(context)},${ref(crs)},${stepReal(mc.eastings)},${stepReal(mc.northings)},${stepReal(mc.orthogonalHeight)},` +
+        `${stepReal(mc.xAxisAbscissa)},${stepReal(mc.xAxisOrdinate)},${stepReal(mc.scale)})`,
+    );
   }
 
   /** Archivo completo alrededor de las entidades escritas. */

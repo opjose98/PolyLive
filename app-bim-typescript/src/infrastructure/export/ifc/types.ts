@@ -166,6 +166,19 @@ export interface SerializeInput {
    * neto de su recinto, bajo la cota de su piso.
    */
   readonly zoneFloors?: readonly Floor[];
+  /** Georreferencia del proyecto (M2b): IfcProjectedCRS + IfcMapConversion. */
+  readonly mapConversion?: IfcMapConversionInput;
+}
+
+export interface IfcMapConversionInput {
+  readonly crsName: string;
+  readonly crsDescription: string;
+  readonly eastings: number;
+  readonly northings: number;
+  readonly orthogonalHeight: number;
+  readonly xAxisAbscissa: number;
+  readonly xAxisOrdinate: number;
+  readonly scale: number;
 }
 
 /** Nivel del proyecto tal como llega al exportador. */

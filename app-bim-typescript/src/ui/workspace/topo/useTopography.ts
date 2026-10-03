@@ -121,13 +121,13 @@ export function useTopography({ services, projectId, spaceId, editor, levelZ, op
       toast('Toca el punto del mojón (se pega a los vértices)', { kind: 'info', durationMs: 2200 });
     } else if (topoAction === 'punto-gps') {
       setGpsFor({ kind: 'benchmark' });
-    } else {
+    } else if (topoAction === 'coordenada') {
       setForm({ mode: 'typed' });
     }
   }, [topoAction]);
 
   const doneTool = useCallback(() => {
-    if (topoAction && topoAction !== 'mojon') workspaceStore.getState().clearTool();
+    if (topoAction === 'punto-gps' || topoAction === 'coordenada') workspaceStore.getState().clearTool();
   }, [topoAction]);
 
   // --- Coordenadas ---
@@ -472,6 +472,8 @@ export function useTopography({ services, projectId, spaceId, editor, levelZ, op
       } else return false;
       return true;
     },
+    /** Relee georreferencia y mojones (tras importar puntos). */
+    reloadAll: reload,
     setGpsSeconds: (s: number) => projectId && guard(topo.setGpsSeconds(projectId, s).then(reload), 'No se pudo guardar el tiempo del GPS'),
   };
 }

@@ -17,7 +17,7 @@ import {
 import { Window } from '../../domain/objects';
 import { floorZoneId } from '../../domain/objects/floor';
 import { IValidationService, IIFCSerializer, ValidationError } from './types';
-import type { IfcZoneInput } from '../../infrastructure/export/ifc/types';
+import type { IfcMapConversionInput, IfcZoneInput } from '../../infrastructure/export/ifc/types';
 
 export interface ExportRoomIfcInput {
   roomId: RoomId;
@@ -33,6 +33,8 @@ export interface ExportRoomIfcInput {
   author?: string;
   /** Recintos con identidad: un IfcSpace por recinto (T0). */
   zones?: readonly IfcZoneInput[];
+  /** Georreferencia del proyecto (M2b). */
+  mapConversion?: IfcMapConversionInput;
 }
 
 export interface ExportRoomIfcOutput {
@@ -89,6 +91,7 @@ export class ExportRoomIfcUseCase {
       projectKey: input.projectKey,
       author: input.author,
       zones: input.zones,
+      mapConversion: input.mapConversion,
       zoneFloors: floors.filter((f) => floorZoneId(f) !== null),
     });
 
