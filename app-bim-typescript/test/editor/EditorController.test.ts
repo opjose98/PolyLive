@@ -506,6 +506,56 @@ describe('EditorController', () => {
     });
   });
 
+  describe('uniones de muros', () => {
+    const wallAt = (sx: number, sy: number) =>
+      editor.walls.find((w) => Math.abs(w.startPoint.x - sx) < 1e-6 && Math.abs(w.startPoint.y - sy) < 1e-6)!;
+
+    it('arrastrar una esquina mueve los dos muros que se unen en ella, y el recinto sigue cerrado', async () => {
+      await drawRectangle();
+      editor.setTool('select');
+      await editor.handleTap(px(2), px(0), TOL_PX); // muro inferior
+      expect(editor.beginDrag(px(4), px(0), TOL_PX)).toBe(true);
+      editor.updateDrag(px(5), px(0));
+      // Vista previa: el muro vecino se mueve en vivo.
+      expect(editor.getState().dragLinked).toHaveLength(1);
+      await editor.endDrag(px(5), px(0));
+
+      const east = editor.walls.find((w) => Math.abs(w.endPoint.x - 4) < 1e-6 && Math.abs(w.endPoint.y - 3) < 1e-6)!;
+      expect(east.startPoint.x).toBeCloseTo(5);
+      expect(editor.getState().rooms).toHaveLength(1);
+      expect(editor.getState().dragLinked).toHaveLength(0);
+    });
+
+    it('trasladar un muro estira a sus vecinos; un deshacer lo devuelve todo', async () => {
+      await drawRectangle();
+      editor.setTool('select');
+      await editor.handleTap(px(2), px(0), TOL_PX);
+      expect(editor.beginDrag(px(2), px(0), TOL_PX)).toBe(true); // handle central
+      await editor.endDrag(px(2), px(-1));
+
+      expect(wallAt(0, -1).endPoint).toEqual({ x: 4, y: -1 });
+      expect(wallAt(4, -1).endPoint).toEqual({ x: 4, y: 3 });
+      expect(editor.getState().rooms[0].area).toBeCloseTo(16);
+
+      await editor.undo();
+      expect(wallAt(0, 0).endPoint).toEqual({ x: 4, y: 0 });
+      expect(wallAt(4, 0).endPoint).toEqual({ x: 4, y: 3 });
+      expect(editor.getState().rooms[0].area).toBeCloseTo(12);
+
+      await editor.redo();
+      expect(wallAt(4, -1)).toBeDefined();
+    });
+
+    it('aplicar una medida mueve el extremo con su unión', async () => {
+      await drawRectangle();
+      editor.setTool('measure');
+      await editor.handleTap(px(2), px(0), TOL_PX);
+      await editor.applyMeasurementToWall(meters(5));
+      expect(editor.walls.some((w) => Math.abs(w.startPoint.x - 5) < 1e-6 && Math.abs(w.endPoint.y - 3) < 1e-6)).toBe(true);
+      expect(editor.getState().rooms).toHaveLength(1);
+    });
+  });
+
   describe('arrastre en vivo', () => {
     async function selectedColumn(): Promise<void> {
       editor.setTool('column');

@@ -62,6 +62,7 @@ import { CanvasPoint, canvasPoint, MIN_SCALE, MAX_SCALE } from '../canvas/types'
 import { SnapHandler } from '../canvas/SnapHandler';
 import { MiterHandler } from '../canvas/MiterHandler';
 import { SelectionService, Handle, touchToleranceMeters } from '../canvas/SelectionService';
+import { JointWall, WallEndsChange, endsAt, planEndMove, planWallTranslate } from '../../domain/topology/joints';
 import type { AppServices } from '../AppServices';
 import type { AuditPhotoId } from '../../domain/objects/base';
 
@@ -201,15 +202,33 @@ export interface EditorState {
   readonly dragPreview: RevitObjectBase | null;
   /** El extremo arrastrado está enganchado a un nodo de otro muro. */
   readonly dragSnappedToNode: boolean;
+  /**
+   * Muros que el arrastre mueve por estar UNIDOS al arrastrado (extremos
+   * comunes o encuentros en T), en su posición en vivo. Vacío si no hay.
+   */
+  readonly dragLinked: readonly RevitObjectBase[];
   /** Último mensaje para la UI (éxito o error). La vista lo muestra y lo limpia. */
   readonly notice: { kind: 'info' | 'error' | 'success'; message: string } | null;
 }
 
 export type EditorListener = (state: EditorState) => void;
 
+/** Lo común a todo destino de arrastre: plan de uniones (si el muro tiene) y muros arrastrados. */
+interface DragJoints {
+  readonly plan: WallEndsChange[] | null;
+  readonly linked: RevitObjectBase[];
+}
+
 type DragTarget =
-  | { kind: 'center'; dx: number; dy: number; preview: RevitObjectBase | null; snappedToNode: false }
-  | { kind: 'start' | 'end'; point: Point2D; dx: number; dy: number; preview: RevitObjectBase | null; snappedToNode: boolean };
+  | ({ kind: 'center'; dx: number; dy: number; preview: RevitObjectBase | null; snappedToNode: false } & DragJoints)
+  | ({
+      kind: 'start' | 'end';
+      point: Point2D;
+      dx: number;
+      dy: number;
+      preview: RevitObjectBase | null;
+      snappedToNode: boolean;
+    } & DragJoints);
 
 /**
  * Copia de un objeto de dominio con algunos campos cambiados, conservando su
@@ -296,6 +315,7 @@ export class EditorController {
       draggingHandle: null,
       dragPreview: null,
       dragSnappedToNode: false,
+      dragLinked: [],
       notice: null,
     };
   }
@@ -520,7 +540,9 @@ export class EditorController {
     const preview = this.state.dragPreview;
     const scoped = this.scopedObjects;
     if (!preview) return scoped;
-    return scoped.map((o) => (o.id === preview.id ? preview : o));
+    const live = new Map<string, RevitObjectBase>([[preview.id as string, preview]]);
+    for (const o of this.state.dragLinked) live.set(o.id as string, o);
+    return scoped.map((o) => live.get(o.id as string) ?? o);
   }
 
   worldToScreen(point: Point2D): CanvasPoint {
@@ -614,6 +636,7 @@ export class EditorController {
       draggingHandle: null,
       dragPreview: null,
       dragSnappedToNode: false,
+      dragLinked: [],
       wallDraft: null,
     });
     this.dragOrigin = null;
@@ -835,7 +858,7 @@ export class EditorController {
 
     this.dragOrigin = world;
     this.dragTolerancePx = touchTolerancePx;
-    this.patch({ draggingHandle: handle, dragPreview: null, dragSnappedToNode: false });
+    this.patch({ draggingHandle: handle, dragPreview: null, dragSnappedToNode: false, dragLinked: [] });
     return true;
   }
 
@@ -847,14 +870,14 @@ export class EditorController {
   updateDrag(screenX: number, screenY: number): void {
     const target = this.dragTargetAt(screenX, screenY);
     if (!target) return;
-    this.patch({ dragPreview: target.preview, dragSnappedToNode: target.snappedToNode });
+    this.patch({ dragPreview: target.preview, dragSnappedToNode: target.snappedToNode, dragLinked: target.linked });
   }
 
   /** Abandona el arrastre sin persistir (el gesto fue cancelado por el sistema). */
   cancelDrag(): void {
     this.dragOrigin = null;
     if (this.state.draggingHandle || this.state.dragPreview) {
-      this.patch({ draggingHandle: null, dragPreview: null, dragSnappedToNode: false });
+      this.patch({ draggingHandle: null, dragPreview: null, dragSnappedToNode: false, dragLinked: [] });
     }
   }
 
@@ -872,7 +895,7 @@ export class EditorController {
 
     const sel = this.selected;
     if (!target || !sel) {
-      this.patch({ dragPreview: null });
+      this.patch({ dragPreview: null, dragLinked: [] });
       return;
     }
 
@@ -880,13 +903,16 @@ export class EditorController {
     // Un micro-arrastre por temblor de pulso no debe contar como una edición:
     // generaría un comando en la pila que el usuario no pidió.
     if (Math.hypot(dx, dy) < 1e-4) {
-      this.patch({ dragPreview: null });
+      this.patch({ dragPreview: null, dragLinked: [] });
       return;
     }
 
     this.patch({ busy: true });
     try {
-      if (target.kind === 'center') {
+      if (target.plan) {
+        // Muro con uniones: todos los muros afectados, un solo paso de deshacer.
+        await this.services.useCases.reshapeWalls.execute({ changes: target.plan });
+      } else if (target.kind === 'center') {
         // MoveObjectUseCase toma posiciones ABSOLUTAS, no deltas: para un muro
         // basta mandar el nuevo inicio (el use case traslada el final y el eje
         // con el mismo delta); para una columna, la nueva posición.
@@ -912,7 +938,7 @@ export class EditorController {
     } catch (err) {
       this.fail(err, 'No se pudo mover el objeto.');
     } finally {
-      this.patch({ busy: false, dragPreview: null });
+      this.patch({ busy: false, dragPreview: null, dragLinked: [] });
     }
   }
 
@@ -935,11 +961,14 @@ export class EditorController {
       if (sel instanceof Column) {
         preview = cloneWith(sel, { position: { x: sel.position.x + dx, y: sel.position.y + dy } });
       } else if (sel instanceof Wall && sel.isStraight) {
-        const start = { x: sel.startPoint.x + dx, y: sel.startPoint.y + dy };
-        const end = { x: sel.endPoint.x + dx, y: sel.endPoint.y + dy };
-        preview = cloneWith(sel, { startPoint: start, endPoint: end, shape: lineShape(start, end) });
+        const joints = this.jointWalls(sel);
+        if (joints) {
+          const plan = planWallTranslate(joints, sel.id as string, dx, dy);
+          const { main, linked } = this.previewPlan(sel, plan);
+          return { kind: 'center', dx, dy, preview: main, snappedToNode: false, plan, linked };
+        }
       }
-      return { kind: 'center', dx, dy, preview, snappedToNode: false };
+      return { kind: 'center', dx, dy, preview, snappedToNode: false, plan: null, linked: [] };
     }
 
     if (!(sel instanceof Wall)) return null;
@@ -951,9 +980,13 @@ export class EditorController {
     // hay, el snap angular respecto al extremo fijo.
     let point = world;
     let snappedToNode = false;
+    const joints = this.jointWalls(sel);
+    // Los muros unidos en este extremo se mueven con él: engancharse a ellos
+    // sería engancharse a sí mismo.
+    const joinedHere = new Set(joints ? endsAt(joints, current, new Set([sel.id as string])).map((j) => j.id) : []);
     if (this.state.nodeSnapEnabled) {
       const tol = touchToleranceMeters(this.dragTolerancePx, this.state.transform.scale);
-      const others = this.walls.filter((w) => w.id !== sel.id);
+      const others = this.walls.filter((w) => w.id !== sel.id && !joinedHere.has(w.id as string));
       const node = this.selection.findNearestNode({ worldPoint: world, walls: others, thresholdMeters: tol });
       if (node) {
         point = node;
@@ -961,6 +994,21 @@ export class EditorController {
       }
     }
     if (!snappedToNode) point = this.snapEndpoint(world, fixed);
+
+    if (joints) {
+      const plan = planEndMove(joints, sel.id as string, isStart ? 'start' : 'end', point);
+      const { main, linked } = this.previewPlan(sel, plan);
+      return {
+        kind: isStart ? 'start' : 'end',
+        point,
+        dx: point.x - current.x,
+        dy: point.y - current.y,
+        preview: main,
+        snappedToNode,
+        plan,
+        linked,
+      };
+    }
 
     const preview = sel.isStraight
       ? cloneWith(sel, {
@@ -976,7 +1024,43 @@ export class EditorController {
       dy: point.y - current.y,
       preview,
       snappedToNode,
+      plan: null,
+      linked: [],
     };
+  }
+
+  /**
+   * Muros que pueden estar unidos a `wall`: los rectos de su mismo nivel (dos
+   * muros de plantas distintas no se unen aunque coincidan en planta). `null`
+   * si el muro no es recto: los arcos se mueven solos, como antes.
+   */
+  private jointWalls(wall: Wall): JointWall[] | null {
+    if (!wall.isStraight) return null;
+    const lv = this.levelScope;
+    const level = lv ? this.levelOf(wall, lv) : null;
+    const out: JointWall[] = [];
+    for (const w of this.walls) {
+      if (!w.isStraight) continue;
+      if (lv && this.levelOf(w, lv) !== level) continue;
+      out.push({ id: w.id as string, start: w.startPoint, end: w.endPoint });
+    }
+    return out;
+  }
+
+  /** Vistas previas de un plan de uniones: el muro arrastrado y los que arrastra. */
+  private previewPlan(sel: Wall, plan: readonly WallEndsChange[]): { main: RevitObjectBase; linked: RevitObjectBase[] } {
+    let main: RevitObjectBase = sel;
+    const linked: RevitObjectBase[] = [];
+    for (const c of plan) {
+      const w = c.id === (sel.id as string) ? sel : this.wallById(c.id);
+      if (!w) continue;
+      const start = c.start ?? w.startPoint;
+      const end = c.end ?? w.endPoint;
+      const clone = cloneWith(w, { startPoint: start, endPoint: end, shape: lineShape(start, end) });
+      if (w === sel) main = clone;
+      else linked.push(clone);
+    }
+    return { main, linked };
   }
 
   // -------------------------------------------------------------------------
@@ -1431,11 +1515,19 @@ export class EditorController {
 
     this.patch({ busy: true });
     try {
-      await this.services.useCases.updateObjectProperty.execute({
-        objectId: wall.id,
-        property: 'endPoint',
-        newValue: newEnd,
-      });
+      // El extremo final se mueve CON sus uniones: la esquina sigue cerrada.
+      const joints = this.jointWalls(wall);
+      if (joints) {
+        await this.services.useCases.reshapeWalls.execute({
+          changes: planEndMove(joints, wall.id as string, 'end', newEnd),
+        });
+      } else {
+        await this.services.useCases.updateObjectProperty.execute({
+          objectId: wall.id,
+          property: 'endPoint',
+          newValue: newEnd,
+        });
+      }
       await this.reload();
       this.notify('success', `Muro ajustado a ${Number(distance).toFixed(3)} m.`);
     } catch (err) {

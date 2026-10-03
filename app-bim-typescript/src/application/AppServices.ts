@@ -38,6 +38,7 @@ import {
   UpdateObjectPropertyUseCase,
 } from './use-cases';
 import { ExportRoomDxfUseCase } from './use-cases/ExportRoomDxfUseCase';
+import { ReshapeWallsUseCase } from './use-cases/ReshapeWallsUseCase';
 import { WallElevationService } from './elevation/WallElevationService';
 import { IFCSerializerAdapter } from '../infrastructure/export/ifc/IFCSerializerAdapter';
 
@@ -77,6 +78,8 @@ export interface AppServices {
     createColumn: CreateColumnUseCase;
     moveObject: MoveObjectUseCase;
     updateObjectProperty: UpdateObjectPropertyUseCase;
+    /** Mover extremos de varios muros unidos en un paso de deshacer (uniones). */
+    reshapeWalls: ReshapeWallsUseCase;
     deleteObject: DeleteObjectUseCase;
     closeRoom: CloseRoomUseCase;
     capturePhoto: CapturePhotoUseCase;
@@ -129,6 +132,7 @@ export function createAppServices(db: IDatabase): AppServices {
       createColumn: new CreateColumnUseCase(store, commandStack, validationService),
       moveObject: new MoveObjectUseCase(store, commandStack),
       updateObjectProperty: new UpdateObjectPropertyUseCase(store, commandStack, validationService),
+      reshapeWalls: new ReshapeWallsUseCase(store, commandStack),
       deleteObject: new DeleteObjectUseCase(store, commandStack),
       closeRoom: new CloseRoomUseCase(store, commandStack, validationService, cdt),
       capturePhoto: new CapturePhotoUseCase(store, commandStack),
