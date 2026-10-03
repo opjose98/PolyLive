@@ -249,11 +249,11 @@ export const CATEGORIES_REVIEW: readonly CategoryDef[] = [
     label: 'Marcas',
     icon: 'draw',
     tools: [
-      { id: 'trazo', label: 'Trazo libre', icon: 'draw' },
-      { id: 'flecha', label: 'Flecha', icon: 'arrow-top-right' },
-      { id: 'rectangulo-rev', label: 'Rectángulo', icon: 'rectangle-outline' },
-      { id: 'texto-rev', label: 'Texto', icon: 'format-text' },
-      { id: 'nube', label: 'Nube', icon: 'cloud-outline' },
+      { id: 'trazo', label: 'Trazo libre', icon: 'draw', binding: { kind: 'review', tool: 'freehand' } },
+      { id: 'flecha', label: 'Flecha', icon: 'arrow-top-right', binding: { kind: 'review', tool: 'arrow' } },
+      { id: 'rectangulo-rev', label: 'Rectángulo', icon: 'rectangle-outline', binding: { kind: 'review', tool: 'rect' } },
+      { id: 'texto-rev', label: 'Texto', icon: 'format-text', binding: { kind: 'review', tool: 'text' } },
+      { id: 'nube', label: 'Nube', icon: 'cloud-outline', binding: { kind: 'review', tool: 'cloud' } },
     ],
   },
 ];

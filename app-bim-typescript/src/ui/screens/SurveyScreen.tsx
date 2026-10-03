@@ -60,7 +60,11 @@ import { useTopoTools } from '../workspace/topo/useTopoTools';
 import { StakeoutSheet } from '../workspace/topo/StakeoutSheet';
 import { useProgress } from '../workspace/progress/useProgress';
 import { ProgressSheets } from '../workspace/progress/ProgressSheets';
-import { planSvg } from '../../application/report/planSvg';
+import { planSvg, faceSvg } from '../../application/report/planSvg';
+import { useReview } from '../workspace/review/useReview';
+import { ReviewSheets } from '../workspace/review/ReviewSheets';
+import { reviewSvgMarks } from '../../application/review/reviewReport';
+import { countByStatus, ReviewItem, ReviewView } from '../../domain/review/review';
 import { zoneCode as zoneCodeOf } from '../../domain/objects/zone';
 import { amarreSummary, coordinateInline } from '../../application/geo/coordinateText';
 import { ElevationEditor } from '../../application/elevation/ElevationEditor';
@@ -351,6 +355,15 @@ export function SurveyScreen({
     objectsVersion: state.objects,
   });
 
+  // --- Revisión (M4): marcas y observaciones ---
+  const review = useReview({
+    services,
+    spaceId: roomId as unknown as string,
+    editor,
+    operatorName,
+    touchTolerancePx: CANVAS_TOUCH_TOLERANCE_PX,
+  });
+
   const topoBack = topo.back;
 
   // --- Alzado (F4): vive encima de la planta, que queda intacta debajo ---
@@ -521,6 +534,7 @@ export function SurveyScreen({
         wsNow.closeWindow();
         return;
       }
+      if (review.plan.tap(x, y)) return;
       if (progress.handleTap(x, y)) return;
       if (topoTools.handleTap(x, y)) return;
       if (topo.handleTap(x, y)) return;
@@ -539,7 +553,7 @@ export function SurveyScreen({
         if (editor.getState().tool === 'select' && after && after !== before) haptic.select();
       });
     },
-    [editor, topo.handleTap, topoTools.handleTap, progress.handleTap, onOpenPhoto],
+    [editor, topo.handleTap, topoTools.handleTap, progress.handleTap, review.plan, onOpenPhoto],
   );
 
   // Propiedades (con edición y borrado) solo donde se edita el modelo: en los
@@ -671,8 +685,9 @@ export function SurveyScreen({
       measure: topoTools.overlay,
       coordGrid: topoGrid,
       progressLayers: progress.active ? progress.planLayers : undefined,
+      markups: review.active ? review.planMarkups : undefined,
     }),
-    [canvasScene, underlay, existingIds, visibleObjects, filters.cotas, filters.fotos, topo.planBenchmarks, topo.selectedBenchmark, topo.coordLabels, topo.active, filters.vertices, topoTools.overlay, topoGrid, progress.active, progress.planLayers],
+    [canvasScene, underlay, existingIds, visibleObjects, filters.cotas, filters.fotos, topo.planBenchmarks, topo.selectedBenchmark, topo.coordLabels, topo.active, filters.vertices, topoTools.overlay, topoGrid, progress.active, progress.planLayers, review.active, review.planMarkups],
   );
 
   // --- Selector de base y tope: qué edita ---
@@ -806,6 +821,8 @@ export function SurveyScreen({
   const zoomPercent = (state.transform.scale / DEFAULT_SCALE) * 100;
   const activeActivity = progress.state.activities.find((a) => a.id === progress.state.activityId);
   const activeCut = progress.state.cuts.find((c) => c.id === progress.state.cutId);
+  const reviewCounts = countByStatus(review.state.items);
+  const reviewItems = [`${reviewCounts.open} abierta(s) · ${reviewCounts.resolved} resuelta(s)`];
   const progressItems = [
     activeCut ? `Corte ${activeCut.label || activeCut.date}` : 'Sin corte: créalo en "Actividad y corte"',
     activeActivity ? activeActivity.name : 'Sin actividad',
@@ -818,6 +835,7 @@ export function SurveyScreen({
     zoomPercent,
     ...(topo.active && { canvasTitle: 'Topografía', canvasItems: amarreSummary(topo.geo) }),
     ...(progress.active && { canvasTitle: 'Avance', canvasItems: progressItems }),
+    ...(review.active && { canvasTitle: 'Revisión', canvasItems: reviewItems }),
   });
 
   const commitSelectionProp = useCallback(
@@ -851,7 +869,12 @@ export function SurveyScreen({
         : [];
 
   const bpcActions: BpcAction[] = [];
-  if (progress.active) {
+  if (review.active) {
+    if (review.state.canUndo) bpcActions.push({ icon: 'undo-variant', label: 'Deshacer', onPress: () => void review.ctl.undo() });
+    if (review.state.canRedo) bpcActions.push({ icon: 'redo-variant', label: 'Rehacer', onPress: () => void review.ctl.redo() });
+    if (review.tool) bpcActions.push({ icon: 'palette', label: 'Color', onPress: () => review.ctl.cycleColor() });
+    bpcActions.push({ icon: 'format-list-numbered', label: 'Observaciones', onPress: review.openList });
+  } else if (progress.active) {
     if (progress.state.canUndo) bpcActions.push({ icon: 'undo-variant', label: 'Deshacer trazo', onPress: () => void progress.ctl.undo() });
     if (progress.state.canRedo) bpcActions.push({ icon: 'redo-variant', label: 'Rehacer trazo', onPress: () => void progress.ctl.redo() });
     bpcActions.push({ icon: 'palette-outline', label: 'Actividad y corte', onPress: () => progress.openSheet('catalog') });
@@ -965,6 +988,56 @@ export function SurveyScreen({
     [editor, state.rooms, progress.planLayers],
   );
 
+  // --- Revisión: nombre y dibujo de cada vista (acta) ---
+  const reviewViewName = useCallback(
+    (v: ReviewView) => (v.kind === 'plan' ? 'Planta' : supportLabel(`wall:${v.wallId}:${v.side}`)),
+    [supportLabel],
+  );
+  const reviewViewSvg = useCallback(
+    (v: ReviewView, items: readonly ReviewItem[]) => {
+      if (v.kind === 'plan') {
+        return planSvg({
+          walls: editor.walls.map((w) => ({ start: w.startPoint, end: w.endPoint, thickness: w.thickness as number })),
+          zones: state.rooms
+            .filter((r) => (r.netPolygon?.length ?? 0) >= 3)
+            .map((r) => ({ polygon: r.netPolygon!, label: r.name ?? 'Recinto', at: r.centroid })),
+          marks: reviewSvgMarks(items),
+        });
+      }
+      const face = progress.supports.get(`wall:${v.wallId}:${v.side}`);
+      return face ? faceSvg(face, v.side === 'B', reviewSvgMarks(items)) : '';
+    },
+    [editor, state.rooms, progress.supports],
+  );
+
+  /** Foto tomada para una observación: se guarda como foto del espacio y se adjunta. */
+  const handleReviewPhoto = useCallback(
+    async (photo: { base64: string }) => {
+      const itemId = review.photoFor;
+      review.clearPhotoRequest();
+      if (!itemId) return;
+      try {
+        const saved = await photoFs.savePhoto(photo.base64);
+        const existing = await services.store.listAuditPhotos(roomId);
+        const bimCode = generateBimCode(
+          PHOTO_BIM_CODE_PREFIX,
+          existing.map((p) => p.metadata.bimCode).filter((c): c is string => !!c),
+        );
+        const result = await services.useCases.capturePhoto.execute({
+          roomId,
+          photoData: base64ToUint8Array(photo.base64),
+          filename: saved.filename,
+          metadata: { bimCode, notes: 'Revisión' },
+        });
+        await review.ctl.attachPhoto(itemId, result.photoId as unknown as string);
+        toast(`Foto ${bimCode} adjunta`, { kind: 'success' });
+      } catch (err: unknown) {
+        alertDialog('Error', err instanceof AppError ? err.userMessage : 'No se pudo guardar la foto.');
+      }
+    },
+    [review, photoFs, services, roomId],
+  );
+
   const chromeTop = chromeSpacing.sm;
   const belowBpc = chromeTop + chromeSizes.bpcHeight + chromeSpacing.sm;
   const spaceName = roomName ?? 'Espacio';
@@ -1001,8 +1074,8 @@ export function SurveyScreen({
           palette={canvasPalette}
           grid={{ show: gridLines || gridDots, lines: gridLines, dots: gridDots }}
           dragEnabled={editable && state.tool === 'select' && !state.busy}
-          drawEnabled={(editable && state.tool === 'wall') || progress.drawEnabled}
-          sketch={progress.planSketch}
+          drawEnabled={(editable && state.tool === 'wall') || progress.drawEnabled || review.drawEnabled}
+          sketch={review.active ? review.planSketch : progress.planSketch}
           doubleTapEnabled={state.tool === 'select' && wsState.workMode !== 'topografia'}
           rotationSnaps={topo.rotationSnaps}
           longPressEnabled
@@ -1015,14 +1088,21 @@ export function SurveyScreen({
           onDragMove={handleDragMove}
           onDragEnd={handleDragEnd}
           onDragCancel={handleDragCancel}
-          onDrawBegin={(x, y) => (progress.drawEnabled ? progress.planDraw.begin(x, y) : editor.drawBegin(x, y))}
-          onDrawMove={(x, y) => (progress.drawEnabled ? progress.planDraw.move(x, y) : editor.drawMove(x, y))}
+          onDrawBegin={(x, y) =>
+            review.drawEnabled ? review.plan.begin(x, y) : progress.drawEnabled ? progress.planDraw.begin(x, y) : editor.drawBegin(x, y)
+          }
+          onDrawMove={(x, y) =>
+            review.drawEnabled ? review.plan.move(x, y) : progress.drawEnabled ? progress.planDraw.move(x, y) : editor.drawMove(x, y)
+          }
           onDrawEnd={(x, y) => {
             haptic.commit();
-            if (progress.drawEnabled) progress.planDraw.end(x, y);
+            if (review.drawEnabled) review.plan.end(x, y);
+            else if (progress.drawEnabled) progress.planDraw.end(x, y);
             else void editor.drawEnd(x, y);
           }}
-          onDrawCancel={() => (progress.drawEnabled ? progress.planDraw.cancel() : editor.drawCancel())}
+          onDrawCancel={() =>
+            review.drawEnabled ? review.plan.cancel() : progress.drawEnabled ? progress.planDraw.cancel() : editor.drawCancel()
+          }
           onCameraChange={(t) => editor.setTransform(t)}
         />
 
@@ -1037,6 +1117,7 @@ export function SurveyScreen({
             phaseHandlers={phaseHandlers}
             chromeTop={chromeTop}
             progress={progress}
+            review={review}
             onClose={closeElevation}
           />
         ) : (
@@ -1044,7 +1125,9 @@ export function SurveyScreen({
             <Bpc
               context={bpcContext}
               toolDetail={
-                progress.tool
+                review.tool
+                  ? 'Dibuja sobre el plano · el color se cambia en la BPC'
+                  : progress.tool
                   ? progressItems.join(' · ')
                   : topoTools.summary
                   ? topoTools.summary.detail
@@ -1164,6 +1247,19 @@ export function SurveyScreen({
       </BottomSheet>
 
       {projectId ? <TopographySheets topo={topo} vertices={topoVertices} /> : null}
+      <ReviewSheets
+        review={review}
+        projectName={projectName}
+        spaceName={spaceName}
+        operatorName={operatorName}
+        viewName={reviewViewName}
+        viewSvg={reviewViewSvg}
+        onOpenPhoto={onOpenPhoto}
+      />
+      {/* --- Foto de una observación --- */}
+      <Modal visible={review.photoFor !== null} animationType="slide" onRequestClose={review.clearPhotoRequest}>
+        <CameraCaptureView capture={photoCapture} onCapture={handleReviewPhoto} onClose={review.clearPhotoRequest} />
+      </Modal>
       <ProgressSheets
         progress={progress}
         projectName={projectName}

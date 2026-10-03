@@ -10,6 +10,7 @@
 
 import type { Point2D } from '../../domain/geometry/types';
 import type { ICanvasRenderer } from '../../native/canvas/SkiaCanvasAdapter';
+import { cloudOutline } from '../../application/review/cloud';
 
 export type SketchShape =
   /** Trazo con ancho en METROS (pincel) o en PÍXELES (marcador de revisión). */
@@ -39,43 +40,6 @@ export function withAlpha(hex: string, alpha: number): string {
 
 /** Trazo de marcador de revisión (px), independiente del zoom. */
 const MARKUP_PX = 2.5;
-
-/** Contorno de nube de revisión: arcos a lo largo de los lados del rectángulo. */
-export function cloudPath(a: Point2D, b: Point2D, bump: number): Point2D[] {
-  const x0 = Math.min(a.x, b.x);
-  const x1 = Math.max(a.x, b.x);
-  const y0 = Math.min(a.y, b.y);
-  const y1 = Math.max(a.y, b.y);
-  const corners = [
-    { x: x0, y: y0 },
-    { x: x1, y: y0 },
-    { x: x1, y: y1 },
-    { x: x0, y: y1 },
-  ];
-  const out: Point2D[] = [];
-  for (let i = 0; i < 4; i++) {
-    const p = corners[i];
-    const q = corners[(i + 1) % 4];
-    const len = Math.hypot(q.x - p.x, q.y - p.y);
-    const n = Math.max(1, Math.round(len / (bump * 2)));
-    const ux = (q.x - p.x) / len;
-    const uy = (q.y - p.y) / len;
-    // Normal hacia afuera del rectángulo (recorrido horario en pantalla).
-    const nx = uy;
-    const ny = -ux;
-    const seg = len / n;
-    for (let k = 0; k < n; k++) {
-      const cx = p.x + ux * seg * (k + 0.5);
-      const cy = p.y + uy * seg * (k + 0.5);
-      const r = seg / 2;
-      for (let s = 0; s <= 8; s++) {
-        const t = Math.PI - (Math.PI * s) / 8;
-        out.push({ x: cx + ux * Math.cos(t) * r + nx * Math.sin(t) * r, y: cy + uy * Math.cos(t) * r + ny * Math.sin(t) * r });
-      }
-    }
-  }
-  return out;
-}
 
 /**
  * Dibuja las formas. `toScreen` lleva del mundo al lienzo y `scale` son px por
@@ -131,7 +95,7 @@ export function drawSketch(r: ICanvasRenderer, shapes: readonly SketchShape[], t
         const b = toScreen(s.b);
         r.setStrokeStyle(s.color);
         r.setLineWidth(MARKUP_PX);
-        r.strokePolygon(cloudPath(a, b, 9));
+        r.strokePolygon(cloudOutline(a, b, 9));
         break;
       }
       case 'text': {

@@ -118,3 +118,30 @@ export function planSvg(input: PlanSvgInput): string {
   out.push('</svg>');
   return out.join('\n');
 }
+
+/**
+ * Una cara de muro como SVG: contorno, vanos y marcas. Las coordenadas de la
+ * cara son (u, v) con v hacia arriba; el lado B se ve en espejo, como en el
+ * alzado de la app.
+ */
+export function faceSvg(
+  face: { readonly outline: readonly Point2D[]; readonly holes: readonly (readonly Point2D[])[] },
+  mirrored: boolean,
+  marks: readonly SvgMark[] = [],
+): string {
+  const length = Math.max(0, ...face.outline.map((p) => p.x));
+  const t = (p: Point2D): Point2D => ({ x: mirrored ? length - p.x : p.x, y: -p.y });
+  const tm = (m: SvgMark): SvgMark =>
+    m.kind === 'polyline'
+      ? { ...m, points: m.points.map(t) }
+      : m.kind === 'arrow'
+        ? { ...m, a: t(m.a), b: t(m.b) }
+        : { ...m, at: t(m.at) };
+  const outline = face.outline.map(t);
+  const svg = planSvg({ walls: [], zones: [{ polygon: outline, label: '', at: outline[0] }], marks: marks.map(tm), margin: 0.5 });
+  // Los vanos: huecos en blanco con borde, encima del contorno y debajo de las marcas.
+  const holes = face.holes
+    .map((h) => `<polygon points="${pts(h.map(t))}" fill="#ffffff" stroke="#888" stroke-width="0.02"/>`)
+    .join('');
+  return svg.replace(/(<polygon [^>]*fill="#f3f1ec"[^>]*\/>)/, `$1${holes}`);
+}
