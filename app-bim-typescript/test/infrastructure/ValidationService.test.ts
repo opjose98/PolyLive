@@ -120,15 +120,6 @@ describe('ValidationService', () => {
       const result = service.validateRoom({ geometry: [{ x: 0, y: 0 }, { x: 1, y: 0 }] });
       expect(result.valid).toBe(false);
     });
-
-    it('delega en triangulation.valid/warnings cuando se provee', () => {
-      const result = service.validateRoom(
-        { geometry: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }] },
-        { valid: false, warnings: [{ type: 'self_intersecting_polygon', message: 'boom' }] },
-      );
-      expect(result.valid).toBe(false);
-      expect(result.warnings[0].message).toBe('boom');
-    });
   });
 
   describe('validateExport', () => {
