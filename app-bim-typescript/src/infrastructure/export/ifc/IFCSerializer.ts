@@ -109,6 +109,7 @@ export class IFCSerializer {
 
     const context = w.writeContext(input.author ?? '');
     const units = w.writeUnits();
+    if (input.mapConversion) w.mapConversion(context, { ...input.mapConversion, geodeticDatum: 'MAGNA-SIRGAS' });
     const oh = ref(w.ownerHistory);
     const projectName = input.projectName ?? 'PolyLive Project';
     const project = w.add(

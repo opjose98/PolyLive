@@ -74,6 +74,15 @@ export interface PlanScene {
   readonly roomName?: string;
   /** Recinto seleccionado: se resalta su contorno a cara interior. */
   readonly selectedZoneId?: string | null;
+  /** Herramientas de Topografía (M2b): puntos tocados, polígono de área y objetivo de replanteo. */
+  readonly measure?: {
+    readonly points: readonly Point2D[];
+    readonly closed: boolean;
+    readonly target: Point2D | null;
+    readonly label?: string;
+  } | null;
+  /** Cuadrícula de coordenadas reales (líneas de E y N redondos). */
+  readonly coordGrid?: readonly { readonly from: Point2D; readonly to: Point2D; readonly label: string }[] | null;
   /** Suelos (F6a): contorno neto de su recinto, con trama de piso. */
   readonly floors?: readonly { readonly id: string; readonly polygon: readonly Point2D[] }[];
   /** Muro en curso de trazado. */
@@ -227,7 +236,9 @@ export function drawPlan(r: ICanvasRenderer, scene: PlanScene): void {
   if (scene.showNodes) drawNodes(ctx);
   drawWallDraft(ctx);
   if (scene.photoMarkers?.length) drawPhotoMarkers(ctx);
+  if (scene.coordGrid?.length) drawCoordGrid(ctx);
   if (scene.coordLabels?.length) drawCoordLabels(ctx);
+  if (scene.measure) drawMeasure(ctx);
   if (scene.benchmarks?.length) drawBenchmarks(ctx);
   drawSelection(ctx);
   if (scene.snapIndicator) drawSnapIndicator(r, ctx.toScreen(scene.snapIndicator), pal);
@@ -668,6 +679,55 @@ function drawBenchmarks({ r, scene, pal, toScreen }: Ctx): void {
 }
 
 /** Rótulos E/N junto a cada punto; fondo del lienzo detrás para leerlos sobre muros. */
+/** Cuadrícula de coordenadas: líneas finas verdes (topografía) con su valor en un extremo. */
+function drawCoordGrid({ r, scene, toScreen, pal }: Ctx): void {
+  r.setStrokeStyle('rgba(46, 125, 50, 0.45)');
+  r.setLineWidth(0.8 * pal.lineScale);
+  r.setFillStyle(BENCHMARK_COLOR);
+  for (const l of scene.coordGrid ?? []) {
+    const a = toScreen(l.from);
+    const b = toScreen(l.to);
+    r.drawLine(a.x, a.y, b.x, b.y);
+    r.drawText(l.label, a.x + 4, a.y - 4, 9, 'left');
+  }
+}
+
+const MEASURE_COLOR = '#2E7D32';
+
+/** Inverso / Área / Replanteo: la geometría que el operador va tocando. */
+function drawMeasure({ r, scene, toScreen, pal }: Ctx): void {
+  const m = scene.measure;
+  if (!m) return;
+  const pts = m.points.map(toScreen);
+  if (m.closed && pts.length >= 3) {
+    r.setFillStyle('rgba(46, 125, 50, 0.14)');
+    r.fillPolygon(pts);
+  }
+  r.setStrokeStyle(MEASURE_COLOR);
+  r.setLineWidth(2 * pal.lineScale);
+  if (pts.length >= 2) {
+    if (m.closed) r.strokePolygon(pts);
+    else r.strokePolyline(pts);
+  }
+  r.setFillStyle(MEASURE_COLOR);
+  pts.forEach((p, i) => {
+    r.fillCircle(p.x, p.y, 4);
+    if (!m.closed || pts.length <= 12) r.drawText(String.fromCharCode(65 + (i % 26)), p.x + 6, p.y - 6, 11, 'left');
+  });
+  if (m.label && pts.length >= 2) {
+    const mid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+    r.drawText(m.label, mid.x, mid.y - 8, 11, 'center');
+  }
+  if (m.target) {
+    const t = toScreen(m.target);
+    r.setStrokeStyle(MEASURE_COLOR);
+    r.setLineWidth(2 * pal.lineScale);
+    r.strokeCircle(t.x, t.y, 12);
+    r.drawLine(t.x - 18, t.y, t.x + 18, t.y);
+    r.drawLine(t.x, t.y - 18, t.x, t.y + 18);
+  }
+}
+
 function drawCoordLabels({ r, scene, pal, toScreen }: Ctx): void {
   for (const l of scene.coordLabels ?? []) {
     const p = toScreen(l.position);

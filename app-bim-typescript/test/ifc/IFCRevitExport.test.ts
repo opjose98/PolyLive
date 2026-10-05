@@ -371,3 +371,30 @@ describe('IFCSerializer — suelos de recinto (F6a)', () => {
     expect(slabs[0].args[2]).toBe("'Suelo R-01'");
   });
 });
+
+describe('IFCSerializer — georreferencia (M2b)', () => {
+  it('escribe IfcProjectedCRS e IfcMapConversion contra el contexto del modelo', async () => {
+    const r = await serialize({
+      mapConversion: {
+        crsName: 'EPSG:9377',
+        crsDescription: 'MAGNA-SIRGAS 2018 / Origen-Nacional',
+        eastings: 4880000.5,
+        northings: 2070000.25,
+        orthogonalHeight: 2600,
+        xAxisAbscissa: Math.cos(0.4),
+        xAxisOrdinate: Math.sin(0.4),
+        scale: 1,
+      },
+    });
+    expect(lintIfc(r.content)).toEqual([]);
+    const [mc] = ofType(r.content, 'IFCMAPCONVERSION');
+    expect(mc.args[2]).toBe('4880000.5');
+    expect(mc.args[4]).toBe('2600.');
+    expect(ofType(r.content, 'IFCPROJECTEDCRS')[0].args[0]).toBe("'EPSG:9377'");
+  });
+
+  it('sin amarre no hay georreferencia', async () => {
+    const r = await serialize();
+    expect(ofType(r.content, 'IFCMAPCONVERSION')).toHaveLength(0);
+  });
+});

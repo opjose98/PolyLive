@@ -226,7 +226,7 @@ export class TopographyService {
       /** Sistema de `known` si son planas (por defecto el del proyecto). */
       crs?: CrsId;
       h: number | null;
-      source: 'typed' | 'gps';
+      source: 'typed' | 'gps' | 'import';
       accuracy?: number;
       createdBy?: string;
     },
@@ -247,6 +247,34 @@ export class TopographyService {
       local,
       localZ: placed && p.h !== null ? p.h - geo.z0 : null,
     });
+  }
+
+  /**
+   * Importa puntos de una estación total o GNSS (CSV en planas del sistema
+   * `crs`) como mojones del proyecto. Devuelve cuántos se crearon.
+   */
+  async importPoints(
+    projectId: string,
+    spaceId: string,
+    geo: Georeference | null,
+    crs: CrsId,
+    points: readonly { name: string; e: number; n: number; z: number | null; description: string }[],
+    createdBy?: string,
+  ): Promise<number> {
+    let n = 0;
+    for (const p of points) {
+      await this.benchmarkFromReal(projectId, spaceId, geo, {
+        name: p.name,
+        description: p.description || undefined,
+        known: { e: p.e, n: p.n },
+        crs,
+        h: p.z,
+        source: 'import',
+        createdBy,
+      });
+      n++;
+    }
+    return n;
   }
 
   /** Coloca (o re-coloca) un mojón en el dibujo de un espacio: así se vuelve punto de control. */

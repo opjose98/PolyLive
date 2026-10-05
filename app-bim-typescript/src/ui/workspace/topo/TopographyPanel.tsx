@@ -13,6 +13,7 @@ import { Accordion, ActionButton } from '../../primitives';
 import { crsDef, formatMeters, meridianConvergence, workingCrs } from '../../../domain/geo/crs';
 import { azimuthDegrees } from '../../../domain/geo/georeference';
 import type { Topography } from './useTopography';
+import type { TopoTools } from './useTopoTools';
 import { Field, Kv, parseNum } from './TopoFields';
 import { spacing } from '../../design/tokens';
 import { type } from '../../design/typography';
@@ -20,7 +21,7 @@ import { themedStyles } from '../../design/theme';
 
 const METHOD = { none: 'Solo locales', origin: 'Origen conocido + azimut', gps: 'GPS en un punto', control: 'Ajuste por mojones' } as const;
 
-export function TopographyPanel({ topo }: { topo: Topography }) {
+export function TopographyPanel({ topo, tools }: { topo: Topography; tools?: TopoTools }) {
   const styles = useStyles();
   const { geo } = topo;
   const [secs, setSecs] = useState(String(geo?.gpsSeconds ?? 30));
@@ -72,6 +73,15 @@ export function TopographyPanel({ topo }: { topo: Topography }) {
         <ActionButton label={geo ? 'Reconfigurar amarre' : 'Configurar'} icon="map-marker-radius" onPress={topo.openSetup} />
         <ActionButton label="Tabla de coordenadas" icon="table" variant="secondary" onPress={topo.openCoords} />
       </View>
+      {tools ? (
+        <View style={styles.actions}>
+          <Text style={styles.text}>Puntos de estación total o GNSS (CSV en planas):</Text>
+          <ActionButton label="Importar CSV (P,N,E,Z,D)" icon="file-import-outline" variant="secondary" onPress={() => void tools.importCsv('PNEZD')} />
+          <ActionButton label="Importar CSV (P,E,N,Z,D)" icon="file-import-outline" variant="secondary" onPress={() => void tools.importCsv('PENZD')} />
+          <ActionButton label="Exportar puntos CSV" icon="file-delimited-outline" variant="secondary" onPress={tools.exportCsv} />
+          <ActionButton label="Exportar KML (Google Earth)" icon="google-earth" variant="secondary" onPress={tools.exportKml} />
+        </View>
+      ) : null}
     </Accordion>
   );
 }

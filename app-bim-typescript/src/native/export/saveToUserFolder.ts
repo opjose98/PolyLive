@@ -32,6 +32,26 @@ export async function saveTextToUserFolder(
   mimeType = 'application/octet-stream',
   opts: { askAgain?: boolean } = {},
 ): Promise<SaveResult> {
+  return saveToUserFolder(filename, content, FileSystem.EncodingType.UTF8, mimeType, opts);
+}
+
+/** Igual que `saveTextToUserFolder`, para binarios (PDF, imágenes) en base64. */
+export async function saveBase64ToUserFolder(
+  filename: string,
+  base64: string,
+  mimeType = 'application/octet-stream',
+  opts: { askAgain?: boolean } = {},
+): Promise<SaveResult> {
+  return saveToUserFolder(filename, base64, FileSystem.EncodingType.Base64, mimeType, opts);
+}
+
+async function saveToUserFolder(
+  filename: string,
+  data: string,
+  encoding: FileSystem.EncodingType,
+  mimeType: string,
+  opts: { askAgain?: boolean },
+): Promise<SaveResult> {
   if (Platform.OS !== 'android') return { ok: false, reason: 'unsupported' };
   const saf = FileSystem.StorageAccessFramework;
 
@@ -39,7 +59,7 @@ export async function saveTextToUserFolder(
     // Con un tipo genérico Android respeta la extensión del nombre (.ifc);
     // con uno conocido añadiría la suya.
     const uri = await saf.createFileAsync(dir, filename, mimeType);
-    await FileSystem.writeAsStringAsync(uri, content, { encoding: FileSystem.EncodingType.UTF8 });
+    await FileSystem.writeAsStringAsync(uri, data, { encoding });
     return uri;
   };
 

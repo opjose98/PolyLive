@@ -18,6 +18,9 @@ import { saveTextToUserFolder } from '../../native/export/saveToUserFolder';
 import { toast } from '../primitives';
 import { haptic } from '../design/haptics';
 import { dxfZones, ifcZones } from '../../application/topology/zoneExport';
+import { mapConversionFor } from '../../application/geo/surveyTools';
+import { isGeoreferenced } from '../../application/geo/coordinateText';
+import { crsDef, workingCrs } from '../../domain/geo/crs';
 
 export interface ExportContext {
   readonly roomId: RoomId;
@@ -75,6 +78,12 @@ export async function exportRevitIfc(services: AppServices, ctx: ExportContext):
   toast('Generando IFC…', { kind: 'info', durationMs: 1200 });
   try {
     const none = Promise.resolve([] as ProjectMarker[]);
+    const geo = ctx.projectId ? await services.topography.getGeoreference(ctx.projectId) : null;
+    const space = ctx.roomId as unknown as string;
+    // Proyecto amarrado: el IFC sale georreferenciado (coordenadas compartidas en Revit).
+    const mapConversion = isGeoreferenced(geo)
+      ? mapConversionFor(geo, space, workingCrs(geo.crs), crsDef(workingCrs(geo.crs)).name)
+      : undefined;
     const [lv, ph, elevs, zones] = await Promise.all([
       ctx.projectId ? services.markers.list(ctx.projectId, 'level') : none,
       ctx.projectId ? services.markers.list(ctx.projectId, 'phase') : none,
@@ -92,8 +101,10 @@ export async function exportRevitIfc(services: AppServices, ctx: ExportContext):
       projectKey: ctx.projectId,
       author: ctx.author,
       zones: ifcZones(zones),
+      mapConversion,
     });
-    return await save(ctx, 'ifc', out.ifcContent, `${lv.length || 1} nivel(es), ${ifcZones(zones).length} recinto(s)`);
+    const detail = `${lv.length || 1} nivel(es), ${ifcZones(zones).length} recinto(s)${mapConversion ? ', georreferenciado' : ''}`;
+    return await save(ctx, 'ifc', out.ifcContent, detail);
   } catch (err) {
     console.warn('[export-ifc]', err);
     const message = failureMessage(err, 'No se pudo exportar el IFC.');
