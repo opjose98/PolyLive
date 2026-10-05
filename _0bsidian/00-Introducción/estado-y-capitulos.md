@@ -7,7 +7,7 @@ mentioned-in: "[[MOC-PolyLive]]"
 tags: #índice #estado #herramientas
 ---
 
-# Estado y capítulos (2026-10-01)
+# Estado y capítulos (2026-10-03)
 
 Informe completo, herramienta por herramienta: `docs/18-INFORME-HERRAMIENTAS.md`.
 
@@ -15,19 +15,19 @@ Informe completo, herramienta por herramienta: `docs/18-INFORME-HERRAMIENTAS.md`
 |---|---|---|---|
 | 1 | Entrada y organización | [[Project-especificacion]] · [[ProjectService]] · [[restauracion-en-dispositivo]] | ✅ |
 | 2 | Lienzo y navegación | [[capa-viva-y-camara]] · [[sistema-de-diseño]] · [[uso-a-una-mano]] | ✅ (⚠️ toggles sin efecto) |
-| 3 | Levantamiento en planta | [[EditorController]] · [[convenciones-de-dibujo]] · [[Wall-especificacion]] | ✅ |
+| 3 | Levantamiento en planta | [[EditorController]] · [[Uniones-de-muros]] · [[Recintos-con-identidad]] · [[Suelo]] | ✅ (T0, F6a) |
 | 4 | Niveles y fases | [[Niveles-y-fases]] · [[Restricciones-verticales]] · [[alcance-nivel-fase]] | ✅ |
 | 5 | Alzado | [[ElevationEditor]] · [[WallElevation-MEM]] | ✅ |
-| 6 | Topografía | [[Georreferencia-proyecto]] · [[Mojones-biblioteca]] · [[TopographyService]] | ✅ M2 · ⬜ M2b |
+| 6 | Topografía | [[Georreferencia-proyecto]] · [[Mojones-biblioteca]] · [[TopographyService]] · [[Topografia-de-apoyo]] | ✅ M2 · ✅ M2b (mapa ⬜) |
 | 7 | Fotos y auditoría | [[PhotoMarker-SPDS]] · [[CapturePhotoUseCase]] | ✅ |
-| 8 | Exportación | [[serializador-IFC-general]] · [[DXF-R2000]] | ✅ (sin IfcMapConversion) |
-| 9 | Avance de obra | — | ⬜ F6a Suelo → M3 |
-| 10 | Revisión | — | ⬜ M4 |
+| 8 | Exportación | [[serializador-IFC-general]] · [[DXF-R2000]] | ✅ IfcSpace por recinto, IfcSlab por suelo, IfcMapConversion |
+| 9 | Avance de obra | [[Avance-de-obra]] | ✅ M3 |
+| 10 | Revisión | [[Revision]] | ✅ M4 |
 | 11 | Herramientas de dibujo | [[catalogo-herramientas]] | ⬜ F6b |
 
 ## Siguiente (en orden)
 
-1. Corregir los ⚠️: snaps de vértice y punto medio; deshabilitar lo que no tiene función.
-2. Guardar el tema entre sesiones.
-3. M2b — IFC georreferenciado primero; decidir licencia del mapa offline.
-4. F6a Suelo → M3 Avance → M4 Revisión → F6b.
+1. Pruebas de campo en teléfono (lista en `docs/20`).
+2. F6b: Cota, Texto, Etiqueta, Coordenada, Línea, Polígono, Vano, Viga, Cercha, Correa.
+3. Mapa de fondo offline (decidir licencia).
+4. Bloqueantes de la auditoría (respaldo externo, migraciones, medida cara a cara).

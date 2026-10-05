@@ -298,6 +298,30 @@ CREATE INDEX IF NOT EXISTS idx_progress_activities_project ON progress_activitie
 CREATE INDEX IF NOT EXISTS idx_progress_cuts_project ON progress_cuts(project_id) WHERE is_deleted = 0;
 `;
 
+/**
+ * Revisión (M4): observaciones con su marca, comentario, autor, estado y foto,
+ * por espacio. Ver domain/review.
+ */
+export const CREATE_REVIEW = `
+CREATE TABLE IF NOT EXISTS review_items (
+  id           TEXT PRIMARY KEY NOT NULL,
+  space_id     TEXT NOT NULL,
+  number       INTEGER NOT NULL,
+  view_json    TEXT NOT NULL,
+  markup_json  TEXT NOT NULL,
+  color        TEXT NOT NULL,
+  comment      TEXT NOT NULL DEFAULT '',
+  author       TEXT NOT NULL DEFAULT '',
+  status       TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'resolved')),
+  resolved_by  TEXT,
+  resolved_at  TEXT,
+  photo_id     TEXT,
+  is_deleted   INTEGER NOT NULL DEFAULT 0 CHECK(is_deleted IN (0, 1)),
+  created_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_review_items_space ON review_items(space_id) WHERE is_deleted = 0;
+`;
+
 // ---------------------------------------------------------------------------
 // Índices para consultas frecuentes
 // ---------------------------------------------------------------------------
@@ -358,5 +382,6 @@ export const ALL_DDL: string[] = [
   CREATE_PROJECT_BENCHMARKS,
   CREATE_ZONES,
   CREATE_PROGRESS,
+  CREATE_REVIEW,
   CREATE_INDEXES,
 ];

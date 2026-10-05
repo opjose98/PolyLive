@@ -42,6 +42,8 @@ import { haptic } from '../design/haptics';
 import { themedStyles, useCanvasPalette, useTheme } from '../design/theme';
 import type { Progress } from '../workspace/progress/useProgress';
 import type { ProgressDraft } from '../../application/progress/ProgressController';
+import type { Review } from '../workspace/review/useReview';
+import type { ReviewView } from '../../domain/review/review';
 
 const TOUCH_TOL = sizes.canvasTouchTolerance;
 const cm = (m: number) => Math.round(m * 100);
@@ -57,6 +59,8 @@ export interface ElevationViewProps {
   readonly chromeTop: number;
   /** Avance (M3): pintar sobre la cara visible del muro. */
   readonly progress?: Progress;
+  /** Revisión (M4): marcas sobre la cara visible del muro. */
+  readonly review?: Review;
   onClose(): void;
 }
 
@@ -91,9 +95,27 @@ export function ElevationView(props: ElevationViewProps) {
     () => (progress && wallDbId ? progress.faceDraw(wallDbId, st.side, (x, y) => editor.toCsl(x, y)) : null),
     [progress, wallDbId, st.side, editor],
   );
+  // --- Revisión: la cara visible es la vista ---
+  const review = props.review;
+  const reviewing = !!review?.active;
+  const faceView = useMemo((): ReviewView | null => (wallDbId ? { kind: 'wallFace', wallId: wallDbId, side: st.side } : null), [wallDbId, st.side]);
+  const reviewGestures = useMemo(
+    () =>
+      review && faceView
+        ? review.gesturesFor(faceView, (x, y) => editor.toCsl(x, y), () => 1 / editor.getState().viewport.scale)
+        : null,
+    [review, faceView, editor],
+  );
+  const [reviewDraftKey, setReviewDraftKey] = useState<unknown>(null);
+  useEffect(() => (review ? review.ctl.subscribe((s) => setReviewDraftKey(s.draft)) : undefined), [review]);
+
   // El trazo en curso se dibuja en el alzado (que se regraba entero: un muro es barato).
   const [draft, setDraft] = useState<ProgressDraft | null>(null);
   useEffect(() => (progress ? progress.ctl.subscribe((s) => setDraft(s.draft)) : undefined), [progress]);
+  const reviewFaceSketch = useMemo(() => {
+    const d = review?.ctl.getState().draft;
+    return d && d.view.kind === 'wallFace' && d.view.wallId === wallDbId && d.view.side === st.side ? review!.draftShapes() : undefined;
+  }, [review, reviewDraftKey, wallDbId, st.side]); // eslint-disable-line react-hooks/exhaustive-deps
   const faceSketch = useMemo(
     () =>
       draft && draft.target.kind === 'wallFace' && draft.target.wallId === wallDbId && draft.target.side === st.side && progress
@@ -114,12 +136,18 @@ export function ElevationView(props: ElevationViewProps) {
   // Botón atrás de Android: primero cierra la hoja, luego vuelve a la planta.
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (sheetOpen) setSheetOpen(false);
+      // Las hojas de Avance y Revisión viven en la planta pero se abren desde aquí: se cierran primero.
+      const rv = props.review;
+      const pg = props.progress;
+      if (rv?.state.pendingText) rv.ctl.cancelText();
+      else if (rv?.sheet) rv.closeSheet();
+      else if (pg?.sheet) pg.closeSheet();
+      else if (sheetOpen) setSheetOpen(false);
       else props.onClose();
       return true;
     });
     return () => sub.remove();
-  }, [sheetOpen, props.onClose]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sheetOpen, props.onClose, props.review, props.progress]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Herramienta del FAB del alzado → herramienta del editor.
   const activeTool = ws.activeTool;
@@ -162,10 +190,11 @@ export function ElevationView(props: ElevationViewProps) {
             palette,
             visibleTypes,
             progressLayers: painting && wallDbId && progress ? progress.faceLayers(wallDbId, st.side) : undefined,
-            sketch: faceSketch,
+            markups: reviewing && review && faceView ? review.shapesFor(faceView) : undefined,
+            sketch: reviewing && review && faceView ? reviewFaceSketch : faceSketch,
           }
         : null,
-    [st, editor, width, height, severity, ws.grid, ws.filters.cotas, palette, visibleTypes, painting, wallDbId, progress, faceSketch],
+    [st, editor, width, height, severity, ws.grid, ws.filters.cotas, palette, visibleTypes, painting, wallDbId, progress, faceSketch, reviewing, review, faceView, reviewFaceSketch],
   );
 
   // Solo Levantamiento edita vanos; Avance y Revisión miran el alzado.
@@ -183,6 +212,7 @@ export function ElevationView(props: ElevationViewProps) {
         w.closeWindow();
         return;
       }
+      if (reviewing && reviewGestures?.tap(x, y)) return;
       if (painting && face?.tap()) return;
       const props = w.activeTool?.props;
       const before = editor.getState().selectedId;
@@ -195,7 +225,7 @@ export function ElevationView(props: ElevationViewProps) {
           if (after && after !== before) haptic.select();
         });
     },
-    [editor, painting, face],
+    [editor, painting, face, reviewing, reviewGestures],
   );
   const onLongPress = useCallback(
     (x: number, y: number) => {
@@ -250,7 +280,13 @@ export function ElevationView(props: ElevationViewProps) {
         : [];
   const actions: BpcAction[] = editable
     ? [{ icon: 'tune-variant', label: sel ? 'Propiedades' : 'Detalles', onPress: () => setSheetOpen(true) }]
-    : painting && progress
+    : reviewing && review
+      ? [
+          ...(review.state.canUndo ? [{ icon: 'undo-variant', label: 'Deshacer', onPress: () => void review.ctl.undo() }] : []),
+          ...(review.tool ? [{ icon: 'palette', label: 'Color', onPress: () => review.ctl.cycleColor() }] : []),
+          { icon: 'format-list-numbered', label: 'Observaciones', onPress: review.openList },
+        ]
+      : painting && progress
       ? [
           ...(progress.state.canUndo ? [{ icon: 'undo-variant', label: 'Deshacer trazo', onPress: () => void progress.ctl.undo() }] : []),
           { icon: 'palette-outline', label: 'Actividad y corte', onPress: () => progress.openSheet('catalog') },
@@ -291,11 +327,11 @@ export function ElevationView(props: ElevationViewProps) {
             onDragEnd={() => void editor.endDrag()}
             onDragCancel={() => editor.cancelDrag()}
             onViewDelta={(k, dx, dy) => editor.applyViewDelta(k, dx, dy)}
-            drawEnabled={painting && !!progress?.drawEnabled}
-            onDrawBegin={(x, y) => face?.begin(x, y)}
-            onDrawMove={(x, y) => face?.move(x, y)}
-            onDrawEnd={(x, y) => face?.end(x, y)}
-            onDrawCancel={() => face?.cancel()}
+            drawEnabled={(painting && !!progress?.drawEnabled) || (reviewing && !!review?.drawEnabled)}
+            onDrawBegin={(x, y) => (reviewing ? reviewGestures?.begin(x, y) : face?.begin(x, y))}
+            onDrawMove={(x, y) => (reviewing ? reviewGestures?.move(x, y) : face?.move(x, y))}
+            onDrawEnd={(x, y) => (reviewing ? reviewGestures?.end(x, y) : face?.end(x, y))}
+            onDrawCancel={() => (reviewing ? reviewGestures?.cancel() : face?.cancel())}
           />
         ) : (
           <View style={[StyleSheet.absoluteFill, { backgroundColor: palette.background }]} />

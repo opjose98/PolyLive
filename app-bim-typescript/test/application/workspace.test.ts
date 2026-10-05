@@ -81,12 +81,12 @@ describe('catálogo', () => {
     expect(categoriesFor('levantamiento', 'elevation')).toBe(CATEGORIES_ELEVATION);
     expect(categoriesFor('avance', 'elevation')).toBe(CATEGORIES_PROGRESS);
     expect(filtersFor('topografia', 'plan').map((f) => f.id)).toContain('mojones');
-    // M2/M2b: Topografía completa; M3: Avance. Revisión espera su fase (M4).
+    // M2/M2b: Topografía completa; M3: Avance; M4: Revisión.
     const enabled = [...CATEGORIES_TOPOGRAPHY, ...CATEGORIES_PROGRESS, ...CATEGORIES_REVIEW]
       .flatMap((c) => c.tools)
       .filter(isToolEnabled)
       .map((t) => t.id);
-    expect(enabled).toEqual(['mojon', 'punto-gps', 'coordenada', 'inverso', 'area', 'replanteo', 'pincel', 'borrador', 'relleno', 'rectangulo-avance']);
+    expect(enabled).toEqual(['mojon', 'punto-gps', 'coordenada', 'inverso', 'area', 'replanteo', 'pincel', 'borrador', 'relleno', 'rectangulo-avance', 'trazo', 'flecha', 'rectangulo-rev', 'texto-rev', 'nube']);
   });
 });
 
@@ -341,8 +341,8 @@ describe('modos en el store', () => {
     expect(st.getState().activeTool).not.toBeNull();
     st.getState().setWorkMode('revision');
     expect(st.getState().activeTool).toBeNull();
-    // En Revisión el FAB + ofrece marcas (todavía deshabilitadas).
-    expect(st.getState().activateTool('marcas', 'trazo')).toEqual({ ok: false, reason: 'disabled' });
+    // En Revisión el FAB + ofrece las marcas (M4).
+    expect(st.getState().activateTool('marcas', 'trazo')).toMatchObject({ ok: true, tool: { toolId: 'trazo' } });
   });
 
   it('pasar a alzado desde Topografía vuelve a Levantamiento', () => {
