@@ -14,6 +14,7 @@
 import { TopographyService } from './geo/TopographyService';
 import { GeoStore } from '../infrastructure/sqlite/GeoStore';
 import { MarkerStore } from '../infrastructure/sqlite/MarkerStore';
+import { ZoneStore } from '../infrastructure/sqlite/ZoneStore';
 import { IDatabase } from '../infrastructure/sqlite/database';
 import { LevelId, levelId } from '../domain/objects/base';
 import { ObjectStore } from '../infrastructure/sqlite/ObjectStore';
@@ -38,6 +39,7 @@ import {
   UpdateObjectPropertyUseCase,
 } from './use-cases';
 import { ExportRoomDxfUseCase } from './use-cases/ExportRoomDxfUseCase';
+import { ReshapeWallsUseCase } from './use-cases/ReshapeWallsUseCase';
 import { WallElevationService } from './elevation/WallElevationService';
 import { IFCSerializerAdapter } from '../infrastructure/export/ifc/IFCSerializerAdapter';
 
@@ -66,6 +68,8 @@ export interface AppServices {
   defaultLevelId: LevelId;
   /** Niveles y fases de cada proyecto. */
   markers: MarkerStore;
+  /** Recintos con identidad (T0): nombre, uso y contorno de cada espacio cerrado. */
+  zones: ZoneStore;
   /** Topografía: georreferencia del proyecto y mojones. */
   geo: GeoStore;
   /** Amarres, mojones y coordenadas reales (usa `geo`). */
@@ -77,6 +81,8 @@ export interface AppServices {
     createColumn: CreateColumnUseCase;
     moveObject: MoveObjectUseCase;
     updateObjectProperty: UpdateObjectPropertyUseCase;
+    /** Mover extremos de varios muros unidos en un paso de deshacer (uniones). */
+    reshapeWalls: ReshapeWallsUseCase;
     deleteObject: DeleteObjectUseCase;
     closeRoom: CloseRoomUseCase;
     capturePhoto: CapturePhotoUseCase;
@@ -120,6 +126,7 @@ export function createAppServices(db: IDatabase): AppServices {
     elevations: new WallElevationService(db, store),
     defaultLevelId,
     markers: new MarkerStore(db),
+    zones: new ZoneStore(db),
     geo: geoStore,
     topography: new TopographyService(geoStore),
     useCases: {
@@ -129,6 +136,7 @@ export function createAppServices(db: IDatabase): AppServices {
       createColumn: new CreateColumnUseCase(store, commandStack, validationService),
       moveObject: new MoveObjectUseCase(store, commandStack),
       updateObjectProperty: new UpdateObjectPropertyUseCase(store, commandStack, validationService),
+      reshapeWalls: new ReshapeWallsUseCase(store, commandStack),
       deleteObject: new DeleteObjectUseCase(store, commandStack),
       closeRoom: new CloseRoomUseCase(store, commandStack, validationService, cdt),
       capturePhoto: new CapturePhotoUseCase(store, commandStack),

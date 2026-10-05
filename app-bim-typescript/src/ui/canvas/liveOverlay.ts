@@ -51,9 +51,11 @@ export function isDragging(s: EditorState): boolean {
 export function draggedIds(s: EditorState): ReadonlySet<string> {
   const id = s.selectedId as string | null;
   if (!id || !isDragging(s)) return new Set();
-  const out = new Set<string>([id]);
+  // El arrastrado, los muros que arrastra por sus uniones y los vanos de todos.
+  const walls = new Set<string>([id, ...s.dragLinked.map((o) => o.id as string)]);
+  const out = new Set<string>(walls);
   for (const o of s.objects) {
-    if ((o instanceof Door || o instanceof Window) && (o.parentWallId as unknown as string) === id) out.add(o.id as string);
+    if ((o instanceof Door || o instanceof Window) && walls.has(o.parentWallId as unknown as string)) out.add(o.id as string);
   }
   return out;
 }
@@ -65,7 +67,7 @@ export function createLiveSource(editor: EditorController): LiveSource {
     subscribe: (onChange) => editor.subscribe(() => onChange()),
     get: () => {
       const s = editor.getState();
-      const key = [s.wallDraft, s.dragPreview, s.draggingHandle, s.dragSnappedToNode, s.objects, s.selectedId];
+      const key = [s.wallDraft, s.dragPreview, s.draggingHandle, s.dragSnappedToNode, s.dragLinked, s.objects, s.selectedId];
       if (key.every((k, i) => k === cacheKey[i])) return cached;
       cacheKey = key;
       if (!s.wallDraft && !isDragging(s)) {
@@ -75,9 +77,10 @@ export function createLiveSource(editor: EditorController): LiveSource {
       const preview = s.dragPreview;
       const objects: RevitObjectBase[] = [];
       if (preview) {
-        objects.push(preview);
+        objects.push(preview, ...s.dragLinked);
+        const moving = new Set(objects.map((o) => o.id as string));
         for (const o of s.objects) {
-          if ((o instanceof Door || o instanceof Window) && (o.parentWallId as unknown as string) === (preview.id as string)) objects.push(o);
+          if ((o instanceof Door || o instanceof Window) && moving.has(o.parentWallId as unknown as string)) objects.push(o);
         }
       }
       const snapIndicator =
@@ -111,7 +114,8 @@ export function sameStructure(a: EditorState, b: EditorState): boolean {
       if ((a.dragPreview?.id ?? null) !== (b.dragPreview?.id ?? null)) return false;
     } else if (k === 'draggingHandle') {
       if (!!a.draggingHandle !== !!b.draggingHandle) return false;
-    } else if (k === 'dragSnappedToNode') {
+    } else if (k === 'dragSnappedToNode' || k === 'dragLinked') {
+      // Los muros arrastrados por uniones viven en la capa viva, como el arrastrado.
       continue;
     } else if (a[k] !== b[k]) {
       return false;

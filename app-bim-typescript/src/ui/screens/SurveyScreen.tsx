@@ -71,6 +71,8 @@ import { PHOTO_BIM_CODE_PREFIX } from '../../domain/objects/audit-photo';
 import { generateBimCode } from '../../domain/objects/project';
 import { ActionButton } from '../primitives';
 import { PropertiesPanel } from '../components/PropertiesPanel';
+import { ZoneSheet } from '../workspace/ZoneSheet';
+import { zoneCode } from '../../domain/objects/zone';
 import { NumberField } from '../components/fields';
 import { AppServices } from '../../application/AppServices';
 import { EditorController, EditorState } from '../../application/editor/EditorController';
@@ -147,6 +149,7 @@ export function SurveyScreen({
 
   const [state, setState] = useState<EditorState>(() => editor.getState());
   const [panelOpen, setPanelOpen] = useState(false);
+  const [zoneSheetOpen, setZoneSheetOpen] = useState(false);
   const [manualMeasureOpen, setManualMeasureOpen] = useState(false);
   const [manualValue, setManualValue] = useState(3);
   const [measurements, setMeasurements] = useState<readonly Measurement[]>([]);
@@ -512,7 +515,16 @@ export function SurveyScreen({
   // demás modos el toque largo solo selecciona y la BPC informa.
   const handleLongPress = useCallback(
     (x: number, y: number) => {
-      if (editor.selectAt(x, y, CANVAS_TOUCH_TOLERANCE_PX) && editable) setPanelOpen(true);
+      if (editor.selectAt(x, y, CANVAS_TOUCH_TOLERANCE_PX)) {
+        if (editable) setPanelOpen(true);
+        return;
+      }
+      // Sin objeto bajo el dedo: el recinto que lo contiene (nombre, uso, áreas).
+      const zone = editor.zoneAt(x, y);
+      if (zone?.id) {
+        editor.selectZone(zone.id);
+        setZoneSheetOpen(true);
+      }
     },
     [editor, editable],
   );
@@ -570,11 +582,12 @@ export function SurveyScreen({
       handles,
       rooms: state.rooms,
       roomName,
+      selectedZoneId: state.selectedZoneId,
       showNodes: state.tool === 'wall',
       measureTargetId: state.measureTargetId as unknown as string | null,
       photoMarkers: state.photoMarkers,
     }),
-    [displayObjects, dragging, state.selectedId, handles, state.rooms, roomName, state.tool, state.measureTargetId, state.photoMarkers],
+    [displayObjects, dragging, state.selectedId, handles, state.rooms, roomName, state.selectedZoneId, state.tool, state.measureTargetId, state.photoMarkers],
   );
   const parentWallLength = useMemo(() => {
     if (!(selected instanceof Door) && !(selected instanceof Window)) return undefined;
@@ -721,6 +734,14 @@ export function SurveyScreen({
       }
       if (sel) return { typeLabel: sel.type, props: {} };
     }
+    const zone = editor.selectedZone;
+    if (!sel && zone) {
+      return {
+        typeLabel: zone.number !== undefined ? `${zoneCode({ number: zone.number })} ${zone.name ?? ''}` : 'Recinto',
+        detail: `neta ${(zone.netArea ?? zone.area).toFixed(2)} m² · P ${(zone.perimeter ?? 0).toFixed(2)} m${zone.use ? ` · ${zone.use}` : ''}`,
+        props: {},
+      };
+    }
     if (!sel) return null;
     const cm = (m: unknown) => Math.round(Number(m) * 100);
     if (sel instanceof Wall) {
@@ -741,7 +762,7 @@ export function SurveyScreen({
       return { typeLabel: 'Recinto', detail: state.rooms[0] ? `${state.rooms[0].area.toFixed(2)} m²` : 'abierto', props: {} };
     }
     return { typeLabel: sel.type, props: {} };
-  }, [editor, selected, state.rooms, levelInfo, topo.active, topo.selectedBenchmark, topo.probe, topo.geo, topo.display]);
+  }, [editor, selected, state.rooms, state.selectedZoneId, levelInfo, topo.active, topo.selectedBenchmark, topo.probe, topo.geo, topo.display]);
 
   const zoomPercent = (state.transform.scale / DEFAULT_SCALE) * 100;
   const bpcContext = resolveBpcContext({
@@ -790,6 +811,8 @@ export function SurveyScreen({
     }
     bpcActions.push({ icon: 'table', label: 'Coordenadas', onPress: topo.openCoords });
     bpcActions.push({ icon: 'map-marker-radius', label: 'Amarre', onPress: topo.openSetup });
+  } else if (bpcContext.kind === 'selection' && editor.selectedZone && !selected) {
+    bpcActions.push({ icon: 'tune-variant', label: 'Recinto', onPress: () => setZoneSheetOpen(true) });
   } else if (bpcContext.kind === 'selection' && editable) {
     bpcActions.push({ icon: 'tune-variant', label: 'Propiedades', onPress: () => setPanelOpen(true) });
   }
@@ -816,7 +839,10 @@ export function SurveyScreen({
   const handleRedo = useCallback(() => void editor.redo().then(() => elevEditor?.load(false)), [editor, elevEditor]);
   const handleToolActivated = useCallback(() => editor.select(null), [editor]);
   const wallCount = editor.walls.length;
-  const areaLabel = state.rooms[0] ? `${state.rooms[0].area.toFixed(2)} m²` : 'Abierto';
+  // Suma de áreas NETAS de los recintos del nivel (lo que se pisa).
+  const areaLabel = state.rooms.length
+    ? `${state.rooms.reduce((s, r) => s + (r.netArea ?? r.area), 0).toFixed(2)} m² en ${state.rooms.length} recinto(s)`
+    : 'Abierto';
   const fileInfo = useMemo(
     () => ({
       project: projectName,
@@ -1014,6 +1040,21 @@ export function SurveyScreen({
                 : undefined
             }
           />
+      </BottomSheet>
+
+      {/* --- Recinto: nombre, uso, notas y áreas --- */}
+      <BottomSheet open={zoneSheetOpen && !!editor.selectedZone} onClose={() => setZoneSheetOpen(false)} heightRatio={0.6}>
+        {editor.selectedZone ? (
+          <ZoneSheet
+            zone={editor.selectedZone}
+            levelName={projectId ? levelInfo.active.name : undefined}
+            editable={editable}
+            onEdit={(edit) => {
+              const id = editor.selectedZone?.id;
+              if (id) void editor.editZone(id, edit);
+            }}
+          />
+        ) : null}
       </BottomSheet>
 
       {projectId ? <TopographySheets topo={topo} vertices={topoVertices} /> : null}

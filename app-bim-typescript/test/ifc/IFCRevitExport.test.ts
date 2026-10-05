@@ -296,3 +296,55 @@ describe('IFCSerializer — Revit', () => {
     expect(ofType(r.content, 'IFCMATERIALLAYERSET')).toHaveLength(1);
   });
 });
+
+describe('IFCSerializer — recintos con identidad (T0)', () => {
+  const zone = (id: string, code: string, name: string, levelId: string, x0: number, x1: number) => ({
+    id,
+    code,
+    name,
+    levelId,
+    netPolygon: [
+      { x: x0 + 0.1, y: 0.1 },
+      { x: x1 - 0.1, y: 0.1 },
+      { x: x1 - 0.1, y: 3.9 },
+      { x: x0 + 0.1, y: 3.9 },
+    ],
+    netArea: (x1 - x0 - 0.2) * 3.8,
+    grossArea: (x1 - x0) * 4,
+    perimeter: 2 * (x1 - x0 - 0.2 + 3.8),
+  });
+
+  it('un IfcSpace por recinto, en el piso de su nivel, con número, nombre y cantidades', async () => {
+    const r = await serialize({
+      zones: [zone('za', 'R-01', 'Cocina', 'n0', 0, 2.5), zone('zb', 'R-02', 'Baño', 'n0', 2.5, 5), zone('zc', 'R-03', 'Estudio', 'n1', 0, 5)],
+    });
+    expect(lintIfc(r.content)).toEqual([]);
+    const spaces = ofType(r.content, 'IFCSPACE');
+    expect(spaces).toHaveLength(3);
+    expect(spaces.map((s) => [s.args[2], s.args[7]])).toEqual([
+      ["'R-01'", "'Cocina'"],
+      ["'R-02'", stepString('Baño')],
+      ["'R-03'", "'Estudio'"],
+    ]);
+    // GUID estable por recinto.
+    expect(spaces[0].args[0]).toBe(`'${stableGuid('zone:za')}'`);
+
+    // Agregados a su piso: los dos primeros al Nivel 0, el tercero al Nivel 1.
+    const ents = parseStep(r.content);
+    const storeyName = (spaceId: number) => {
+      const rel = [...ents.values()].find((e) => e.type === 'IFCRELAGGREGATES' && refsIn(e.args[5]).includes(spaceId))!;
+      return ents.get(refsIn(rel.args[4])[0])!.args[2];
+    };
+    expect(storeyName(spaces[0].id)).toBe("'Nivel 0'");
+    expect(storeyName(spaces[2].id)).toBe("'Nivel 1'");
+
+    const qto = ofType(r.content, 'IFCQUANTITYAREA').map((q) => q.args[0]);
+    expect(qto).toContain("'NetFloorArea'");
+    expect(qto).toContain("'GrossFloorArea'");
+  });
+
+  it('sin recintos se conserva el IfcSpace único del espacio', async () => {
+    const r = await serialize();
+    expect(ofType(r.content, 'IFCSPACE')).toHaveLength(1);
+  });
+});

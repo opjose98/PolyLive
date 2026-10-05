@@ -68,10 +68,12 @@ export interface PlanScene {
   readonly selectedBenchmarkId?: string | null;
   /** Rótulos de coordenadas reales (Topografía, filtro "Rótulos de coordenadas"). */
   readonly coordLabels?: readonly { readonly position: Point2D; readonly lines: readonly string[] }[];
-  /** Recintos cerrados detectados a partir de los muros. */
-  readonly rooms?: readonly { polygon: readonly Point2D[]; area: number; centroid: Point2D }[];
-  /** Nombre a mostrar en el recinto principal (el mayor). */
+  /** Recintos cerrados (con identidad: id, nombre y área neta). */
+  readonly rooms?: readonly PlanRoom[];
+  /** Nombre a mostrar en el recinto principal si aún no tiene nombre propio. */
   readonly roomName?: string;
+  /** Recinto seleccionado: se resalta su contorno a cara interior. */
+  readonly selectedZoneId?: string | null;
   /** Muro en curso de trazado. */
   readonly wallDraft?: { start: Point2D | null; end: Point2D | null; snappedToNode: boolean } | null;
   /** Espesor (m) con que se previsualiza el muro en curso. */
@@ -93,6 +95,16 @@ export interface PlanScene {
   readonly gridOverscanPx?: number;
   /** El extremo arrastrado está enganchado a un nodo: se marca con un anillo. */
   readonly snapIndicator?: Point2D | null;
+}
+
+export interface PlanRoom {
+  readonly polygon: readonly Point2D[];
+  readonly area: number;
+  readonly centroid: Point2D;
+  readonly id?: string;
+  readonly name?: string;
+  readonly netPolygon?: readonly Point2D[];
+  readonly netArea?: number;
 }
 
 export interface PlanBenchmark {
@@ -297,6 +309,15 @@ function drawRooms({ r, scene, pal, toScreen }: Ctx): void {
     if (room.polygon.length < 3) continue;
     r.setFillStyle(pal.roomFill);
     r.fillPolygon(room.polygon.map(toScreen));
+  }
+  const sel = scene.selectedZoneId ? scene.rooms?.find((x) => x.id === scene.selectedZoneId) : undefined;
+  if (sel) {
+    const outline = (sel.netPolygon?.length ?? 0) >= 3 ? sel.netPolygon! : sel.polygon;
+    r.setFillStyle(pal.selectionFill);
+    r.fillPolygon(outline.map(toScreen));
+    r.setStrokeStyle(pal.selection);
+    r.setLineWidth(2 * pal.lineScale);
+    r.strokePolygon(outline.map(toScreen));
   }
 }
 
@@ -753,8 +774,9 @@ function drawLabels(ctx: Ctx): void {
   const rooms = scene.rooms ?? [];
   rooms.forEach((room, i) => {
     const c = toScreen(room.centroid);
-    const name = i === 0 && scene.roomName ? scene.roomName : `Recinto ${i + 1}`;
+    const name = room.name ?? (i === 0 && scene.roomName ? scene.roomName : `Recinto ${i + 1}`);
     r.drawText(name, c.x, c.y - 4, 12, 'center');
-    r.drawText(`${room.area.toFixed(2)} m²`, c.x, c.y + 12, 11, 'center');
+    // Área NETA (a cara interior): la que se pisa y la que usa Revit.
+    r.drawText(`${(room.netArea ?? room.area).toFixed(2)} m²`, c.x, c.y + 12, 11, 'center');
   });
 }

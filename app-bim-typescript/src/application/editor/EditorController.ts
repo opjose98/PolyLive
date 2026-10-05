@@ -38,7 +38,11 @@ import { Room } from '../../domain/objects/room';
 import { Column } from '../../domain/objects/column';
 import { Door } from '../../domain/objects/door';
 import { Window } from '../../domain/objects/window';
-import { distanceToSegment } from '../../domain/geometry/polygon-utils';
+import { distanceToSegment, isPointInPolygon } from '../../domain/geometry/polygon-utils';
+import { generateId } from '../../domain/objects/base';
+import { interiorPoint, netGeometry } from '../../domain/objects/zone';
+import { reconcileZones } from '../topology/reconcileZones';
+import type { ZoneEdit } from '../../infrastructure/sqlite/ZoneStore';
 import { lineShape } from '../../domain/geometry/shapes';
 import { LEVEL_PROP, PHASE_PROP } from '../../domain/objects/marker';
 import {
@@ -62,6 +66,7 @@ import { CanvasPoint, canvasPoint, MIN_SCALE, MAX_SCALE } from '../canvas/types'
 import { SnapHandler } from '../canvas/SnapHandler';
 import { MiterHandler } from '../canvas/MiterHandler';
 import { SelectionService, Handle, touchToleranceMeters } from '../canvas/SelectionService';
+import { JointWall, WallEndsChange, endsAt, planEndMove, planWallTranslate } from '../../domain/topology/joints';
 import type { AppServices } from '../AppServices';
 import type { AuditPhotoId } from '../../domain/objects/base';
 
@@ -120,11 +125,25 @@ export interface WallDraft {
   readonly snappedToNode: boolean;
 }
 
-/** Recinto cerrado detectado automáticamente a partir de los muros. */
+/**
+ * Recinto cerrado que forman los muros del nivel activo. `area` y `polygon`
+ * son al eje (lo que detecta la topología); `id` y lo demás vienen del
+ * recinto PERSISTIDO que le corresponde (ver reconcileZones). Sin `id` solo
+ * en el instante previo a reconciliar.
+ */
 export interface DetectedRoom {
   readonly polygon: readonly Point2D[];
   readonly area: number;
+  /** Punto interior donde va el rótulo. */
   readonly centroid: Point2D;
+  readonly id?: string;
+  readonly number?: number;
+  readonly name?: string;
+  readonly use?: string;
+  readonly notes?: string;
+  readonly netPolygon?: readonly Point2D[];
+  readonly netArea?: number;
+  readonly perimeter?: number;
 }
 
 /**
@@ -173,6 +192,8 @@ export interface EditorState {
   /** Recintos cerrados que forman los muros, recalculados en cada cambio. */
   readonly rooms: readonly DetectedRoom[];
   readonly selectedId: RevitObjectId | null;
+  /** Recinto seleccionado (tocar dentro de él sin tocar un objeto). Excluye a `selectedId`. */
+  readonly selectedZoneId: string | null;
   /** Muro elegido como destino de la próxima medición (herramienta `measure`). */
   readonly measureTargetId: WallId | null;
   /**
@@ -201,15 +222,33 @@ export interface EditorState {
   readonly dragPreview: RevitObjectBase | null;
   /** El extremo arrastrado está enganchado a un nodo de otro muro. */
   readonly dragSnappedToNode: boolean;
+  /**
+   * Muros que el arrastre mueve por estar UNIDOS al arrastrado (extremos
+   * comunes o encuentros en T), en su posición en vivo. Vacío si no hay.
+   */
+  readonly dragLinked: readonly RevitObjectBase[];
   /** Último mensaje para la UI (éxito o error). La vista lo muestra y lo limpia. */
   readonly notice: { kind: 'info' | 'error' | 'success'; message: string } | null;
 }
 
 export type EditorListener = (state: EditorState) => void;
 
+/** Lo común a todo destino de arrastre: plan de uniones (si el muro tiene) y muros arrastrados. */
+interface DragJoints {
+  readonly plan: WallEndsChange[] | null;
+  readonly linked: RevitObjectBase[];
+}
+
 type DragTarget =
-  | { kind: 'center'; dx: number; dy: number; preview: RevitObjectBase | null; snappedToNode: false }
-  | { kind: 'start' | 'end'; point: Point2D; dx: number; dy: number; preview: RevitObjectBase | null; snappedToNode: boolean };
+  | ({ kind: 'center'; dx: number; dy: number; preview: RevitObjectBase | null; snappedToNode: false } & DragJoints)
+  | ({
+      kind: 'start' | 'end';
+      point: Point2D;
+      dx: number;
+      dy: number;
+      preview: RevitObjectBase | null;
+      snappedToNode: boolean;
+    } & DragJoints);
 
 /**
  * Copia de un objeto de dominio con algunos campos cambiados, conservando su
@@ -242,6 +281,7 @@ export class EditorController {
   private dragOrigin: Point2D | null = null;
   private dragTolerancePx = 22;
   private wallCommits: Promise<void> = Promise.resolve();
+  private zoneQueue: Promise<unknown> = Promise.resolve();
   private levelScope: LevelScope | null = null;
   private phaseScope: PhaseScope | null = null;
   private creationVertical: CreationVertical = { wall: null, column: null };
@@ -284,6 +324,7 @@ export class EditorController {
       wallDraft: null,
       rooms: [],
       selectedId: null,
+      selectedZoneId: null,
       measureTargetId: null,
       pendingPhotoPoint: null,
       photoMarkers: [],
@@ -296,6 +337,7 @@ export class EditorController {
       draggingHandle: null,
       dragPreview: null,
       dragSnappedToNode: false,
+      dragLinked: [],
       notice: null,
     };
   }
@@ -346,6 +388,15 @@ export class EditorController {
   /** Objetos del nivel activo, sin lo creado en fases posteriores a la activa. */
   get scopedObjects(): readonly RevitObjectBase[] {
     return this.scope().scoped;
+  }
+
+  /**
+   * Lo que se toca para seleccionar: todo menos el Room contenedor. Tocar
+   * dentro de un espacio cerrado selecciona su RECINTO (con identidad), no el
+   * contenedor del levantamiento.
+   */
+  private get pickable(): readonly RevitObjectBase[] {
+    return this.scopedObjects.filter((o) => !(o instanceof Room));
   }
 
   private scope(): NonNullable<EditorController['scopeCache']> {
@@ -520,7 +571,9 @@ export class EditorController {
     const preview = this.state.dragPreview;
     const scoped = this.scopedObjects;
     if (!preview) return scoped;
-    return scoped.map((o) => (o.id === preview.id ? preview : o));
+    const live = new Map<string, RevitObjectBase>([[preview.id as string, preview]]);
+    for (const o of this.state.dragLinked) live.set(o.id as string, o);
+    return scoped.map((o) => live.get(o.id as string) ?? o);
   }
 
   worldToScreen(point: Point2D): CanvasPoint {
@@ -574,7 +627,8 @@ export class EditorController {
         .execute({ walls })
         .suggestions.map((r) => ({ polygon: r.polygon, area: r.area as number, centroid: r.centroid }))
         .sort((a, b) => b.area - a.area);
-    const rooms = detect(objects.filter((o): o is Wall => o instanceof Wall && this.inScope(o)));
+    const scopedWalls = objects.filter((o): o is Wall => o instanceof Wall && this.inScope(o));
+    const rooms = await this.syncZones(detect(scopedWalls), scopedWalls);
     // El Recinto persistido (el que exportan IFC y DXF) es el de su nivel, la
     // base: navegar a otro nivel no debe reescribir su geometría.
     const lv = this.levelScope;
@@ -594,7 +648,81 @@ export class EditorController {
       // Una selección apuntando a un objeto que ya no está (borrado, o
       // deshecho) dejaría el panel de propiedades mostrando un fantasma.
       selectedId: objects.some((o) => o.id === this.state.selectedId) ? this.state.selectedId : null,
+      selectedZoneId: rooms.some((r) => r.id === this.state.selectedZoneId) ? this.state.selectedZoneId : null,
     });
+  }
+
+  /**
+   * Liga los contornos detectados a sus recintos persistidos (crea los nuevos,
+   * desliga los que dejaron de cerrarse) y devuelve los recintos a dibujar.
+   * En cola: dos recargas simultáneas crearían el mismo recinto dos veces.
+   */
+  private syncZones(contours: readonly DetectedRoom[], walls: readonly Wall[]): Promise<DetectedRoom[]> {
+    const run = async (): Promise<DetectedRoom[]> => {
+      const zones = this.services.zones;
+      const space = this.roomId as unknown as string;
+      const lv = this.levelScope;
+      const level = lv?.active ?? '';
+      const all = await zones.list(space);
+      // Lo creado antes de cargar los niveles (nivel '') es de la base.
+      const mine = all.filter((z) => z.levelId === level || (z.levelId === '' && (!lv || level === lv.base)));
+      const thick = walls.map((w) => ({ start: w.startPoint, end: w.endPoint, thickness: w.thickness as number }));
+      const { assigned, changed } = reconcileZones({
+        zones: mine,
+        detected: contours.map((c) => ({ polygon: c.polygon, area: c.area, ...netGeometry(c.polygon, thick) })),
+        spaceId: space,
+        levelId: level,
+        nextNumber: Math.max(0, ...all.map((z) => z.number)) + 1,
+        newId: () => generateId() as unknown as string,
+        now: new Date().toISOString(),
+      });
+      await zones.saveGeometry(changed);
+      return assigned.map((z, i) => ({
+        polygon: contours[i].polygon,
+        area: contours[i].area,
+        centroid: interiorPoint(z.netPolygon.length >= 3 ? z.netPolygon : z.polygon),
+        id: z.id,
+        number: z.number,
+        name: z.name,
+        use: z.use,
+        notes: z.notes,
+        netPolygon: z.netPolygon,
+        netArea: z.netArea,
+        perimeter: z.perimeter,
+      }));
+    };
+    const next = this.zoneQueue.then(run, run);
+    this.zoneQueue = next.catch(() => undefined);
+    return next.catch(() => [...contours]);
+  }
+
+  // -------------------------------------------------------------------------
+  // Recintos con identidad: selección y edición
+  // -------------------------------------------------------------------------
+
+  /** Recinto bajo un punto de pantalla (el más pequeño que lo contenga), o `null`. */
+  zoneAt(screenX: number, screenY: number): DetectedRoom | null {
+    const p = this.screenToWorld(screenX, screenY);
+    const hits = this.state.rooms.filter((r) => r.id && r.polygon.length >= 3 && isPointInPolygon(p, r.polygon));
+    return hits.sort((a, b) => a.area - b.area)[0] ?? null;
+  }
+
+  get selectedZone(): DetectedRoom | null {
+    return this.state.rooms.find((r) => r.id === this.state.selectedZoneId) ?? null;
+  }
+
+  selectZone(id: string | null): void {
+    this.patch({ selectedZoneId: id, ...(id && { selectedId: null }) });
+  }
+
+  /** Cambia nombre, uso o notas del recinto (metadatos: no entran al historial de deshacer). */
+  async editZone(id: string, edit: ZoneEdit): Promise<void> {
+    try {
+      await this.services.zones.edit(id, edit);
+      await this.reload();
+    } catch (err) {
+      this.fail(err, 'No se pudo guardar el recinto.');
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -614,6 +742,7 @@ export class EditorController {
       draggingHandle: null,
       dragPreview: null,
       dragSnappedToNode: false,
+      dragLinked: [],
       wallDraft: null,
     });
     this.dragOrigin = null;
@@ -638,7 +767,7 @@ export class EditorController {
   }
 
   select(id: RevitObjectId | null): void {
-    this.patch({ selectedId: id });
+    this.patch({ selectedId: id, selectedZoneId: null });
   }
 
   /**
@@ -649,8 +778,8 @@ export class EditorController {
   selectAt(screenX: number, screenY: number, touchTolerancePx: number): RevitObjectBase | null {
     const world = this.screenToWorld(screenX, screenY);
     const tol = touchToleranceMeters(touchTolerancePx, this.state.transform.scale);
-    const hit = this.selection.hitTest({ worldPoint: world, objects: this.scopedObjects, thresholdMeters: tol });
-    if (hit) this.patch({ selectedId: hit.id });
+    const hit = this.selection.hitTest({ worldPoint: world, objects: this.pickable, thresholdMeters: tol });
+    if (hit) this.patch({ selectedId: hit.id, selectedZoneId: null });
     return hit ?? null;
   }
 
@@ -797,11 +926,13 @@ export class EditorController {
     const tol = touchToleranceMeters(touchTolerancePx, this.state.transform.scale);
 
     switch (this.state.tool) {
-      case 'select':
-        this.patch({
-          selectedId: this.selection.hitTest({ worldPoint: world, objects: this.scopedObjects, thresholdMeters: tol })?.id ?? null,
-        });
+      case 'select': {
+        // Un objeto bajo el dedo gana; si no hay, el recinto que lo contiene.
+        const hit = this.selection.hitTest({ worldPoint: world, objects: this.pickable, thresholdMeters: tol });
+        const zone = hit ? null : this.zoneAt(screenX, screenY);
+        this.patch({ selectedId: hit?.id ?? null, selectedZoneId: zone?.id ?? null });
         return;
+      }
       case 'wall':
         return this.wallTap(screenX, screenY);
       case 'door':
@@ -835,7 +966,7 @@ export class EditorController {
 
     this.dragOrigin = world;
     this.dragTolerancePx = touchTolerancePx;
-    this.patch({ draggingHandle: handle, dragPreview: null, dragSnappedToNode: false });
+    this.patch({ draggingHandle: handle, dragPreview: null, dragSnappedToNode: false, dragLinked: [] });
     return true;
   }
 
@@ -847,14 +978,14 @@ export class EditorController {
   updateDrag(screenX: number, screenY: number): void {
     const target = this.dragTargetAt(screenX, screenY);
     if (!target) return;
-    this.patch({ dragPreview: target.preview, dragSnappedToNode: target.snappedToNode });
+    this.patch({ dragPreview: target.preview, dragSnappedToNode: target.snappedToNode, dragLinked: target.linked });
   }
 
   /** Abandona el arrastre sin persistir (el gesto fue cancelado por el sistema). */
   cancelDrag(): void {
     this.dragOrigin = null;
     if (this.state.draggingHandle || this.state.dragPreview) {
-      this.patch({ draggingHandle: null, dragPreview: null, dragSnappedToNode: false });
+      this.patch({ draggingHandle: null, dragPreview: null, dragSnappedToNode: false, dragLinked: [] });
     }
   }
 
@@ -872,7 +1003,7 @@ export class EditorController {
 
     const sel = this.selected;
     if (!target || !sel) {
-      this.patch({ dragPreview: null });
+      this.patch({ dragPreview: null, dragLinked: [] });
       return;
     }
 
@@ -880,13 +1011,16 @@ export class EditorController {
     // Un micro-arrastre por temblor de pulso no debe contar como una edición:
     // generaría un comando en la pila que el usuario no pidió.
     if (Math.hypot(dx, dy) < 1e-4) {
-      this.patch({ dragPreview: null });
+      this.patch({ dragPreview: null, dragLinked: [] });
       return;
     }
 
     this.patch({ busy: true });
     try {
-      if (target.kind === 'center') {
+      if (target.plan) {
+        // Muro con uniones: todos los muros afectados, un solo paso de deshacer.
+        await this.services.useCases.reshapeWalls.execute({ changes: target.plan });
+      } else if (target.kind === 'center') {
         // MoveObjectUseCase toma posiciones ABSOLUTAS, no deltas: para un muro
         // basta mandar el nuevo inicio (el use case traslada el final y el eje
         // con el mismo delta); para una columna, la nueva posición.
@@ -912,7 +1046,7 @@ export class EditorController {
     } catch (err) {
       this.fail(err, 'No se pudo mover el objeto.');
     } finally {
-      this.patch({ busy: false, dragPreview: null });
+      this.patch({ busy: false, dragPreview: null, dragLinked: [] });
     }
   }
 
@@ -935,11 +1069,14 @@ export class EditorController {
       if (sel instanceof Column) {
         preview = cloneWith(sel, { position: { x: sel.position.x + dx, y: sel.position.y + dy } });
       } else if (sel instanceof Wall && sel.isStraight) {
-        const start = { x: sel.startPoint.x + dx, y: sel.startPoint.y + dy };
-        const end = { x: sel.endPoint.x + dx, y: sel.endPoint.y + dy };
-        preview = cloneWith(sel, { startPoint: start, endPoint: end, shape: lineShape(start, end) });
+        const joints = this.jointWalls(sel);
+        if (joints) {
+          const plan = planWallTranslate(joints, sel.id as string, dx, dy);
+          const { main, linked } = this.previewPlan(sel, plan);
+          return { kind: 'center', dx, dy, preview: main, snappedToNode: false, plan, linked };
+        }
       }
-      return { kind: 'center', dx, dy, preview, snappedToNode: false };
+      return { kind: 'center', dx, dy, preview, snappedToNode: false, plan: null, linked: [] };
     }
 
     if (!(sel instanceof Wall)) return null;
@@ -951,9 +1088,13 @@ export class EditorController {
     // hay, el snap angular respecto al extremo fijo.
     let point = world;
     let snappedToNode = false;
+    const joints = this.jointWalls(sel);
+    // Los muros unidos en este extremo se mueven con él: engancharse a ellos
+    // sería engancharse a sí mismo.
+    const joinedHere = new Set(joints ? endsAt(joints, current, new Set([sel.id as string])).map((j) => j.id) : []);
     if (this.state.nodeSnapEnabled) {
       const tol = touchToleranceMeters(this.dragTolerancePx, this.state.transform.scale);
-      const others = this.walls.filter((w) => w.id !== sel.id);
+      const others = this.walls.filter((w) => w.id !== sel.id && !joinedHere.has(w.id as string));
       const node = this.selection.findNearestNode({ worldPoint: world, walls: others, thresholdMeters: tol });
       if (node) {
         point = node;
@@ -961,6 +1102,21 @@ export class EditorController {
       }
     }
     if (!snappedToNode) point = this.snapEndpoint(world, fixed);
+
+    if (joints) {
+      const plan = planEndMove(joints, sel.id as string, isStart ? 'start' : 'end', point);
+      const { main, linked } = this.previewPlan(sel, plan);
+      return {
+        kind: isStart ? 'start' : 'end',
+        point,
+        dx: point.x - current.x,
+        dy: point.y - current.y,
+        preview: main,
+        snappedToNode,
+        plan,
+        linked,
+      };
+    }
 
     const preview = sel.isStraight
       ? cloneWith(sel, {
@@ -976,7 +1132,43 @@ export class EditorController {
       dy: point.y - current.y,
       preview,
       snappedToNode,
+      plan: null,
+      linked: [],
     };
+  }
+
+  /**
+   * Muros que pueden estar unidos a `wall`: los rectos de su mismo nivel (dos
+   * muros de plantas distintas no se unen aunque coincidan en planta). `null`
+   * si el muro no es recto: los arcos se mueven solos, como antes.
+   */
+  private jointWalls(wall: Wall): JointWall[] | null {
+    if (!wall.isStraight) return null;
+    const lv = this.levelScope;
+    const level = lv ? this.levelOf(wall, lv) : null;
+    const out: JointWall[] = [];
+    for (const w of this.walls) {
+      if (!w.isStraight) continue;
+      if (lv && this.levelOf(w, lv) !== level) continue;
+      out.push({ id: w.id as string, start: w.startPoint, end: w.endPoint });
+    }
+    return out;
+  }
+
+  /** Vistas previas de un plan de uniones: el muro arrastrado y los que arrastra. */
+  private previewPlan(sel: Wall, plan: readonly WallEndsChange[]): { main: RevitObjectBase; linked: RevitObjectBase[] } {
+    let main: RevitObjectBase = sel;
+    const linked: RevitObjectBase[] = [];
+    for (const c of plan) {
+      const w = c.id === (sel.id as string) ? sel : this.wallById(c.id);
+      if (!w) continue;
+      const start = c.start ?? w.startPoint;
+      const end = c.end ?? w.endPoint;
+      const clone = cloneWith(w, { startPoint: start, endPoint: end, shape: lineShape(start, end) });
+      if (w === sel) main = clone;
+      else linked.push(clone);
+    }
+    return { main, linked };
   }
 
   // -------------------------------------------------------------------------
@@ -1431,11 +1623,19 @@ export class EditorController {
 
     this.patch({ busy: true });
     try {
-      await this.services.useCases.updateObjectProperty.execute({
-        objectId: wall.id,
-        property: 'endPoint',
-        newValue: newEnd,
-      });
+      // El extremo final se mueve CON sus uniones: la esquina sigue cerrada.
+      const joints = this.jointWalls(wall);
+      if (joints) {
+        await this.services.useCases.reshapeWalls.execute({
+          changes: planEndMove(joints, wall.id as string, 'end', newEnd),
+        });
+      } else {
+        await this.services.useCases.updateObjectProperty.execute({
+          objectId: wall.id,
+          property: 'endPoint',
+          newValue: newEnd,
+        });
+      }
       await this.reload();
       this.notify('success', `Muro ajustado a ${Number(distance).toFixed(3)} m.`);
     } catch (err) {

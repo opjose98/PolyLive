@@ -506,6 +506,56 @@ describe('EditorController', () => {
     });
   });
 
+  describe('uniones de muros', () => {
+    const wallAt = (sx: number, sy: number) =>
+      editor.walls.find((w) => Math.abs(w.startPoint.x - sx) < 1e-6 && Math.abs(w.startPoint.y - sy) < 1e-6)!;
+
+    it('arrastrar una esquina mueve los dos muros que se unen en ella, y el recinto sigue cerrado', async () => {
+      await drawRectangle();
+      editor.setTool('select');
+      await editor.handleTap(px(2), px(0), TOL_PX); // muro inferior
+      expect(editor.beginDrag(px(4), px(0), TOL_PX)).toBe(true);
+      editor.updateDrag(px(5), px(0));
+      // Vista previa: el muro vecino se mueve en vivo.
+      expect(editor.getState().dragLinked).toHaveLength(1);
+      await editor.endDrag(px(5), px(0));
+
+      const east = editor.walls.find((w) => Math.abs(w.endPoint.x - 4) < 1e-6 && Math.abs(w.endPoint.y - 3) < 1e-6)!;
+      expect(east.startPoint.x).toBeCloseTo(5);
+      expect(editor.getState().rooms).toHaveLength(1);
+      expect(editor.getState().dragLinked).toHaveLength(0);
+    });
+
+    it('trasladar un muro estira a sus vecinos; un deshacer lo devuelve todo', async () => {
+      await drawRectangle();
+      editor.setTool('select');
+      await editor.handleTap(px(2), px(0), TOL_PX);
+      expect(editor.beginDrag(px(2), px(0), TOL_PX)).toBe(true); // handle central
+      await editor.endDrag(px(2), px(-1));
+
+      expect(wallAt(0, -1).endPoint).toEqual({ x: 4, y: -1 });
+      expect(wallAt(4, -1).endPoint).toEqual({ x: 4, y: 3 });
+      expect(editor.getState().rooms[0].area).toBeCloseTo(16);
+
+      await editor.undo();
+      expect(wallAt(0, 0).endPoint).toEqual({ x: 4, y: 0 });
+      expect(wallAt(4, 0).endPoint).toEqual({ x: 4, y: 3 });
+      expect(editor.getState().rooms[0].area).toBeCloseTo(12);
+
+      await editor.redo();
+      expect(wallAt(4, -1)).toBeDefined();
+    });
+
+    it('aplicar una medida mueve el extremo con su unión', async () => {
+      await drawRectangle();
+      editor.setTool('measure');
+      await editor.handleTap(px(2), px(0), TOL_PX);
+      await editor.applyMeasurementToWall(meters(5));
+      expect(editor.walls.some((w) => Math.abs(w.startPoint.x - 5) < 1e-6 && Math.abs(w.endPoint.y - 3) < 1e-6)).toBe(true);
+      expect(editor.getState().rooms).toHaveLength(1);
+    });
+  });
+
   describe('arrastre en vivo', () => {
     async function selectedColumn(): Promise<void> {
       editor.setTool('column');
@@ -646,6 +696,52 @@ describe('EditorController', () => {
       expect(editor.getState().rooms).toHaveLength(0);
       const room = (await services.store.readObject(ROOM_OBJECT_ID)) as Room;
       expect(room.geometry).toHaveLength(0);
+    });
+
+    it('cada recinto tiene id persistido, número y área neta a cara interior', async () => {
+      await drawRectangle();
+      const [r] = editor.getState().rooms;
+      expect(r.id).toBeDefined();
+      expect(r.number).toBe(1);
+      expect(r.name).toBe('Recinto 1');
+      expect(r.netArea).toBeCloseTo(3.85 * 2.85, 4);
+      const stored = await services.zones.list(ROOM_ID as unknown as string);
+      expect(stored.map((z) => z.id)).toEqual([r.id]);
+    });
+
+    it('el recinto conserva id y nombre al mover un muro, y al dividirlo nace otro', async () => {
+      await drawRectangle();
+      const id = editor.getState().rooms[0].id!;
+      await editor.editZone(id, { name: 'Cocina', use: 'cocina' });
+
+      // Mover el muro inferior: mismo recinto, más grande.
+      editor.setTool('select');
+      await editor.handleTap(px(2), px(0), TOL_PX);
+      editor.beginDrag(px(2), px(0), TOL_PX);
+      await editor.endDrag(px(2), px(-1));
+      expect(editor.getState().rooms[0]).toMatchObject({ id, name: 'Cocina', use: 'cocina' });
+
+      // Dividir con un muro en x=1 (la semilla queda en un lado).
+      await drawWall(1, -1, 1, 3);
+      const rooms = editor.getState().rooms;
+      expect(rooms).toHaveLength(2);
+      expect(rooms.filter((r) => r.id === id)).toHaveLength(1);
+      expect(rooms.find((r) => r.id !== id)!.number).toBe(2);
+
+      // Deshacer la división: vuelve a ser un solo recinto, el mismo.
+      await editor.undo();
+      expect(editor.getState().rooms.map((r) => r.id)).toEqual([id]);
+    });
+
+    it('tocar dentro de un recinto lo selecciona; tocar un muro selecciona el muro', async () => {
+      await drawRectangle();
+      editor.setTool('select');
+      await editor.handleTap(px(2), px(1.5), TOL_PX);
+      expect(editor.getState().selectedZoneId).toBe(editor.getState().rooms[0].id);
+      expect(editor.selectedZone?.name).toBe('Recinto 1');
+      await editor.handleTap(px(2), px(0), TOL_PX);
+      expect(editor.getState().selectedZoneId).toBeNull();
+      expect(editor.getState().selectedId).not.toBeNull();
     });
   });
 
