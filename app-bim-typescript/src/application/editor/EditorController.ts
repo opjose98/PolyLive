@@ -1097,16 +1097,24 @@ export class EditorController {
     // Los muros unidos en este extremo se mueven con él: engancharse a ellos
     // sería engancharse a sí mismo.
     const joinedHere = new Set(joints ? endsAt(joints, current, new Set([sel.id as string])).map((j) => j.id) : []);
+    const tol = touchToleranceMeters(this.dragTolerancePx, this.state.transform.scale);
+    const others = this.walls.filter((w) => w.id !== sel.id && !joinedHere.has(w.id as string));
     if (this.state.nodeSnapEnabled) {
-      const tol = touchToleranceMeters(this.dragTolerancePx, this.state.transform.scale);
-      const others = this.walls.filter((w) => w.id !== sel.id && !joinedHere.has(w.id as string));
       const node = this.selection.findNearestNode({ worldPoint: world, walls: others, thresholdMeters: tol });
       if (node) {
         point = node;
         snappedToNode = true;
       }
     }
-    if (!snappedToNode) point = this.snapEndpoint(world, fixed);
+    if (!snappedToNode) {
+      point = this.snapEndpoint(world, fixed);
+      // Llevar el extremo hasta el eje de otro muro lo deja en T (une y divide recintos).
+      const onAxis = this.state.nodeSnapEnabled ? this.snapToWallAxis(world, point, fixed, tol, others) : null;
+      if (onAxis) {
+        point = onAxis;
+        snappedToNode = true;
+      }
+    }
 
     if (joints) {
       const plan = planEndMove(joints, sel.id as string, isStart ? 'start' : 'end', point);
@@ -1252,8 +1260,62 @@ export class EditorController {
       const node = this.selection.findNearestNode({ worldPoint: world, walls: this.walls, thresholdMeters: tol });
       if (node) return { point: node, snappedToNode: true };
     }
-    if (from !== undefined && this.state.snapEnabled) return { point: this.snap.snapPoint(world, from), snappedToNode: false };
-    return { point: world, snappedToNode: false };
+    const angled = from !== undefined && this.state.snapEnabled ? this.snap.snapPoint(world, from) : world;
+    if (this.state.nodeSnapEnabled) {
+      const onAxis = this.snapToWallAxis(world, angled, from, tol, this.walls);
+      if (onAxis) return { point: onAxis, snappedToNode: true };
+    }
+    return { point: angled, snappedToNode: false };
+  }
+
+  /**
+   * Enganche al EJE de un muro (encuentro en T): sin él, un tabique que llega a
+   * la mitad de otro muro queda unos centímetros corto o largo y la topología
+   * no lo une, así que el recinto no se divide. Si hay snap angular, se toma el
+   * cruce del rayo ya enganchado en ángulo con el eje (el tabique sale recto Y
+   * toca el muro); si no, la proyección del dedo sobre el eje. Solo el tramo
+   * interior: los extremos son nodos y tienen su propio enganche.
+   */
+  private snapToWallAxis(
+    world: Point2D,
+    angled: Point2D,
+    from: Point2D | undefined,
+    tol: number,
+    walls: readonly Wall[],
+  ): Point2D | null {
+    let best: { p: Point2D; d: number } | null = null;
+    for (const w of walls) {
+      if (!w.isStraight) continue;
+      const a = w.startPoint;
+      const b = w.endPoint;
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const len2 = dx * dx + dy * dy;
+      if (len2 < 1e-9) continue;
+      let p: Point2D | null = null;
+      if (from !== undefined && (angled.x !== world.x || angled.y !== world.y)) {
+        // Cruce de la recta from→angled con el eje del muro.
+        const rx = angled.x - from.x;
+        const ry = angled.y - from.y;
+        const den = rx * dy - ry * dx;
+        if (Math.abs(den) > 1e-12) {
+          const t = ((a.x - from.x) * dy - (a.y - from.y) * dx) / den;
+          const cand = { x: from.x + rx * t, y: from.y + ry * t };
+          if (Math.hypot(cand.x - angled.x, cand.y - angled.y) <= tol) p = cand;
+        }
+      }
+      if (!p) {
+        const t = ((world.x - a.x) * dx + (world.y - a.y) * dy) / len2;
+        p = { x: a.x + t * dx, y: a.y + t * dy };
+      }
+      const s = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
+      const len = Math.sqrt(len2);
+      // Fuera del tramo interior (o pegado a un extremo): no es una T.
+      if (s * len < 0.02 || (1 - s) * len < 0.02) continue;
+      const d = Math.hypot(p.x - world.x, p.y - world.y);
+      if (d <= tol && (!best || d < best.d)) best = { p, d };
+    }
+    return best?.p ?? null;
   }
 
   private async commitWall(start: Point2D, end: Point2D): Promise<void> {

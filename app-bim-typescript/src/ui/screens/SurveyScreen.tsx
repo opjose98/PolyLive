@@ -412,6 +412,27 @@ export function SurveyScreen({
   useEffect(() => {
     if (elevWallId) return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      // Lo abierto se cierra antes de salir del espacio: hojas, textos y flujos de cada modo.
+      if (review.state.pendingText) {
+        review.ctl.cancelText();
+        return true;
+      }
+      if (review.sheet) {
+        review.closeSheet();
+        return true;
+      }
+      if (progress.sheet) {
+        progress.closeSheet();
+        return true;
+      }
+      if (topoTools.stakeTarget) {
+        topoTools.closeStakeout();
+        return true;
+      }
+      if (zoneSheetOpen) {
+        setZoneSheetOpen(false);
+        return true;
+      }
       if (topoBack()) return true;
       if (panelOpen) {
         setPanelOpen(false);
@@ -434,7 +455,7 @@ export function SurveyScreen({
       return false;
     });
     return () => sub.remove();
-  }, [elevWallId, onExit, panelOpen, topoBack]);
+  }, [elevWallId, onExit, panelOpen, topoBack, zoneSheetOpen, review, progress, topoTools]);
 
   const closeElevation = useCallback(() => {
     setElevWallId(null);

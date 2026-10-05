@@ -136,12 +136,18 @@ export function ElevationView(props: ElevationViewProps) {
   // Botón atrás de Android: primero cierra la hoja, luego vuelve a la planta.
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (sheetOpen) setSheetOpen(false);
+      // Las hojas de Avance y Revisión viven en la planta pero se abren desde aquí: se cierran primero.
+      const rv = props.review;
+      const pg = props.progress;
+      if (rv?.state.pendingText) rv.ctl.cancelText();
+      else if (rv?.sheet) rv.closeSheet();
+      else if (pg?.sheet) pg.closeSheet();
+      else if (sheetOpen) setSheetOpen(false);
       else props.onClose();
       return true;
     });
     return () => sub.remove();
-  }, [sheetOpen, props.onClose]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sheetOpen, props.onClose, props.review, props.progress]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Herramienta del FAB del alzado → herramienta del editor.
   const activeTool = ws.activeTool;

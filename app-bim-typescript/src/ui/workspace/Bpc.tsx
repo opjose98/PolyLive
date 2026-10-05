@@ -53,34 +53,11 @@ export const Bpc = React.memo(function Bpc({ context, pills, actions = [], onExi
     <Animated.View style={[styles.bar, { top, right }]} layout={LinearTransition.springify().damping(22)}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.content}>
         <Animated.View key={key} entering={FadeIn.duration(160)} exiting={FadeOut.duration(80)} style={styles.segs}>
-          {context.kind === 'tool' ? (
-            <>
-              <Text style={styles.strong}>{context.tool.label}</Text>
-              <Text style={styles.muted}>{context.tool.methodLabel ?? context.tool.categoryLabel}</Text>
-              {toolDetail ? <Text style={styles.value}>{toolDetail}</Text> : null}
-            </>
-          ) : context.kind === 'selection' ? (
-            <>
-              <Text style={styles.strong}>{context.selection.typeLabel}</Text>
-              {context.selection.detail ? <Text style={styles.muted}>{context.selection.detail}</Text> : null}
-            </>
-          ) : (
-            <>
-              <Text style={styles.strong}>{context.title ?? 'Lienzo'}</Text>
-              {context.items?.map((it) => (
-                <Text key={it} style={styles.muted}>
-                  {it}
-                </Text>
-              ))}
-              <Text style={styles.muted}>{context.viewLabel}</Text>
-              <Text style={styles.muted}>
-                Escala <Text style={styles.value}>{context.scaleLabel}</Text>
-              </Text>
-              <Text style={styles.muted}>
-                Zoom <Text style={styles.value}>{context.zoomLabel}</Text>
-              </Text>
-            </>
-          )}
+          {/* Orden: título, píldoras y ACCIONES primero (lo que se toca tiene que
+              verse sin deslizar la barra); los datos informativos, al final. */}
+          <Text style={styles.strong}>
+            {context.kind === 'tool' ? context.tool.label : context.kind === 'selection' ? context.selection.typeLabel : context.title ?? 'Lienzo'}
+          </Text>
           {pills.map((p) => (
             <DragPill key={p.key} pill={p} />
           ))}
@@ -90,6 +67,31 @@ export const Bpc = React.memo(function Bpc({ context, pills, actions = [], onExi
               <Text style={styles.actionText}>{a.label}</Text>
             </Tappable>
           ))}
+          {context.kind === 'tool' ? (
+            <>
+              <Text style={styles.muted}>{context.tool.methodLabel ?? context.tool.categoryLabel}</Text>
+              {toolDetail ? <Text style={styles.value}>{toolDetail}</Text> : null}
+            </>
+          ) : context.kind === 'selection' ? (
+            context.selection.detail ? <Text style={styles.muted}>{context.selection.detail}</Text> : null
+          ) : context.items?.length ? (
+            // Un modo con contexto propio (Topografía, Avance, Revisión, Alzado): escala y zoom sobran.
+            context.items.map((it) => (
+              <Text key={it} style={styles.muted}>
+                {it}
+              </Text>
+            ))
+          ) : (
+            <>
+              <Text style={styles.muted}>{context.viewLabel}</Text>
+              <Text style={styles.muted}>
+                Escala <Text style={styles.value}>{context.scaleLabel}</Text>
+              </Text>
+              <Text style={styles.muted}>
+                Zoom <Text style={styles.value}>{context.zoomLabel}</Text>
+              </Text>
+            </>
+          )}
         </Animated.View>
       </ScrollView>
       {context.kind === 'tool' && onExitTool ? (

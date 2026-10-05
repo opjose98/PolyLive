@@ -763,6 +763,36 @@ describe('EditorController', () => {
       expect(editor.floorViews).toHaveLength(1);
     });
 
+    it('un tabique trazado hasta la mitad de dos muros (con el dedo impreciso) se engancha a sus ejes y divide el recinto', async () => {
+      await drawRectangle();
+      editor.setSnapEnabled(true);
+      editor.setNodeSnapEnabled(true);
+      const id = editor.getState().rooms[0].id;
+      // 6 cm por dentro de cada eje y 4 cm torcido: así traza un dedo.
+      await drawWall(2, 0.06, 2.04, 2.94);
+      const rooms = editor.getState().rooms;
+      expect(rooms).toHaveLength(2);
+      expect(rooms.some((r) => r.id === id)).toBe(true);
+      const tabique = editor.walls.find((w) => Math.abs(w.startPoint.x - 2) < 1e-6 && w.startPoint.y < 0.01)!;
+      expect(tabique.startPoint.y).toBeCloseTo(0, 9);
+      expect(tabique.endPoint.y).toBeCloseTo(3, 9);
+      expect(tabique.endPoint.x).toBeCloseTo(2, 6); // el snap angular lo dejó vertical
+    });
+
+    it('arrastrar un extremo hasta el eje de otro muro lo deja en T', async () => {
+      await drawRectangle();
+      editor.setSnapEnabled(false);
+      editor.setNodeSnapEnabled(false);
+      await drawWall(2, 0, 2, 2.5); // corto: no llega al muro norte
+      expect(editor.getState().rooms).toHaveLength(1);
+      editor.setNodeSnapEnabled(true);
+      editor.setTool('select');
+      await editor.handleTap(px(2), px(1.2), TOL_PX);
+      expect(editor.beginDrag(px(2), px(2.5), TOL_PX)).toBe(true);
+      await editor.endDrag(px(2.03), px(2.93));
+      expect(editor.getState().rooms).toHaveLength(2);
+    });
+
     it('Suelo fuera de un recinto avisa y no crea nada', async () => {
       await drawRectangle();
       editor.setTool('floor');
