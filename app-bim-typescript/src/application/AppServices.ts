@@ -23,7 +23,6 @@ import { ObjectStore } from '../infrastructure/sqlite/ObjectStore';
 import { ProjectStore } from '../infrastructure/sqlite/ProjectStore';
 import { ProjectService } from './projects/ProjectService';
 import { ValidationService } from '../infrastructure/validation/ValidationService';
-import { CDTAdapter } from '../infrastructure/geometry/CDTAdapter';
 import { CommandStack } from './state/CommandStack';
 import {
   CreateWallUseCase,
@@ -32,7 +31,6 @@ import {
   CreateColumnUseCase,
   MoveObjectUseCase,
   DeleteObjectUseCase,
-  CloseRoomUseCase,
   CapturePhotoUseCase,
   LinkPhotoToObjectUseCase,
   CaptureMeasurementUseCase,
@@ -51,7 +49,6 @@ export interface AppServices {
   store: ObjectStore;
   commandStack: CommandStack;
   validationService: ValidationService;
-  cdt: CDTAdapter;
   projectStore: ProjectStore;
   /**
    * Proyectos y espacios (portado de LevON). No vive bajo `useCases` porque no
@@ -93,17 +90,13 @@ export interface AppServices {
     /** Mover extremos de varios muros unidos en un paso de deshacer (uniones). */
     reshapeWalls: ReshapeWallsUseCase;
     deleteObject: DeleteObjectUseCase;
-    closeRoom: CloseRoomUseCase;
     capturePhoto: CapturePhotoUseCase;
     linkPhotoToObject: LinkPhotoToObjectUseCase;
     captureMeasurement: CaptureMeasurementUseCase;
     exportRoomIfc: ExportRoomIfcUseCase;
     /** Exportación a DXF R2000 (portada de LevON). */
     exportRoomDxf: ExportRoomDxfUseCase;
-    /**
-     * Detección automática de recintos (motor portado de LevON).
-     * Devuelve SUGERENCIAS: `closeRoom` sigue siendo quien cierra el recinto.
-     */
+    /** Detección automática de recintos (motor portado de LevON); la usa el editor en cada recarga. */
     detectRooms: DetectRoomsUseCase;
   };
 }
@@ -118,7 +111,6 @@ export function createAppServices(db: IDatabase): AppServices {
   const store = new ObjectStore(db);
   const commandStack = new CommandStack(store);
   const validationService = new ValidationService();
-  const cdt = new CDTAdapter();
   const ifcSerializer = new IFCSerializerAdapter();
   const projectStore = new ProjectStore(db);
   const geoStore = new GeoStore(db);
@@ -129,7 +121,6 @@ export function createAppServices(db: IDatabase): AppServices {
     store,
     commandStack,
     validationService,
-    cdt,
     projectStore,
     projects: new ProjectService(projectStore, store, defaultLevelId),
     elevations: new WallElevationService(db, store),
@@ -150,7 +141,6 @@ export function createAppServices(db: IDatabase): AppServices {
       updateObjectProperty: new UpdateObjectPropertyUseCase(store, commandStack, validationService),
       reshapeWalls: new ReshapeWallsUseCase(store, commandStack),
       deleteObject: new DeleteObjectUseCase(store, commandStack),
-      closeRoom: new CloseRoomUseCase(store, commandStack, validationService, cdt),
       capturePhoto: new CapturePhotoUseCase(store, commandStack),
       linkPhotoToObject: new LinkPhotoToObjectUseCase(store, commandStack),
       captureMeasurement: new CaptureMeasurementUseCase(store),

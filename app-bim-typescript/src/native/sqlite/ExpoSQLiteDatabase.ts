@@ -80,7 +80,7 @@ export class ExpoSQLiteDatabase implements IDatabase {
     // decide COMMIT vs ROLLBACK según si su callback lanza — al tragarnos el
     // error, la callback terminaba "bien" y expo-sqlite hacía COMMIT de una
     // transacción fallida. Las escrituras parciales de un UseCase que abortó a
-    // mitad (p. ej. CloseRoomUseCase fallando la validación tras haber escrito
+    // mitad (p. ej. un UseCase fallando la validación tras haber escrito
     // el Room) quedaban persistidas.
     //
     // La forma correcta es dejar que el error atraviese la callback (para que

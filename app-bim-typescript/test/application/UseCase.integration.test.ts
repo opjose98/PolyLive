@@ -27,12 +27,11 @@ import {
 import { Window } from '../../src/domain/objects';
 import { meters, squareMeters, Point2D, ValidationWarning } from '../../src/domain/geometry/types';
 import { CommandStack } from '../../src/application/state/CommandStack';
-import { IValidationService, ICDT, IBLEManager, IIFCSerializer, ValidationResult } from '../../src/application/use-cases/types';
+import { IValidationService, IBLEManager, IIFCSerializer, ValidationResult } from '../../src/application/use-cases/types';
 import { CreateWallUseCase, CreateWallInput } from '../../src/application/use-cases/CreateWallUseCase';
 import { CreateDoorUseCase, CreateDoorInput } from '../../src/application/use-cases/CreateDoorUseCase';
 import { MoveObjectUseCase, MoveObjectInput } from '../../src/application/use-cases/MoveObjectUseCase';
 import { DeleteObjectUseCase, DeleteObjectInput } from '../../src/application/use-cases/DeleteObjectUseCase';
-import { CloseRoomUseCase, CloseRoomInput } from '../../src/application/use-cases/CloseRoomUseCase';
 import { UpdateObjectPropertyUseCase, UpdateObjectPropertyInput } from '../../src/application/use-cases/UpdateObjectPropertyUseCase';
 import { ExportRoomIfcUseCase, ExportRoomIfcInput } from '../../src/application/use-cases/ExportRoomIfcUseCase';
 
@@ -108,19 +107,6 @@ function createMockValidationService(overrides?: Partial<IValidationService>): I
 }
 
 // ---------------------------------------------------------------------------
-// Mock ICDT
-// ---------------------------------------------------------------------------
-
-function createMockCDT(totalArea = 25.0): ICDT {
-  return {
-    triangulate: jest.fn().mockResolvedValue({
-      totalArea,
-      triangles: [],
-      valid: true,
-      warnings: [],
-    }),
-  };
-}
 
 // ---------------------------------------------------------------------------
 // Mock IIFCSerializer
@@ -315,48 +301,9 @@ describe('UseCases — Integration', () => {
   });
 
   // =========================================================================
-  // 5. CloseRoomUseCase — CDT, calcula área, crea Floor implícito
+
   // =========================================================================
 
-  describe('CloseRoomUseCase', () => {
-    it('closes room, calculates area via CDT, creates implicit floor', async () => {
-      // Pre-crear Room — invariante: id === roomId
-      const rid = ROOM_ID as unknown as RevitObjectId;
-      const room = new Room({
-        id: rid,
-        roomId: ROOM_ID,
-        levelId: LEVEL_ID,
-        geometry: [
-          { x: 0, y: 0 },
-          { x: 5, y: 0 },
-          { x: 5, y: 5 },
-          { x: 0, y: 5 },
-        ],
-        isOpen: true,
-      });
-      await store.createObject(room);
-
-      const cdt = createMockCDT(25.0);
-      const closeUseCase = new CloseRoomUseCase(store, commandStack, validationService, cdt);
-
-      const output = await closeUseCase.execute({ roomId: ROOM_ID });
-
-      // Room cerrado
-      const closedRoom = await store.readObject(rid) as Room;
-      expect(closedRoom.isOpen).toBe(false);
-      expect(closedRoom.area).toEqual(squareMeters(25));
-
-      // Floor implícito creado
-      expect(output.floor).not.toBeNull();
-      expect(output.floor!.isImplicit).toBe(true);
-
-      // CDT invocado
-      expect(cdt.triangulate).toHaveBeenCalledTimes(1);
-
-      // Comando emitido
-      expect(commandStack.size()).toBe(1);
-    });
-  });
 
   // =========================================================================
   // 6. UpdateObjectPropertyUseCase — actualiza y guarda oldValue

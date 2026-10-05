@@ -8,7 +8,8 @@
 // =============================================================================
 
 import { Wall, Door, Column, Floor, AuditPhoto, Measurement, Room } from '../../src/domain/objects';
-import { CDT } from '../../src/domain/geometry/CDT';
+import { polygonArea } from '../../src/domain/geometry/polygon-utils';
+import { PolygonValidator } from '../../src/domain/geometry/polygon-validator';
 import {
   createFixtureRoom1,
   createFixtureWall1,
@@ -59,19 +60,13 @@ describe('geometry.fixtures', () => {
     expect(createFixtureWall4().endPoint).toEqual({ x: 0, y: 0 });
   });
 
-  it('createFixtureRoomLShape triangulates to 27 m² via the real CDT', () => {
+  it('createFixtureRoomLShape mide 27 m²', () => {
     const room = createFixtureRoomLShape();
-    const cdt = new CDT();
-    const result = cdt.triangulate({ vertices: room.geometry, isClosed: true });
-    expect(result.valid).toBe(true);
-    expect(result.totalArea as unknown as number).toBeCloseTo(27, 6);
+    expect(polygonArea(room.geometry) as unknown as number).toBeCloseTo(27, 6);
   });
 
-  it('createFixturePolygonComplex triangulates without self-intersection', () => {
-    const cdt = new CDT();
-    const result = cdt.triangulate(createFixturePolygonComplex());
-    expect(result.valid).toBe(true);
-    expect(result.warnings.some((w) => w.type === 'self_intersecting_polygon')).toBe(false);
+  it('createFixturePolygonComplex es un polígono válido (sin autointersección)', () => {
+    expect(new PolygonValidator().validate(createFixturePolygonComplex().vertices).valid).toBe(true);
   });
 
   it('createFixturePointArray100 returns exactly 100 distinct points', () => {
@@ -151,12 +146,10 @@ describe('room-scenarios.fixtures', () => {
     expect(fx.expectedArea as unknown as number).toBe(12);
   });
 
-  it('room-L: 6 walls + 1 floor, area matches real CDT triangulation (27 m²)', () => {
+  it('room-L: 6 walls + 1 floor, area 27 m²', () => {
     const fx = createRoomFixtureLShape();
     expect(fx.objects).toHaveLength(7);
-    const cdt = new CDT();
-    const result = cdt.triangulate({ vertices: fx.room.geometry, isClosed: true });
-    expect(result.totalArea as unknown as number).toBeCloseTo(fx.expectedArea as unknown as number, 6);
+    expect(polygonArea(fx.room.geometry) as unknown as number).toBeCloseTo(fx.expectedArea as unknown as number, 6);
   });
 
   it('room-with-column: 4 walls + 1 column + 1 floor', () => {

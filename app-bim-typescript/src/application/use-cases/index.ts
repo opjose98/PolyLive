@@ -9,7 +9,6 @@ export { CreateWindowUseCase, CreateWindowInput, CreateWindowOutput } from './Cr
 export { UpdateObjectPropertyUseCase, UpdateObjectPropertyInput, UpdateObjectPropertyOutput } from './UpdateObjectPropertyUseCase';
 export { MoveObjectUseCase, MoveObjectInput, MoveObjectOutput } from './MoveObjectUseCase';
 export { DeleteObjectUseCase, DeleteObjectInput, DeleteObjectOutput } from './DeleteObjectUseCase';
-export { CloseRoomUseCase, CloseRoomInput, CloseRoomOutput } from './CloseRoomUseCase';
 // Detección automática de recintos (motor portado de LevON). El editor la usa
 // en cada recarga para mantener la geometría del Recinto (syncRoomGeometry).
 export {
@@ -25,4 +24,4 @@ export { ExportRoomIfcUseCase, ExportRoomIfcInput, ExportRoomIfcOutput } from '.
 export { ExportRoomDxfUseCase, ExportRoomDxfInput, ExportRoomDxfOutput } from './ExportRoomDxfUseCase';
 
 // Tipos compartidos
-export { ValidationError, IValidationService, IBLEManager, IIFCSerializer, ICDT, ValidationResult } from './types';
+export { ValidationError, IValidationService, IBLEManager, IIFCSerializer, ValidationResult } from './types';

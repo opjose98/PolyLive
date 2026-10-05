@@ -48,7 +48,7 @@ export interface Point3D {
   readonly z: Meters;
 }
 
-/** Triángulo resultado de la triangulación CDT. */
+/** Triángulo (geometría). */
 export interface Triangle {
   readonly v0: Point2D;
   readonly v1: Point2D;

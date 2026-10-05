@@ -6,17 +6,10 @@
 //
 // Pipeline: muros → TopologyGraph → ciclos mínimos → validación → sugerencias.
 //
-// MODO SUGERENCIA (decisión de adaptación, no del original):
-// En LevON los recintos SON los ciclos del grafo: se derivan y punto. En
-// PolyLive la fuente de verdad sigue siendo CloseRoomUseCase — el operador
-// cierra el recinto y el área se calcula por triangulación CDT. Este caso de
-// uso NO crea ni persiste `Room`s: devuelve candidatos para que la UI ofrezca
-// "detecté un recinto cerrado de 12.4 m², ¿lo cierro?".
-//
-// El motivo es de campo, no técnico: en un levantamiento a medio hacer casi
-// siempre hay muros que encierran áreas sin ser un recinto real (un patio, el
-// hueco de una escalera, dos estancias aún sin el tabique). Derivar recintos
-// automáticamente los daría por buenos sin que nadie lo confirme.
+// Este caso de uso es PURO: no persiste nada. Devuelve los contornos cerrados;
+// el editor los liga a recintos con identidad (application/topology/
+// reconcileZones.ts) en cada recarga, y ese recinto persistido es lo que se
+// nombra, se exporta (IfcSpace) y lleva suelo y avance.
 // =============================================================================
 
 import { Point2D, SquareMeters } from '../../domain/geometry/types';

@@ -29,14 +29,13 @@ import {
   revitObjectId,
 } from '../../src/domain/objects';
 import { meters, squareMeters, Point2D } from '../../src/domain/geometry/types';
-import { CDT } from '../../src/domain/geometry/CDT';
 import { CommandStack } from '../../src/application/state/CommandStack';
-import { CanvasManager, canvasPoint } from '../../src/application/canvas';
-import { IValidationService, ICDT, IBLEManager, ValidationResult } from '../../src/application/use-cases/types';
+import { CanvasManager } from '../../src/application/canvas/CanvasManager';
+import { canvasPoint } from '../../src/application/canvas/types';
+import { IValidationService, IBLEManager, ValidationResult } from '../../src/application/use-cases/types';
 import { CreateWallUseCase } from '../../src/application/use-cases/CreateWallUseCase';
 import { CreateDoorUseCase } from '../../src/application/use-cases/CreateDoorUseCase';
 import { MoveObjectUseCase } from '../../src/application/use-cases/MoveObjectUseCase';
-import { CloseRoomUseCase } from '../../src/application/use-cases/CloseRoomUseCase';
 import { ExportRoomIfcUseCase } from '../../src/application/use-cases/ExportRoomIfcUseCase';
 import { CaptureMeasurementUseCase } from '../../src/application/use-cases/CaptureMeasurementUseCase';
 import { CapturePhotoUseCase } from '../../src/application/use-cases/CapturePhotoUseCase';
@@ -50,34 +49,6 @@ import * as path from 'path';
 // Helpers compartidos
 // ---------------------------------------------------------------------------
 
-/**
- * Adapta el CDT real de dominio (domain/geometry/CDT.ts, que trabaja con
- * Polygon.holes como polígonos de vértices) a la interfaz ICDT que esperan
- * los UseCases (application/use-cases/types.ts, que describe huecos como
- * círculos {center, radius} derivados de Column.diameter).
- *
- * NOTA ACTUALIZADA: este comentario afirmaba que "no existe en src/ un
- * adaptador real que convierta huecos circulares a polígonos aproximados — es
- * un gap real del código actual". Ya no lo es: `CloseRoomUseCase.circleToPolygon`
- * aproxima cada columna como un octógono regular antes de llamar a ICDT, y
- * `infrastructure/geometry/CDTAdapter` implementa el contrato contra el motor
- * real. Este adapter de test sigue existiendo solo para no depender del
- * composition root dentro de una suite de flujos.
- */
-class RealCdtAdapter implements ICDT {
-  private readonly cdt = new CDT();
-
-  async triangulate(
-    boundary: Array<{ x: number; y: number }>,
-    holes?: Array<Array<{ x: number; y: number }>>,
-  ) {
-    return this.cdt.triangulate({
-      vertices: boundary as Point2D[],
-      holes: holes?.map((h) => ({ vertices: h as Point2D[], isClosed: true })),
-      isClosed: true,
-    });
-  }
-}
 
 function alwaysValidService(): IValidationService {
   const ok: ValidationResult = { valid: true, warnings: [] };
@@ -188,46 +159,6 @@ describe('Flujo 2 — MoveObject', () => {
     expect(moved.startPoint).toEqual({ x: 2, y: 2 });
     expect(moved.endPoint).toEqual({ x: 7, y: 2 }); // delta preservado
     expect(commandStack.size()).toBe(2); // create + move
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 3. CloseRoom — UseCase → CDT (real) → Calculate area → Create Floor → Persist
-// ---------------------------------------------------------------------------
-
-describe('Flujo 3 — CloseRoom', () => {
-  it('cierra un Room 4×3 usando el CDT real, calcula 12 m² y materializa el Floor implícito', async () => {
-    const room = new Room({
-      id: revitObjectId('e2e-room') as RevitObjectId,
-      roomId: ROOM_ID,
-      levelId: LEVEL_ID,
-      geometry: [
-        { x: 0, y: 0 },
-        { x: 4, y: 0 },
-        { x: 4, y: 3 },
-        { x: 0, y: 3 },
-      ],
-      isOpen: true,
-    });
-    await store.createObject(room);
-
-    const closeUseCase = new CloseRoomUseCase(store, commandStack, validationService, new RealCdtAdapter());
-    const output = await closeUseCase.execute({ roomId: ROOM_ID });
-
-    // Corregido durante auditoría (ver test/critical/CriticalCases.test.ts,
-    // "Bug 4 corregido"): CloseRoomUseCase ahora muta `room.area`/`room.isOpen`
-    // ANTES de persistir, así que `output.room` refleja el estado posterior al
-    // cierre igual que lo que queda en SQLite — ya no hace falta releer del
-    // store para obtener el área/estado correctos.
-    expect(output.room.isOpen).toBe(false);
-    expect(output.room.area).toEqual(squareMeters(12));
-    expect(output.floor).not.toBeNull();
-    expect(output.floor!.isImplicit).toBe(true);
-    expect(commandStack.size()).toBe(1);
-
-    const persistedRoom = (await store.readObject(room.id)) as Room;
-    expect(persistedRoom.isOpen).toBe(false);
-    expect(persistedRoom.area).toEqual(squareMeters(12));
   });
 });
 
@@ -455,12 +386,12 @@ describe('Flujo 7 — Photo Capture + Link', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 8. Multi-step transaction — CreateWall + CreateDoor + CloseRoom → 1 sesión,
+// 8. Multi-step transaction — CreateWall + CreateDoor → 1 sesión,
 //    undo reversa todos (en orden inverso)
 // ---------------------------------------------------------------------------
 
 describe('Flujo 8 — Multi-step transaction', () => {
-  it('CreateWall + CreateDoor + CloseRoom, luego 3x undo revierte todo al estado original', async () => {
+  it('CreateWall + CreateDoor, luego 2x undo revierte todo al estado original', async () => {
     const room = new Room({
       id: revitObjectId('e2e-room-multi') as RevitObjectId,
       roomId: roomId('e2e-room-multi'),
@@ -493,22 +424,7 @@ describe('Flujo 8 — Multi-step transaction', () => {
       height: meters(2.1),
     });
 
-    const closeOut = await new CloseRoomUseCase(
-      store,
-      commandStack,
-      validationService,
-      new RealCdtAdapter(),
-    ).execute({ roomId: multiRoomId });
-
-    expect(commandStack.size()).toBe(3);
-    expect(closeOut.floor).not.toBeNull();
-
-    // Undo x3, en orden inverso: CloseRoom, CreateDoor, CreateWall
-    await commandStack.undo(); // deshace CloseRoom
-    const reopenedRoom = (await store.readObject(room.id)) as Room;
-    expect(reopenedRoom.isOpen).toBe(true);
-    expect(reopenedRoom.area).toBeNull();
-    expect(await store.readObject(closeOut.floor!.id)).toBeNull();
+    expect(commandStack.size()).toBe(2);
 
     await commandStack.undo(); // deshace CreateDoor
     expect(await store.readObject(doorOut.door.id)).toBeNull();
@@ -517,6 +433,6 @@ describe('Flujo 8 — Multi-step transaction', () => {
     expect(await store.readObject(wallOut.wall.id)).toBeNull();
 
     expect(commandStack.size()).toBe(0);
-    expect(commandStack.undoneSize()).toBe(3);
+    expect(commandStack.undoneSize()).toBe(2);
   });
 });

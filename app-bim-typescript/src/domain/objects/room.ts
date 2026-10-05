@@ -20,14 +20,14 @@ import {
  * INVARIANTES CRÍTICAS:
  * - id === roomId SIEMPRE (verificada en validación)
  * - levelId es REQUERIDO y válido
- * - Si isOpen === false → area está definida (calculada por CDT)
+ * - Si isOpen === false → area está definida (la del mayor contorno cerrado)
  * - Si isOpen === true  → area es null (no calculada hasta cerrar)
  * - geometry.length >= 3 (mínimo 3 vértices para polígono)
  *
  * CICLO DE VIDA:
  * 1. Creación: isOpen = true, geometry = [], isClosed = false
  * 2. Trazo: usuario agrega vértices
- * 3. Cierre: CDT calcula área → isOpen = false
+ * 3. Cierre: el editor detecta el contorno cerrado (syncRoomGeometry) → isOpen = false
  * 4. Finalización: exportación o abandono
  *
  * isClosed vs isOpen:

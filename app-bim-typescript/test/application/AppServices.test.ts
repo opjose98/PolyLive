@@ -69,31 +69,6 @@ describe('createAppServices — composition root con implementaciones reales', (
       height: meters(2.8),
     });
 
-    // Room debe existir para poder cerrarla — la crea directamente vía store,
-    // igual que hace el flujo real cuando el usuario termina de trazar.
-    const { Room, levelId, revitObjectId } = await import('../../src/domain/objects');
-    const room = new Room({
-      // CloseRoomUseCase busca la Room haciendo `roomId as unknown as RevitObjectId`
-      // (CloseRoomUseCase.ts:56) — por convención (ver test/fixtures/room-scenarios.fixtures.ts),
-      // el `id` de una Room es siempre su `roomId` reinterpretado, no un id independiente.
-      id: revitObjectId(ROOM_ID as unknown as string),
-      roomId: ROOM_ID,
-      levelId: levelId('level-1'),
-      geometry: [
-        { x: 0, y: 0 },
-        { x: 4, y: 0 },
-        { x: 4, y: 4 },
-        { x: 0, y: 4 },
-      ],
-      isOpen: true,
-      isClosed: false,
-    });
-    await services.store.createObject(room);
-
-    const closeOut = await services.useCases.closeRoom.execute({ roomId: ROOM_ID });
-    expect(closeOut.room.area).not.toBeNull();
-    expect(Number(closeOut.room.area)).toBeCloseTo(16, 1);
-
     void wall2Out;
   });
 
