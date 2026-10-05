@@ -58,6 +58,10 @@ import { TopographySheets } from '../workspace/topo/TopographySheets';
 import { TopographyPanel } from '../workspace/topo/TopographyPanel';
 import { useTopoTools } from '../workspace/topo/useTopoTools';
 import { StakeoutSheet } from '../workspace/topo/StakeoutSheet';
+import { useProgress } from '../workspace/progress/useProgress';
+import { ProgressSheets } from '../workspace/progress/ProgressSheets';
+import { planSvg } from '../../application/report/planSvg';
+import { zoneCode as zoneCodeOf } from '../../domain/objects/zone';
 import { amarreSummary, coordinateInline } from '../../application/geo/coordinateText';
 import { ElevationEditor } from '../../application/elevation/ElevationEditor';
 import { ElevationView } from './ElevationView';
@@ -337,6 +341,16 @@ export function SurveyScreen({
     operatorName,
   });
 
+  // --- Avance de obra (M3): pintar sobre suelos y caras de muro ---
+  const progress = useProgress({
+    services,
+    projectId,
+    spaceId: roomId as unknown as string,
+    editor,
+    operatorName,
+    objectsVersion: state.objects,
+  });
+
   const topoBack = topo.back;
 
   // --- Alzado (F4): vive encima de la planta, que queda intacta debajo ---
@@ -507,6 +521,7 @@ export function SurveyScreen({
         wsNow.closeWindow();
         return;
       }
+      if (progress.handleTap(x, y)) return;
       if (topoTools.handleTap(x, y)) return;
       if (topo.handleTap(x, y)) return;
       // Un marcador de foto (visible) abre su foto, con la herramienta de selección.
@@ -524,7 +539,7 @@ export function SurveyScreen({
         if (editor.getState().tool === 'select' && after && after !== before) haptic.select();
       });
     },
-    [editor, topo.handleTap, topoTools.handleTap, onOpenPhoto],
+    [editor, topo.handleTap, topoTools.handleTap, progress.handleTap, onOpenPhoto],
   );
 
   // Propiedades (con edición y borrado) solo donde se edita el modelo: en los
@@ -655,8 +670,9 @@ export function SurveyScreen({
       showNodes: canvasScene.showNodes || (topo.active && filters.vertices),
       measure: topoTools.overlay,
       coordGrid: topoGrid,
+      progressLayers: progress.active ? progress.planLayers : undefined,
     }),
-    [canvasScene, underlay, existingIds, visibleObjects, filters.cotas, filters.fotos, topo.planBenchmarks, topo.selectedBenchmark, topo.coordLabels, topo.active, filters.vertices, topoTools.overlay, topoGrid],
+    [canvasScene, underlay, existingIds, visibleObjects, filters.cotas, filters.fotos, topo.planBenchmarks, topo.selectedBenchmark, topo.coordLabels, topo.active, filters.vertices, topoTools.overlay, topoGrid, progress.active, progress.planLayers],
   );
 
   // --- Selector de base y tope: qué edita ---
@@ -788,6 +804,12 @@ export function SurveyScreen({
   }, [editor, selected, state.rooms, state.selectedZoneId, levelInfo, topo.active, topo.selectedBenchmark, topo.probe, topo.geo, topo.display]);
 
   const zoomPercent = (state.transform.scale / DEFAULT_SCALE) * 100;
+  const activeActivity = progress.state.activities.find((a) => a.id === progress.state.activityId);
+  const activeCut = progress.state.cuts.find((c) => c.id === progress.state.cutId);
+  const progressItems = [
+    activeCut ? `Corte ${activeCut.label || activeCut.date}` : 'Sin corte: créalo en "Actividad y corte"',
+    activeActivity ? activeActivity.name : 'Sin actividad',
+  ];
   const bpcContext = resolveBpcContext({
     tool: activeTool,
     selection: selectionSummary,
@@ -795,6 +817,7 @@ export function SurveyScreen({
     scaleDenominator: wsState.denominator,
     zoomPercent,
     ...(topo.active && { canvasTitle: 'Topografía', canvasItems: amarreSummary(topo.geo) }),
+    ...(progress.active && { canvasTitle: 'Avance', canvasItems: progressItems }),
   });
 
   const commitSelectionProp = useCallback(
@@ -828,7 +851,12 @@ export function SurveyScreen({
         : [];
 
   const bpcActions: BpcAction[] = [];
-  if (topoTools.tool) {
+  if (progress.active) {
+    if (progress.state.canUndo) bpcActions.push({ icon: 'undo-variant', label: 'Deshacer trazo', onPress: () => void progress.ctl.undo() });
+    if (progress.state.canRedo) bpcActions.push({ icon: 'redo-variant', label: 'Rehacer trazo', onPress: () => void progress.ctl.redo() });
+    bpcActions.push({ icon: 'palette-outline', label: 'Actividad y corte', onPress: () => progress.openSheet('catalog') });
+    bpcActions.push({ icon: 'file-chart-outline', label: 'Reporte', onPress: () => progress.openSheet('report') });
+  } else if (topoTools.tool) {
     if (topoTools.canUndoPoint) bpcActions.push({ icon: 'undo-variant', label: 'Quitar punto', onPress: topoTools.undoPoint });
     bpcActions.push({ icon: 'restart', label: 'Reiniciar', onPress: topoTools.reset });
   } else if (topo.active) {
@@ -910,6 +938,33 @@ export function SurveyScreen({
 
   const topoVertices = useMemo(() => uniqueVertices(editor.walls), [editor, state.objects, levelInfo]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // --- Avance: nombres de soportes y planta del reporte ---
+  const supportLabel = useCallback(
+    (key: string): string => {
+      if (key.startsWith('floor:')) {
+        const r = state.rooms.find((z) => z.id === key.slice(6));
+        return r ? `${r.number !== undefined ? zoneCodeOf({ number: r.number }) + ' ' : ''}${r.name ?? 'Recinto'} · suelo` : 'Suelo';
+      }
+      const [, wallDbId, side] = key.split(':');
+      const i = editor.walls.findIndex((w) => (w.id as string) === wallDbId);
+      const w = editor.walls[i];
+      const name = (w?.properties.name as string | undefined) ?? `Muro ${i + 1}`;
+      return `${name} · cara ${side}`;
+    },
+    [state.rooms, editor, state.objects], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const progressPlanSvg = useCallback(
+    () =>
+      planSvg({
+        walls: editor.walls.map((w) => ({ start: w.startPoint, end: w.endPoint, thickness: w.thickness as number })),
+        zones: state.rooms
+          .filter((r) => (r.netPolygon?.length ?? 0) >= 3)
+          .map((r) => ({ polygon: r.netPolygon!, label: r.name ?? 'Recinto', sublabel: `${(r.netArea ?? r.area).toFixed(2)} m²`, at: r.centroid })),
+        layers: progress.planLayers,
+      }),
+    [editor, state.rooms, progress.planLayers],
+  );
+
   const chromeTop = chromeSpacing.sm;
   const belowBpc = chromeTop + chromeSizes.bpcHeight + chromeSpacing.sm;
   const spaceName = roomName ?? 'Espacio';
@@ -946,7 +1001,8 @@ export function SurveyScreen({
           palette={canvasPalette}
           grid={{ show: gridLines || gridDots, lines: gridLines, dots: gridDots }}
           dragEnabled={editable && state.tool === 'select' && !state.busy}
-          drawEnabled={editable && state.tool === 'wall'}
+          drawEnabled={(editable && state.tool === 'wall') || progress.drawEnabled}
+          sketch={progress.planSketch}
           doubleTapEnabled={state.tool === 'select' && wsState.workMode !== 'topografia'}
           rotationSnaps={topo.rotationSnaps}
           longPressEnabled
@@ -959,13 +1015,14 @@ export function SurveyScreen({
           onDragMove={handleDragMove}
           onDragEnd={handleDragEnd}
           onDragCancel={handleDragCancel}
-          onDrawBegin={(x, y) => editor.drawBegin(x, y)}
-          onDrawMove={(x, y) => editor.drawMove(x, y)}
+          onDrawBegin={(x, y) => (progress.drawEnabled ? progress.planDraw.begin(x, y) : editor.drawBegin(x, y))}
+          onDrawMove={(x, y) => (progress.drawEnabled ? progress.planDraw.move(x, y) : editor.drawMove(x, y))}
           onDrawEnd={(x, y) => {
             haptic.commit();
-            void editor.drawEnd(x, y);
+            if (progress.drawEnabled) progress.planDraw.end(x, y);
+            else void editor.drawEnd(x, y);
           }}
-          onDrawCancel={() => editor.drawCancel()}
+          onDrawCancel={() => (progress.drawEnabled ? progress.planDraw.cancel() : editor.drawCancel())}
           onCameraChange={(t) => editor.setTransform(t)}
         />
 
@@ -979,6 +1036,7 @@ export function SurveyScreen({
             levelHandlers={levelHandlers}
             phaseHandlers={phaseHandlers}
             chromeTop={chromeTop}
+            progress={progress}
             onClose={closeElevation}
           />
         ) : (
@@ -986,7 +1044,9 @@ export function SurveyScreen({
             <Bpc
               context={bpcContext}
               toolDetail={
-                topoTools.summary
+                progress.tool
+                  ? progressItems.join(' · ')
+                  : topoTools.summary
                   ? topoTools.summary.detail
                   : constraintTarget === 'creation'
                     ? constraintSummary(creationEdit)
@@ -1104,6 +1164,14 @@ export function SurveyScreen({
       </BottomSheet>
 
       {projectId ? <TopographySheets topo={topo} vertices={topoVertices} /> : null}
+      <ProgressSheets
+        progress={progress}
+        projectName={projectName}
+        spaceName={spaceName}
+        operatorName={operatorName}
+        supportLabel={supportLabel}
+        planSvg={progressPlanSvg}
+      />
       <StakeoutSheet
         open={!!topoTools.stakeTargetGrid}
         target={topoTools.stakeTargetGrid}

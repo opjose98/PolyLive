@@ -81,12 +81,12 @@ describe('catálogo', () => {
     expect(categoriesFor('levantamiento', 'elevation')).toBe(CATEGORIES_ELEVATION);
     expect(categoriesFor('avance', 'elevation')).toBe(CATEGORIES_PROGRESS);
     expect(filtersFor('topografia', 'plan').map((f) => f.id)).toContain('mojones');
-    // M2: los Puntos de Topografía funcionan; Medir, Avance y Revisión esperan su fase.
+    // M2/M2b: Topografía completa; M3: Avance. Revisión espera su fase (M4).
     const enabled = [...CATEGORIES_TOPOGRAPHY, ...CATEGORIES_PROGRESS, ...CATEGORIES_REVIEW]
       .flatMap((c) => c.tools)
       .filter(isToolEnabled)
       .map((t) => t.id);
-    expect(enabled).toEqual(['mojon', 'punto-gps', 'coordenada', 'inverso', 'area', 'replanteo']);
+    expect(enabled).toEqual(['mojon', 'punto-gps', 'coordenada', 'inverso', 'area', 'replanteo', 'pincel', 'borrador', 'relleno', 'rectangulo-avance']);
   });
 });
 

@@ -44,6 +44,7 @@ import type { Handle } from '../../application/canvas/SelectionService';
 import { CANVAS_PALETTES, CanvasPalette } from '../design/canvasThemes';
 import { sizes } from '../design/tokens';
 import { buildWallOutlines, faceSegments, hatchSegments, WallOutline } from './wallGeometry';
+import { drawSketch, SketchShape, withAlpha } from './sketch';
 
 // ---------------------------------------------------------------------------
 // Entrada
@@ -83,6 +84,14 @@ export interface PlanScene {
   } | null;
   /** Cuadrícula de coordenadas reales (líneas de E y N redondos). */
   readonly coordGrid?: readonly { readonly from: Point2D; readonly to: Point2D; readonly label: string }[] | null;
+  /** Avance de obra (M3): celdas pintadas por actividad (en metros del modelo). */
+  readonly progressLayers?: readonly {
+    readonly color: string;
+    readonly opacity: number;
+    readonly runs: readonly { x: number; y: number; w: number; h: number }[];
+  }[];
+  /** Marcas de revisión (M4) y otros trazos guardados, encima de todo. */
+  readonly markups?: readonly SketchShape[];
   /** Suelos (F6a): contorno neto de su recinto, con trama de piso. */
   readonly floors?: readonly { readonly id: string; readonly polygon: readonly Point2D[] }[];
   /** Muro en curso de trazado. */
@@ -230,6 +239,7 @@ export function drawPlan(r: ICanvasRenderer, scene: PlanScene): void {
   if (scene.underlay?.length) drawUnderlay(r, scene.underlay, pal, ctx.toScreen, ctx.scale);
   drawRooms(ctx);
   if (scene.floors?.length) drawFloors(ctx);
+  if (scene.progressLayers?.length) drawProgress(ctx);
   drawWalls(ctx);
   drawColumns(ctx);
   drawVanos(ctx);
@@ -243,6 +253,20 @@ export function drawPlan(r: ICanvasRenderer, scene: PlanScene): void {
   drawSelection(ctx);
   if (scene.snapIndicator) drawSnapIndicator(r, ctx.toScreen(scene.snapIndicator), pal);
   if (scene.showLabels) drawLabels(ctx);
+  if (scene.markups?.length) drawSketch(r, scene.markups, ctx.toScreen, ctx.scale);
+}
+
+/** Avance: cada corrida de celdas pintadas como un rectángulo del color de su actividad. */
+function drawProgress({ r, scene, scale, toScreen }: Ctx): void {
+  // Medio píxel de solape: sin él se ven costuras entre filas de celdas.
+  const pad = 0.5;
+  for (const layer of scene.progressLayers ?? []) {
+    r.setFillStyle(withAlpha(layer.color, 0.55 * layer.opacity));
+    for (const run of layer.runs) {
+      const p = toScreen({ x: run.x, y: run.y });
+      r.fillRect(p.x - pad, p.y - pad, run.w * scale + pad * 2, run.h * scale + pad * 2);
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

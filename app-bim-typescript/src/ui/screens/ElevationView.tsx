@@ -40,6 +40,8 @@ import { BottomSheet, Icon, Tappable, toast } from '../primitives';
 import { elevation as shadow, sizes, spacing } from '../design/tokens';
 import { haptic } from '../design/haptics';
 import { themedStyles, useCanvasPalette, useTheme } from '../design/theme';
+import type { Progress } from '../workspace/progress/useProgress';
+import type { ProgressDraft } from '../../application/progress/ProgressController';
 
 const TOUCH_TOL = sizes.canvasTouchTolerance;
 const cm = (m: number) => Math.round(m * 100);
@@ -53,6 +55,8 @@ export interface ElevationViewProps {
   readonly levelHandlers: RangeEditHandlers;
   readonly phaseHandlers: RangeEditHandlers;
   readonly chromeTop: number;
+  /** Avance (M3): pintar sobre la cara visible del muro. */
+  readonly progress?: Progress;
   onClose(): void;
 }
 
@@ -78,6 +82,25 @@ export function ElevationView(props: ElevationViewProps) {
   );
 
   useEffect(() => editor.subscribe(setSt), [editor]);
+
+  // --- Avance: la cara visible es el soporte ---
+  const progress = props.progress;
+  const painting = !!progress?.active;
+  const wallDbId = st.wall ? (st.wall.id as string) : null;
+  const face = useMemo(
+    () => (progress && wallDbId ? progress.faceDraw(wallDbId, st.side, (x, y) => editor.toCsl(x, y)) : null),
+    [progress, wallDbId, st.side, editor],
+  );
+  // El trazo en curso se dibuja en el alzado (que se regraba entero: un muro es barato).
+  const [draft, setDraft] = useState<ProgressDraft | null>(null);
+  useEffect(() => (progress ? progress.ctl.subscribe((s) => setDraft(s.draft)) : undefined), [progress]);
+  const faceSketch = useMemo(
+    () =>
+      draft && draft.target.kind === 'wallFace' && draft.target.wallId === wallDbId && draft.target.side === st.side && progress
+        ? progress.draftShapes()
+        : undefined,
+    [draft, wallDbId, st.side, progress],
+  );
   useEffect(() => editor.setSize(width, height), [editor, width, height]);
   useEffect(() => editor.setSide(ws.side), [editor, ws.side]);
 
@@ -138,9 +161,11 @@ export function ElevationView(props: ElevationViewProps) {
             levelLines: st.levelLines,
             palette,
             visibleTypes,
+            progressLayers: painting && wallDbId && progress ? progress.faceLayers(wallDbId, st.side) : undefined,
+            sketch: faceSketch,
           }
         : null,
-    [st, editor, width, height, severity, ws.grid, ws.filters.cotas, palette, visibleTypes],
+    [st, editor, width, height, severity, ws.grid, ws.filters.cotas, palette, visibleTypes, painting, wallDbId, progress, faceSketch],
   );
 
   // Solo Levantamiento edita vanos; Avance y Revisión miran el alzado.
@@ -158,6 +183,7 @@ export function ElevationView(props: ElevationViewProps) {
         w.closeWindow();
         return;
       }
+      if (painting && face?.tap()) return;
       const props = w.activeTool?.props;
       const before = editor.getState().selectedId;
       void editor
@@ -169,7 +195,7 @@ export function ElevationView(props: ElevationViewProps) {
           if (after && after !== before) haptic.select();
         });
     },
-    [editor],
+    [editor, painting, face],
   );
   const onLongPress = useCallback(
     (x: number, y: number) => {
@@ -224,7 +250,13 @@ export function ElevationView(props: ElevationViewProps) {
         : [];
   const actions: BpcAction[] = editable
     ? [{ icon: 'tune-variant', label: sel ? 'Propiedades' : 'Detalles', onPress: () => setSheetOpen(true) }]
-    : [];
+    : painting && progress
+      ? [
+          ...(progress.state.canUndo ? [{ icon: 'undo-variant', label: 'Deshacer trazo', onPress: () => void progress.ctl.undo() }] : []),
+          { icon: 'palette-outline', label: 'Actividad y corte', onPress: () => progress.openSheet('catalog') },
+          { icon: 'file-chart-outline', label: 'Reporte', onPress: () => progress.openSheet('report') },
+        ]
+      : [];
 
   const onZoom = useCallback(
     (a: ZoomAction) => {
@@ -259,6 +291,11 @@ export function ElevationView(props: ElevationViewProps) {
             onDragEnd={() => void editor.endDrag()}
             onDragCancel={() => editor.cancelDrag()}
             onViewDelta={(k, dx, dy) => editor.applyViewDelta(k, dx, dy)}
+            drawEnabled={painting && !!progress?.drawEnabled}
+            onDrawBegin={(x, y) => face?.begin(x, y)}
+            onDrawMove={(x, y) => face?.move(x, y)}
+            onDrawEnd={(x, y) => face?.end(x, y)}
+            onDrawCancel={() => face?.cancel()}
           />
         ) : (
           <View style={[StyleSheet.absoluteFill, { backgroundColor: palette.background }]} />

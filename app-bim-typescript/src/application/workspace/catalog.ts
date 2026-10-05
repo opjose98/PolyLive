@@ -22,7 +22,7 @@ import type { OpeningType } from '../../domain/objects/wall-elevation';
 // Propiedades editables con la píldora de la BPC
 // ---------------------------------------------------------------------------
 
-export type PropKey = 'thickness' | 'side' | 'depth' | 'fontSize' | 'width' | 'height' | 'sill';
+export type PropKey = 'thickness' | 'side' | 'depth' | 'fontSize' | 'width' | 'height' | 'sill' | 'brush';
 
 export interface PropDef {
   readonly label: string;
@@ -40,6 +40,7 @@ export const PROPS: Readonly<Record<PropKey, PropDef>> = {
   width: { label: 'Ancho', unit: 'cm', min: 40, max: 400, step: 5 },
   height: { label: 'Alto', unit: 'cm', min: 30, max: 400, step: 5 },
   sill: { label: 'Antepecho', unit: 'cm', min: 0, max: 300, step: 5 },
+  brush: { label: 'Ancho', unit: 'cm', min: 5, max: 200, step: 5 },
 };
 
 export type PropValues = Partial<Record<PropKey, number>>;
@@ -54,7 +55,13 @@ export type ToolBinding =
   | { readonly kind: 'plan'; readonly tool: EditorTool }
   | { readonly kind: 'elevation'; readonly opening: OpeningType }
   /** Herramientas del modo Topografía (M2): no crean objetos BIM, crean mojones. */
-  | { readonly kind: 'topo'; readonly action: TopoAction };
+  | { readonly kind: 'topo'; readonly action: TopoAction }
+  /** Herramientas del modo Avance (M3): pintan sobre suelos y caras de muro. */
+  | { readonly kind: 'progress'; readonly tool: 'brush' | 'eraser' | 'fill' | 'rect' }
+  /** Herramientas del modo Revisión (M4): marcas sobre el plano o el alzado. */
+  | { readonly kind: 'review'; readonly tool: ReviewToolId };
+
+export type ReviewToolId = 'freehand' | 'arrow' | 'rect' | 'text' | 'cloud';
 
 /** Forma de creación de una herramienta (nivel 3 del FAB). */
 export interface MethodDef {
@@ -228,10 +235,10 @@ export const CATEGORIES_PROGRESS: readonly CategoryDef[] = [
     label: 'Avance',
     icon: 'brush',
     tools: [
-      { id: 'pincel', label: 'Pincel', icon: 'brush' },
-      { id: 'borrador', label: 'Borrador', icon: 'eraser' },
-      { id: 'relleno', label: 'Relleno', icon: 'format-color-fill' },
-      { id: 'rectangulo-avance', label: 'Rectángulo', icon: 'rectangle-outline' },
+      { id: 'pincel', label: 'Pincel', icon: 'brush', props: { brush: 30 }, binding: { kind: 'progress', tool: 'brush' } },
+      { id: 'borrador', label: 'Borrador', icon: 'eraser', props: { brush: 30 }, binding: { kind: 'progress', tool: 'eraser' } },
+      { id: 'relleno', label: 'Relleno', icon: 'format-color-fill', binding: { kind: 'progress', tool: 'fill' } },
+      { id: 'rectangulo-avance', label: 'Rectángulo', icon: 'rectangle-outline', binding: { kind: 'progress', tool: 'rect' } },
     ],
   },
 ];
