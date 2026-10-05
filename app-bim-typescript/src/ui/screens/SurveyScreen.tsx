@@ -891,13 +891,9 @@ export function SurveyScreen({
 
   const bpcActions: BpcAction[] = [];
   if (review.active) {
-    if (review.state.canUndo) bpcActions.push({ icon: 'undo-variant', label: 'Deshacer', onPress: () => void review.ctl.undo() });
-    if (review.state.canRedo) bpcActions.push({ icon: 'redo-variant', label: 'Rehacer', onPress: () => void review.ctl.redo() });
     if (review.tool) bpcActions.push({ icon: 'palette', label: 'Color', onPress: () => review.ctl.cycleColor() });
     bpcActions.push({ icon: 'format-list-numbered', label: 'Observaciones', onPress: review.openList });
   } else if (progress.active) {
-    if (progress.state.canUndo) bpcActions.push({ icon: 'undo-variant', label: 'Deshacer trazo', onPress: () => void progress.ctl.undo() });
-    if (progress.state.canRedo) bpcActions.push({ icon: 'redo-variant', label: 'Rehacer trazo', onPress: () => void progress.ctl.redo() });
     bpcActions.push({ icon: 'palette-outline', label: 'Actividad y corte', onPress: () => progress.openSheet('catalog') });
     bpcActions.push({ icon: 'file-chart-outline', label: 'Reporte', onPress: () => progress.openSheet('report') });
   } else if (topoTools.tool) {
@@ -933,8 +929,23 @@ export function SurveyScreen({
   );
 
   // Una sola historia: deshacer en el alzado deshace también lo del alzado.
-  const handleUndo = useCallback(() => void editor.undo().then(() => elevEditor?.load(false)), [editor, elevEditor]);
-  const handleRedo = useCallback(() => void editor.redo().then(() => elevEditor?.load(false)), [editor, elevEditor]);
+  // Deshacer/rehacer siguen al MODO: en Avance deshacen trazos, en Revisión
+  // observaciones; en los demás, la historia del levantamiento.
+  const modeHistory = review.active
+    ? { canUndo: review.state.canUndo, canRedo: review.state.canRedo, undo: () => review.ctl.undo(), redo: () => review.ctl.redo() }
+    : progress.active
+      ? { canUndo: progress.state.canUndo, canRedo: progress.state.canRedo, undo: () => progress.ctl.undo(), redo: () => progress.ctl.redo() }
+      : null;
+  const handleUndo = useCallback(
+    () => void (modeHistory ? modeHistory.undo() : editor.undo().then(() => elevEditor?.load(false))),
+    [editor, elevEditor, modeHistory],
+  );
+  const handleRedo = useCallback(
+    () => void (modeHistory ? modeHistory.redo() : editor.redo().then(() => elevEditor?.load(false))),
+    [editor, elevEditor, modeHistory],
+  );
+  const historyCanUndo = modeHistory ? modeHistory.canUndo : state.canUndo && !state.busy;
+  const historyCanRedo = modeHistory ? modeHistory.canRedo : state.canRedo && !state.busy;
   const handleToolActivated = useCallback(() => editor.select(null), [editor]);
   const wallCount = editor.walls.length;
   // Suma de áreas NETAS de los recintos del nivel (lo que se pisa).
@@ -1102,8 +1113,8 @@ export function SurveyScreen({
       <WorkspaceStatusBar
         project={projectName}
         space={spaceName}
-        canUndo={state.canUndo && !state.busy}
-        canRedo={state.canRedo && !state.busy}
+        canUndo={historyCanUndo}
+        canRedo={historyCanRedo}
         onUndo={handleUndo}
         onRedo={handleRedo}
       />
@@ -1203,10 +1214,10 @@ export function SurveyScreen({
               onPress={() => editor.setRotation(0, canvasSize.w / 2, canvasSize.h / 2)}
             />}
             <CornerTools onZoom={handleZoom} />
-            {editable && !fabOpen ? (
+            {(editable || progress.active || review.active) && !fabOpen ? (
               <ThumbUndo
-                canUndo={state.canUndo && !state.busy}
-                canRedo={state.canRedo && !state.busy}
+                canUndo={historyCanUndo}
+                canRedo={historyCanRedo}
                 onUndo={handleUndo}
                 onRedo={handleRedo}
               />

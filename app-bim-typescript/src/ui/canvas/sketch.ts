@@ -19,6 +19,8 @@ export type SketchShape =
   | { readonly kind: 'arrow'; readonly a: Point2D; readonly b: Point2D; readonly color: string }
   | { readonly kind: 'cloud'; readonly a: Point2D; readonly b: Point2D; readonly color: string }
   | { readonly kind: 'text'; readonly at: Point2D; readonly text: string; readonly color: string }
+  /** Contorno de un círculo de radio en metros (tamaño del pincel bajo el dedo). */
+  | { readonly kind: 'ring'; readonly at: Point2D; readonly radius: number; readonly color: string }
   /** Número de comentario (círculo con el número). */
   | { readonly kind: 'pin'; readonly at: Point2D; readonly label: string; readonly color: string; readonly selected?: boolean };
 
@@ -102,6 +104,13 @@ export function drawSketch(r: ICanvasRenderer, shapes: readonly SketchShape[], t
         const p = toScreen(s.at);
         r.setFillStyle(s.color);
         r.drawText(s.text, p.x, p.y, 14, 'left');
+        break;
+      }
+      case 'ring': {
+        const p = toScreen(s.at);
+        r.setStrokeStyle(withAlpha(s.color, 0.9));
+        r.setLineWidth(1.5);
+        r.strokeCircle(p.x, p.y, Math.max(3, s.radius * scale));
         break;
       }
       case 'pin': {

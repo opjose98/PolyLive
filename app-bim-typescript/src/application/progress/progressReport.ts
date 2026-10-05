@@ -116,6 +116,6 @@ ${rows
   )
   .join('\n')}
 </table>
-<p style="color:#777;margin-top:10px">Cantidades medidas sobre el modelo: suelos a cara interior de muros; caras de muro descontando vanos. Resolución de medición: 5 cm.</p>
+<p style="color:#777;margin-top:10px">Cantidades medidas sobre el modelo: suelos a cara interior de muros; caras de muro descontando vanos. Resolución de medición: 2 cm.</p>
 </body></html>`;
 }
