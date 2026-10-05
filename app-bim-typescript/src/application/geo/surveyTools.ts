@@ -79,8 +79,12 @@ export function bearingOf(deg: number): string {
   const ns = a <= 90 || a >= 270 ? 'N' : 'S';
   const ew = a <= 180 ? 'E' : 'W';
   const angle = a <= 90 ? a : a <= 180 ? 180 - a : a <= 270 ? a - 180 : 360 - a;
-  const d = Math.floor(angle);
-  const m = Math.round((angle - d) * 60);
+  let d = Math.floor(angle);
+  let m = Math.round((angle - d) * 60);
+  if (m === 60) {
+    m = 0;
+    d += 1;
+  }
   return `${ns} ${d}°${String(m).padStart(2, '0')}' ${ew}`;
 }
 
@@ -331,4 +335,44 @@ export function mapConversionFor(geo: Georeference, spaceId: string, crsName: st
     xAxisOrdinate: Math.sin(angle),
     scale: geo.scale,
   };
+}
+
+/**
+ * Recorta el segmento a→b al polígono convexo `poly` (la ventana visible, que
+ * con la vista girada no es un rectángulo alineado). Cyrus–Beck. `null` si no
+ * lo cruza.
+ */
+export function clipToConvex(a: Point2D, b: Point2D, poly: readonly Point2D[]): [Point2D, Point2D] | null {
+  let t0 = 0;
+  let t1 = 1;
+  const d = { x: b.x - a.x, y: b.y - a.y };
+  // Orientación del polígono, para saber de qué lado queda el interior.
+  let area = 0;
+  for (let i = 0; i < poly.length; i++) {
+    const p = poly[i];
+    const q = poly[(i + 1) % poly.length];
+    area += p.x * q.y - q.x * p.y;
+  }
+  const s = area >= 0 ? 1 : -1;
+  for (let i = 0; i < poly.length; i++) {
+    const p = poly[i];
+    const q = poly[(i + 1) % poly.length];
+    // Normal hacia adentro del lado p→q.
+    const nx = -(q.y - p.y) * s;
+    const ny = (q.x - p.x) * s;
+    const num = nx * (a.x - p.x) + ny * (a.y - p.y);
+    const den = nx * d.x + ny * d.y;
+    if (Math.abs(den) < 1e-12) {
+      if (num < 0) return null;
+      continue;
+    }
+    const t = -num / den;
+    if (den > 0) t0 = Math.max(t0, t);
+    else t1 = Math.min(t1, t);
+    if (t0 > t1) return null;
+  }
+  return [
+    { x: a.x + d.x * t0, y: a.y + d.y * t0 },
+    { x: a.x + d.x * t1, y: a.y + d.y * t1 },
+  ];
 }

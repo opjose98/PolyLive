@@ -74,8 +74,9 @@ export function planSvg(input: PlanSvgInput): string {
     out.push(`<polygon points="${pts(z.polygon)}" fill="#f3f1ec" stroke="#b9b4a8" stroke-width="${n(unit * 0.12)}"/>`);
   }
   for (const l of input.layers ?? []) {
-    out.push(`<g fill="${esc(l.color)}" fill-opacity="${n(0.55 * l.opacity)}">`);
-    for (const r of l.runs) out.push(`<rect x="${n(r.x)}" y="${n(r.y)}" width="${n(r.w)}" height="${n(r.h)}"/>`);
+    // crispEdges y medio milímetro de solape: sin ellos el PDF muestra una costura entre filas de celdas.
+    out.push(`<g fill="${esc(l.color)}" fill-opacity="${n(0.55 * l.opacity)}" shape-rendering="crispEdges">`);
+    for (const r of l.runs) out.push(`<rect x="${n(r.x)}" y="${n(r.y)}" width="${n(r.w)}" height="${n(r.h + 0.0005)}"/>`);
     out.push('</g>');
   }
   for (const wl of input.walls) {
@@ -128,6 +129,7 @@ export function faceSvg(
   face: { readonly outline: readonly Point2D[]; readonly holes: readonly (readonly Point2D[])[] },
   mirrored: boolean,
   marks: readonly SvgMark[] = [],
+  layers: readonly SvgLayer[] = [],
 ): string {
   const length = Math.max(0, ...face.outline.map((p) => p.x));
   const t = (p: Point2D): Point2D => ({ x: mirrored ? length - p.x : p.x, y: -p.y });
@@ -138,7 +140,12 @@ export function faceSvg(
         ? { ...m, a: t(m.a), b: t(m.b) }
         : { ...m, at: t(m.at) };
   const outline = face.outline.map(t);
-  const svg = planSvg({ walls: [], zones: [{ polygon: outline, label: '', at: outline[0] }], marks: marks.map(tm), margin: 0.5 });
+  // Las celdas de avance, al mismo sistema (y hacia abajo, lado B en espejo).
+  const tl = layers.map((l) => ({
+    ...l,
+    runs: l.runs.map((r) => ({ x: mirrored ? length - (r.x + r.w) : r.x, y: -(r.y + r.h), w: r.w, h: r.h })),
+  }));
+  const svg = planSvg({ walls: [], zones: [{ polygon: outline, label: '', at: outline[0] }], layers: tl, marks: marks.map(tm), margin: 0.5 });
   // Los vanos: huecos en blanco con borde, encima del contorno y debajo de las marcas.
   const holes = face.holes
     .map((h) => `<polygon points="${pts(h.map(t))}" fill="#ffffff" stroke="#888" stroke-width="0.02"/>`)

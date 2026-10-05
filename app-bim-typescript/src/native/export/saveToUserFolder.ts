@@ -16,6 +16,11 @@ import { Platform } from 'react-native';
 
 let rememberedDir: string | null = null;
 
+/** ¿La próxima exportación va a abrir el selector de carpetas del sistema? */
+export function willAskForFolder(): boolean {
+  return Platform.OS === 'android' && rememberedDir === null;
+}
+
 export type SaveResult =
   | { readonly ok: true; readonly uri: string; readonly folderLabel: string }
   | { readonly ok: false; readonly reason: 'cancelled' | 'unsupported' | 'failed'; readonly detail?: string };

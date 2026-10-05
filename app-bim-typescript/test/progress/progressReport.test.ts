@@ -56,7 +56,7 @@ describe('planSvg', () => {
     });
     expect(s).toContain('viewBox="-1 -1 6 5"');
     expect(s).toContain('R-01 &lt;Sala&gt;');
-    expect(s).toContain('<rect x="0" y="0" width="1" height="0.05"/>');
+    expect(s).toContain('<rect x="0" y="0" width="1" height="0.051"/>');
     expect(s).toContain('<circle');
   });
 });

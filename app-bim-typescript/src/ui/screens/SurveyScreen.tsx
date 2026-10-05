@@ -76,7 +76,7 @@ import { CameraCaptureView } from '../components/CameraCaptureView';
 import { ExpoPhotoCapture } from '../../native/camera/ExpoPhotoCapture';
 import { ExpoFileSystem } from '../../native/filesystem/ExpoFileSystem';
 import { ExpoGpsProvider } from '../../native/location/ExpoGpsProvider';
-import { base64ToUint8Array } from '../../shared/encoding/base64';
+import { base64ToUint8Array, uint8ArrayToBase64 } from '../../shared/encoding/base64';
 import { PHOTO_BIM_CODE_PREFIX } from '../../domain/objects/audit-photo';
 import { generateBimCode } from '../../domain/objects/project';
 import { ActionButton } from '../primitives';
@@ -1009,6 +1009,19 @@ export function SurveyScreen({
     [editor, state.rooms, progress.planLayers],
   );
 
+  /** Caras de muro con avance pintado, como SVG (para el PDF del reporte). */
+  const progressFaceViews = useCallback(() => {
+    const keys = new Set(progress.state.marks.filter((m) => m.target.kind === 'wallFace').map((m) => `wall:${(m.target as { wallId: string }).wallId}:${(m.target as { side: string }).side}`));
+    const out: { title: string; svg: string }[] = [];
+    for (const key of keys) {
+      const [, wallDbId, side] = key.split(':');
+      const face = progress.supports.get(key);
+      const layers = progress.faceLayers(wallDbId, side as 'A' | 'B');
+      if (face && layers.length) out.push({ title: `Alzado · ${supportLabel(key)}`, svg: faceSvg(face, side === 'B', [], layers) });
+    }
+    return out;
+  }, [progress, supportLabel]);
+
   // --- Revisión: nombre y dibujo de cada vista (acta) ---
   const reviewViewName = useCallback(
     (v: ReviewView) => (v.kind === 'plan' ? 'Planta' : supportLabel(`wall:${v.wallId}:${v.side}`)),
@@ -1029,6 +1042,23 @@ export function SurveyScreen({
       return face ? faceSvg(face, v.side === 'B', reviewSvgMarks(items)) : '';
     },
     [editor, state.rooms, progress.supports],
+  );
+
+  /** Fotos de las observaciones como data URI JPEG, para incrustarlas en el acta. */
+  const reviewPhotoData = useCallback(
+    async (ids: readonly string[]) => {
+      const out = new Map<string, string>();
+      for (const id of ids) {
+        try {
+          const p = await services.store.readAuditPhoto(id as never);
+          if (p?.foto) out.set(id, `data:image/jpeg;base64,${uint8ArrayToBase64(p.foto as Uint8Array)}`);
+        } catch {
+          // Sin la foto el acta igual sale (dice "Con foto").
+        }
+      }
+      return out;
+    },
+    [services],
   );
 
   /** Foto tomada para una observación: se guarda como foto del espacio y se adjunta. */
@@ -1276,6 +1306,7 @@ export function SurveyScreen({
         viewName={reviewViewName}
         viewSvg={reviewViewSvg}
         onOpenPhoto={onOpenPhoto}
+        photoData={reviewPhotoData}
       />
       {/* --- Foto de una observación --- */}
       <Modal visible={review.photoFor !== null} animationType="slide" onRequestClose={review.clearPhotoRequest}>
@@ -1288,6 +1319,7 @@ export function SurveyScreen({
         operatorName={operatorName}
         supportLabel={supportLabel}
         planSvg={progressPlanSvg}
+        faceViews={progressFaceViews}
       />
       <StakeoutSheet
         open={!!topoTools.stakeTargetGrid}

@@ -3,7 +3,7 @@
 // =============================================================================
 
 import type { ReviewItem } from '../../domain/review/review';
-import { anchorOf } from '../../domain/review/review';
+import { anchorOf, localStamp } from '../../domain/review/review';
 import { cloudOutline } from './cloud';
 import type { SvgMark } from '../report/planSvg';
 
@@ -32,7 +32,7 @@ export interface ReviewMeta {
 }
 
 const csvCell = (s: string) => (/[",;\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
-const fmtDate = (iso?: string) => (iso ? iso.slice(0, 16).replace('T', ' ') : '');
+const fmtDate = localStamp;
 
 export function reviewCsv(meta: ReviewMeta, items: readonly ReviewItem[], where: (i: ReviewItem) => string): string {
   const head = ['Proyecto', 'Espacio', 'No.', 'Vista', 'Estado', 'Comentario', 'Autor', 'Fecha', 'Resuelto por', 'Fecha resuelto', 'Foto'];
@@ -67,6 +67,8 @@ export function reviewHtml(
   items: readonly ReviewItem[],
   views: readonly { title: string; svg: string }[],
   where: (i: ReviewItem) => string,
+  /** Fotos incrustadas (data URI) por id de foto: el acta lleva la evidencia, no solo "con foto". */
+  photos: ReadonlyMap<string, string> = new Map(),
 ): string {
   const open = items.filter((i) => i.status === 'open').length;
   return `<!doctype html><html><head><meta charset="utf-8"/>
@@ -75,7 +77,8 @@ export function reviewHtml(
   h1{font-size:18px;margin:0 0 4px} h2{font-size:13px;margin:14px 0 4px} .meta{color:#555;margin-bottom:10px}
   .view{border:1px solid #ccc;margin-bottom:10px;page-break-inside:avoid}
   table{border-collapse:collapse;width:100%} th,td{border:1px solid #ccc;padding:4px 6px;text-align:left;vertical-align:top}
-  th{background:#f1f1f1} .num{display:inline-block;min-width:18px;height:18px;border-radius:9px;color:#fff;text-align:center;font-weight:bold}
+  th{background:#f1f1f1} .num{display:inline-block;min-width:18px;height:18px;line-height:18px;border-radius:9px;color:#fff;text-align:center;font-weight:bold;font-size:10px}
+  .photo{max-width:220px;max-height:160px;margin-top:4px;border-radius:4px}
   .open{color:#c62828;font-weight:bold} .res{color:#2e7d32}
 </style></head><body>
 <h1>Acta de revisión</h1>
@@ -89,7 +92,8 @@ ${items
   .map(
     (i) =>
       `<tr><td><span class="num" style="background:${html(i.color)}">${i.number}</span></td><td>${html(where(i))}</td>` +
-      `<td>${html(i.comment || (i.markup.kind === 'text' ? i.markup.text : '—'))}${i.photoId ? '<br/><i>Con foto</i>' : ''}</td>` +
+      `<td>${html(i.comment || (i.markup.kind === 'text' ? i.markup.text : '—'))}` +
+      `${i.photoId ? (photos.get(i.photoId) ? `<br/><img class="photo" src="${photos.get(i.photoId)}"/>` : '<br/><i>Con foto</i>') : ''}</td>` +
       `<td>${html(i.author || '—')}<br/>${html(fmtDate(i.createdAt))}</td>` +
       `<td>${i.status === 'open' ? '<span class="open">Abierta</span>' : `<span class="res">Resuelta</span><br/>${html(i.resolvedBy ?? '')} ${html(fmtDate(i.resolvedAt))}`}</td></tr>`,
   )

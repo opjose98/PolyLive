@@ -3,6 +3,8 @@
 // =============================================================================
 
 import { saveBase64ToUserFolder, saveTextToUserFolder } from '../../native/export/saveToUserFolder';
+import { folderHint } from './folderHint';
+import * as FileSystem from 'expo-file-system';
 import { shareExistingFile, shareFile } from '../../native/export/shareFile';
 import { htmlToPdf } from '../../native/export/printPdf';
 import { toast } from '../primitives';
@@ -30,6 +32,7 @@ async function guard(label: string, fn: () => Promise<void>): Promise<void> {
 
 export function saveCsv(filename: string, csv: string): Promise<void> {
   return guard('CSV', async () => {
+    folderHint();
     // BOM: Excel reconoce las tildes.
     const r = await saveTextToUserFolder(filename, '﻿' + csv);
     if (r.ok) {
@@ -43,6 +46,7 @@ export function savePdf(filename: string, html: string): Promise<void> {
   return guard('PDF', async () => {
     toast('Generando PDF…', { kind: 'info', durationMs: 1200 });
     const pdf = await htmlToPdf(html);
+    folderHint();
     const r = await saveBase64ToUserFolder(filename, pdf.base64, 'application/pdf');
     if (r.ok) {
       haptic.commit();
@@ -52,11 +56,18 @@ export function savePdf(filename: string, html: string): Promise<void> {
 }
 
 /** Comparte el PDF (WhatsApp, correo, Drive…) sin pasar por una carpeta. */
-export function sharePdf(html: string, dialogTitle: string): Promise<void> {
+export function sharePdf(html: string, dialogTitle: string, filename?: string): Promise<void> {
   return guard('PDF', async () => {
     toast('Generando PDF…', { kind: 'info', durationMs: 1200 });
     const pdf = await htmlToPdf(html);
-    if (!(await shareExistingFile(pdf.uri, 'application/pdf', dialogTitle))) toast('Compartir no está disponible', { kind: 'error' });
+    // expo-print nombra el archivo con un id aleatorio: quien lo recibe por WhatsApp ve ese nombre.
+    let uri = pdf.uri;
+    if (filename && FileSystem.cacheDirectory) {
+      uri = `${FileSystem.cacheDirectory}${filename}`;
+      await FileSystem.deleteAsync(uri, { idempotent: true });
+      await FileSystem.copyAsync({ from: pdf.uri, to: uri });
+    }
+    if (!(await shareExistingFile(uri, 'application/pdf', dialogTitle))) toast('Compartir no está disponible', { kind: 'error' });
   });
 }
 

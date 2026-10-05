@@ -6,7 +6,7 @@ import React, { useEffect, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { BottomSheet, ActionButton, Tappable, toast, confirm } from '../../primitives';
 import { TextField, ReadonlyRow } from '../../components/fields';
-import { REVIEW_COLORS, ReviewItem, ReviewView, countByStatus, viewKey } from '../../../domain/review/review';
+import { REVIEW_COLORS, ReviewItem, ReviewView, countByStatus, localStamp, viewKey } from '../../../domain/review/review';
 import { reviewCsv, reviewHtml } from '../../../application/review/reviewReport';
 import { spacing, radius } from '../../design/tokens';
 import { type } from '../../design/typography';
@@ -25,9 +25,11 @@ export interface ReviewSheetsProps {
   /** Dibujo de una vista con sus observaciones, como SVG. */
   viewSvg: (v: ReviewView, items: readonly ReviewItem[]) => string;
   onOpenPhoto?: (photoId: string) => void;
+  /** Fotos de las observaciones como data URI (para incrustarlas en el acta). */
+  photoData?: (photoIds: readonly string[]) => Promise<ReadonlyMap<string, string>>;
 }
 
-const when = (iso?: string) => (iso ? iso.slice(0, 16).replace('T', ' ') : '—');
+const when = (iso?: string) => localStamp(iso) || '—';
 
 export function ReviewSheets(props: ReviewSheetsProps) {
   const { review } = props;
@@ -130,14 +132,16 @@ function TextBody({ review }: { review: Review }) {
   );
 }
 
-function ListBody({ review, projectName, spaceName, operatorName, viewName, viewSvg }: ReviewSheetsProps) {
+function ListBody({ review, projectName, spaceName, operatorName, viewName, viewSvg, photoData }: ReviewSheetsProps) {
   const styles = useStyles();
   const colors = useTheme();
   const items = review.state.items;
   const counts = countByStatus(items);
   const meta = { project: projectName, space: spaceName, reviewer: operatorName, generatedAt: new Date() };
   const where = (i: ReviewItem) => viewName(i.view);
-  const html = () => {
+  const html = async () => {
+    const ids = items.map((i) => i.photoId).filter((p): p is string => !!p);
+    const photos = photoData && ids.length ? await photoData(ids) : new Map<string, string>();
     // Un dibujo por vista con observaciones: la planta primero.
     const views = new Map<string, { view: ReviewView; items: ReviewItem[] }>();
     for (const i of items) {
@@ -145,7 +149,7 @@ function ListBody({ review, projectName, spaceName, operatorName, viewName, view
       views.set(k, { view: i.view, items: [...(views.get(k)?.items ?? []), i] });
     }
     const ordered = [...views.values()].sort((a, b) => (a.view.kind === 'plan' ? -1 : b.view.kind === 'plan' ? 1 : 0));
-    return reviewHtml(meta, items, ordered.map((v) => ({ title: viewName(v.view), svg: viewSvg(v.view, v.items) })), where);
+    return reviewHtml(meta, items, ordered.map((v) => ({ title: viewName(v.view), svg: viewSvg(v.view, v.items) })), where, photos);
   };
   const base = `${safeName(projectName)}-${safeName(spaceName)}-revision-${new Date().toISOString().slice(0, 10)}`;
   return (
@@ -174,8 +178,8 @@ function ListBody({ review, projectName, spaceName, operatorName, viewName, view
         </Tappable>
       ))}
       <View style={styles.actions}>
-        <ActionButton label="Exportar acta PDF" icon="file-pdf-box" disabled={!items.length} onPress={() => void savePdf(`${base}.pdf`, html())} />
-        <ActionButton label="Compartir acta" icon="share-variant" variant="secondary" disabled={!items.length} onPress={() => void sharePdf(html(), 'Acta de revisión')} />
+        <ActionButton label="Exportar acta PDF" icon="file-pdf-box" disabled={!items.length} onPress={async () => void savePdf(`${base}.pdf`, await html())} />
+        <ActionButton label="Compartir acta" icon="share-variant" variant="secondary" disabled={!items.length} onPress={async () => void sharePdf(await html(), 'Acta de revisión', `${base}.pdf`)} />
         <ActionButton
           label="Exportar CSV"
           icon="file-delimited-outline"

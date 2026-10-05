@@ -15,6 +15,7 @@
 // =============================================================================
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Keyboard } from 'react-native';
 import { useStore } from 'zustand';
 import type { Point2D } from '../../../domain/geometry/types';
 import type { CrsId, GridPoint, LatLon } from '../../../domain/geo/crs';
@@ -266,6 +267,7 @@ export function useTopography({ services, projectId, spaceId, editor, levelZ, op
     async (fn: () => Promise<Georeference>, ok: (g: Georeference) => string) => {
       try {
         const g = await fn();
+        Keyboard.dismiss();
         await reload();
         haptic.commit();
         toast(ok(g), { kind: 'success', durationMs: 2600 });
