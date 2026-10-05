@@ -23,6 +23,19 @@ import {
  * - isImplicit: false → creado explícitamente por el usuario
  * - No tiene geometría propia — la hereda del Room
  */
+/**
+ * Suelo ligado a un recinto (F6a): `properties[FLOOR_ZONE_PROP]` es el id del
+ * recinto (zones.id). El suelo no guarda contorno propio: toma el NETO de su
+ * recinto, así que mover un muro mueve también el borde del suelo.
+ */
+export const FLOOR_ZONE_PROP = 'zoneId';
+
+/** Recinto al que está ligado un suelo, o `null` (suelos implícitos anteriores a F6a). */
+export function floorZoneId(floor: { readonly properties?: Record<string, unknown> }): string | null {
+  const z = floor.properties?.[FLOOR_ZONE_PROP];
+  return typeof z === 'string' ? z : null;
+}
+
 export class Floor extends RevitObjectBase {
   readonly type = 'Floor' as const;
 

@@ -74,6 +74,8 @@ export interface PlanScene {
   readonly roomName?: string;
   /** Recinto seleccionado: se resalta su contorno a cara interior. */
   readonly selectedZoneId?: string | null;
+  /** Suelos (F6a): contorno neto de su recinto, con trama de piso. */
+  readonly floors?: readonly { readonly id: string; readonly polygon: readonly Point2D[] }[];
   /** Muro en curso de trazado. */
   readonly wallDraft?: { start: Point2D | null; end: Point2D | null; snappedToNode: boolean } | null;
   /** Espesor (m) con que se previsualiza el muro en curso. */
@@ -218,6 +220,7 @@ export function drawPlan(r: ICanvasRenderer, scene: PlanScene): void {
   if (scene.showGrid) drawGrid(r, scene, pal);
   if (scene.underlay?.length) drawUnderlay(r, scene.underlay, pal, ctx.toScreen, ctx.scale);
   drawRooms(ctx);
+  if (scene.floors?.length) drawFloors(ctx);
   drawWalls(ctx);
   drawColumns(ctx);
   drawVanos(ctx);
@@ -318,6 +321,23 @@ function drawRooms({ r, scene, pal, toScreen }: Ctx): void {
     r.setStrokeStyle(pal.selection);
     r.setLineWidth(2 * pal.lineScale);
     r.strokePolygon(outline.map(toScreen));
+  }
+}
+
+/** Paso de la trama de suelo (px): más abierta que la de mampostería. */
+const FLOOR_HATCH_PX = 14;
+
+/** Suelo: trama fina a 45° en las dos direcciones (losa en planta) y borde fino. */
+function drawFloors({ r, scene, pal, toScreen }: Ctx): void {
+  for (const f of scene.floors ?? []) {
+    const poly = f.polygon.map(toScreen);
+    r.setStrokeStyle(pal.roomStroke);
+    r.setLineWidth(STROKE.thin * 0.8 * pal.lineScale);
+    for (const angle of [Math.PI / 4, -Math.PI / 4]) {
+      for (const [a, b] of hatchSegments(poly, FLOOR_HATCH_PX * pal.lineScale, angle)) r.drawLine(a.x, a.y, b.x, b.y);
+    }
+    r.setLineWidth(STROKE.thin * pal.lineScale);
+    r.strokePolygon(poly);
   }
 }
 
