@@ -22,7 +22,7 @@
 // todos.
 // =============================================================================
 
-import { columnForExport, roomForExport, wallForExport } from '../../../domain/geometry/handedness';
+import { columnForExport, roomForExport, toLocal, wallForExport } from '../../../domain/geometry/handedness';
 import { Point2D } from '../../../domain/geometry/types';
 import { Wall } from '../../../domain/objects/wall';
 import { Column } from '../../../domain/objects/column';
@@ -71,6 +71,24 @@ export const DXF_LAYERS = {
 // Entrada
 // ---------------------------------------------------------------------------
 
+/** Capas del dibujo técnico (AIA/NCS). */
+export const DRAFT_DXF_LAYERS = {
+  dims: 'A-ANNO-DIMS',
+  text: 'A-ANNO-TEXT',
+  tags: 'A-ANNO-TAGS',
+  coords: 'V-ANNO-COOR',
+  lines: 'A-DETL-GENF',
+  areas: 'A-AREA',
+  beams: 'S-BEAM',
+  trusses: 'S-TRUS',
+} as const;
+
+export type DxfDraftEntity =
+  | { readonly kind: 'line'; readonly layer: string; readonly a: Point2D; readonly b: Point2D; readonly dashed?: boolean }
+  | { readonly kind: 'polyline'; readonly layer: string; readonly points: readonly Point2D[]; readonly closed: boolean }
+  | { readonly kind: 'text'; readonly layer: string; readonly at: Point2D; readonly text: string; readonly height: number; readonly center?: boolean };
+
+
 export interface DXFExportData {
   /** Nombre que va al encabezado y al nombre de archivo. */
   readonly title: string;
@@ -86,6 +104,8 @@ export interface DXFExportData {
    * uno. Con recintos no se dibuja el contorno único del espacio.
    */
   readonly zones?: readonly DXFZone[];
+  /** Dibujo técnico de la planta (F6b): cotas, textos, etiquetas, líneas, vigas… En coordenadas del modelo. */
+  readonly drafting?: readonly DxfDraftEntity[];
 }
 
 export interface DXFZone {
@@ -121,6 +141,9 @@ export class DXFSerializer {
       room: data.room ? roomForExport(data.room) : null,
       walls: data.walls.map(wallForExport),
       columns: data.columns.map(columnForExport),
+      // Los recintos también: antes salían espejados norte-sur respecto a los muros.
+      zones: data.zones?.map((z) => ({ ...z, polygon: z.polygon.map(toLocal), label: toLocal(z.label) })),
+      drafting: data.drafting?.map(draftForExport),
     };
     if (!data.title || data.title.trim().length === 0) {
       throw new DXFExportError('El título del dibujo no puede estar vacío.');
@@ -231,14 +254,16 @@ export class DXFSerializer {
   }
 
   private writeLtypeTable(): void {
-    this.tableHeader('LTYPE', H_LTYPE_TABLE, 3);
+    this.tableHeader('LTYPE', H_LTYPE_TABLE, 4);
     this.writeLtypeRecord('CONTINUOUS', 'Solid line', H_CONTINUOUS_LTYPE);
     this.writeLtypeRecord('ByLayer', '', this.nextHandle());
     this.writeLtypeRecord('ByBlock', '', this.nextHandle());
+    // Trazos para lo que está por encima del corte (vigas): 0,20 m de trazo y 0,10 m de hueco.
+    this.writeLtypeRecord('DASHED', 'Dashed __ __ __', this.nextHandle(), [0.2, -0.1]);
     this.pair('0', 'ENDTAB');
   }
 
-  private writeLtypeRecord(name: string, description: string, handle: string): void {
+  private writeLtypeRecord(name: string, description: string, handle: string, pattern: readonly number[] = []): void {
     this.pair('0', 'LTYPE');
     this.pair('5', handle);
     this.pair('330', H_LTYPE_TABLE);
@@ -248,8 +273,12 @@ export class DXFSerializer {
     this.pair('70', '0');
     this.pair('3', description);
     this.pair('72', '65');
-    this.pair('73', '0');
-    this.pair('40', '0.0');
+    this.pair('73', String(pattern.length));
+    this.pair('40', this.num(pattern.reduce((s, v) => s + Math.abs(v), 0)));
+    for (const dash of pattern) {
+      this.pair('49', this.num(dash));
+      this.pair('74', '0');
+    }
   }
 
   private writeLayerTable(): void {
@@ -261,6 +290,14 @@ export class DXFSerializer {
       [DXF_LAYERS.roomBoundary, 4],
       [DXF_LAYERS.openings, 5],
       [DXF_LAYERS.annotation, 2],
+      // Dibujo técnico (F6b)
+      [DRAFT_DXF_LAYERS.dims, 1],
+      [DRAFT_DXF_LAYERS.tags, 2],
+      [DRAFT_DXF_LAYERS.coords, 6],
+      [DRAFT_DXF_LAYERS.lines, 7],
+      [DRAFT_DXF_LAYERS.areas, 4],
+      [DRAFT_DXF_LAYERS.beams, 30],
+      [DRAFT_DXF_LAYERS.trusses, 30],
     ];
 
     this.tableHeader('LAYER', H_LAYER_TABLE, layers.length);
@@ -416,6 +453,12 @@ export class DXFSerializer {
     for (const wall of data.walls) this.writeWall(wall);
     for (const column of data.columns) this.writeColumn(column);
     if (data.elevations?.length) this.writeOpenings(data.walls, data.elevations);
+
+    for (const e of data.drafting ?? []) {
+      if (e.kind === 'line') this.line(e.layer, e.a, e.b, e.dashed ? 'DASHED' : undefined);
+      else if (e.kind === 'polyline') this.lwPolyline(e.layer, e.points, e.closed);
+      else this.text(e.layer, e.at, e.text, e.height, e.center);
+    }
 
     this.pair('0', 'ENDSEC');
   }
@@ -574,8 +617,9 @@ export class DXFSerializer {
     }
   }
 
-  private line(layer: string, a: Point2D, b: Point2D): void {
+  private line(layer: string, a: Point2D, b: Point2D, linetype?: string): void {
     this.entityHeader('LINE', layer);
+    if (linetype) this.pair('6', linetype);
     this.pair('100', 'AcDbLine');
     this.pair('10', this.num(a.x));
     this.pair('20', this.num(a.y));
@@ -621,7 +665,7 @@ export class DXFSerializer {
     this.pair('51', this.num(sweepRad >= 0 ? endDeg : startDeg));
   }
 
-  private text(layer: string, position: Point2D, value: string, height: number): void {
+  private text(layer: string, position: Point2D, value: string, height: number, center = false): void {
     this.entityHeader('TEXT', layer);
     this.pair('100', 'AcDbText');
     this.pair('10', this.num(position.x));
@@ -630,8 +674,15 @@ export class DXFSerializer {
     this.pair('40', this.num(height));
     this.pair('1', sanitizeDxfText(value));
     this.pair('7', 'Standard');
+    if (center) {
+      // Centrado (72=1) y al medio (73=2) del punto de alineación (11/21).
+      this.pair('72', '1');
+      this.pair('11', this.num(position.x));
+      this.pair('21', this.num(position.y));
+      this.pair('31', '0.0');
+    }
     this.pair('100', 'AcDbText');
-    this.pair('73', '0');
+    this.pair('73', center ? '2' : '0');
   }
 
   // -------------------------------------------------------------------------
@@ -732,4 +783,11 @@ export function sanitizeDxfText(value: string): string {
 /** Nombre de archivo seguro en cualquier sistema. */
 export function sanitizeDxfFilename(name: string): string {
   return name.replace(/[<>:"/\\|?*\u0000-\u001F]/g, '_').trim() || 'dibujo';
+}
+
+/** Entidad del dibujo técnico en coordenadas de intercambio (Y arriba). */
+function draftForExport(e: DxfDraftEntity): DxfDraftEntity {
+  if (e.kind === 'line') return { ...e, a: toLocal(e.a), b: toLocal(e.b) };
+  if (e.kind === 'polyline') return { ...e, points: e.points.map(toLocal) };
+  return { ...e, at: toLocal(e.at) };
 }

@@ -20,8 +20,15 @@ import { toast } from '../primitives';
 import { haptic } from '../design/haptics';
 import { dxfZones, ifcZones } from '../../application/topology/zoneExport';
 import { mapConversionFor } from '../../application/geo/surveyTools';
-import { isGeoreferenced } from '../../application/geo/coordinateText';
+import { gridLabel, isGeoreferenced, localLabel } from '../../application/geo/coordinateText';
 import { crsDef, workingCrs } from '../../domain/geo/crs';
+import { modelToGrid } from '../../domain/geo/georeference';
+import { draftDxfEntities, draftIfcMembers } from '../../application/drafting/draftExport';
+import type { Point2D } from '../../domain/geometry/types';
+import type { DraftItem } from '../../domain/drafting/drafting';
+import { Wall } from '../../domain/objects/wall';
+import { Column } from '../../domain/objects/column';
+import { workspaceStore } from '../../state/workspaceStore';
 
 export interface ExportContext {
   readonly roomId: RoomId;
@@ -75,6 +82,18 @@ async function save(ctx: ExportContext, ext: string, content: string, detail?: s
   return { ok: false, message };
 }
 
+/** Dibujo técnico del espacio; si falla la lectura, el plano sale sin él (no se pierde la exportación). */
+async function loadDrafts(services: AppServices, ctx: ExportContext): Promise<DraftItem[]> {
+  try {
+    return await services.drafts.list(ctx.roomId as unknown as string);
+  } catch (err) {
+    console.warn('[export-drafts]', err);
+    return [];
+  }
+}
+
+const summarize = (n: number, one: string, many: string) => (n ? `, ${n} ${n === 1 ? one : many}` : '');
+
 /** IFC 4 para Revit: un piso por nivel, restricciones de base/tope, fases. */
 export async function exportRevitIfc(services: AppServices, ctx: ExportContext): Promise<ExportOutcome> {
   toast('Generando IFC…', { kind: 'info', durationMs: 1200 });
@@ -94,6 +113,7 @@ export async function exportRevitIfc(services: AppServices, ctx: ExportContext):
     ]);
     const sills = new Map<string, number>();
     for (const e of elevs) for (const o of e.openings) if (o.vanoId) sills.set(o.vanoId, o.sillHeight);
+    const members = draftIfcMembers(await loadDrafts(services, ctx));
     const out = await services.useCases.exportRoomIfc.execute({
       roomId: ctx.roomId,
       levels: lv.map((m) => ({ id: m.id, name: m.name, elevation: m.value, isBase: m.isBase })),
@@ -104,8 +124,14 @@ export async function exportRevitIfc(services: AppServices, ctx: ExportContext):
       author: ctx.author,
       zones: ifcZones(zones),
       mapConversion,
+      members,
     });
-    const detail = `${lv.length || 1} nivel(es), ${ifcZones(zones).length} recinto(s)${mapConversion ? ', georreferenciado' : ''}`;
+    const beams = members.filter((m) => m.role === 'beam').length;
+    const detail =
+      `${lv.length || 1} nivel(es), ${ifcZones(zones).length} recinto(s)` +
+      summarize(beams, 'viga', 'vigas') +
+      summarize(members.length - beams, 'barra de cercha/correa', 'barras de cerchas/correas') +
+      (mapConversion ? ', georreferenciado' : '');
     return await save(ctx, 'ifc', out.ifcContent, detail);
   } catch (err) {
     console.warn('[export-ifc]', err);
@@ -122,10 +148,17 @@ export async function exportPlanDxf(services: AppServices, ctx: ExportContext): 
     const elevations = await services.elevations.listElevations(ctx.roomId);
     // La planta del DXF es la del nivel base: sus recintos (los de otros niveles se superpondrían).
     const base = ctx.projectId ? (await services.markers.list(ctx.projectId, 'level')).find((m) => m.isBase)?.id : undefined;
-    const zones = dxfZones(await services.zones.list(ctx.roomId as unknown as string), base ?? '');
-    const r = await services.useCases.exportRoomDxf.execute({ roomId: ctx.roomId, title: ctx.spaceName, elevations, zones });
+    const allZones = await services.zones.list(ctx.roomId as unknown as string);
+    const zones = dxfZones(allZones, base ?? '');
+    // Dibujo técnico del mismo nivel (el de planta; lo de alzado no va al plano de planta).
+    const drafts = (await loadDrafts(services, ctx)).filter(
+      (d) => d.view.kind === 'plan' && (!base || d.levelId === base || d.levelId === ''),
+    );
+    const drafting = drafts.length ? draftDxfEntities(drafts, await draftContext(services, ctx, allZones)) : undefined;
+    const r = await services.useCases.exportRoomDxf.execute({ roomId: ctx.roomId, title: ctx.spaceName, elevations, zones, drafting });
     const detail =
       `${r.stats.walls} muro(s), ${r.stats.columns} columna(s), ${r.stats.openings} hueco(s)` +
+      summarize(drafts.length, 'elemento de dibujo', 'elementos de dibujo') +
       (r.stats.roomClosed ? ', recinto cerrado' : ', recinto sin cerrar');
     return await save(ctx, 'dxf', r.dxfContent, detail);
   } catch (err) {
@@ -134,4 +167,32 @@ export async function exportPlanDxf(services: AppServices, ctx: ExportContext): 
     toast(message, { kind: 'error' });
     return { ok: false, message };
   }
+}
+
+/**
+ * Lo que el dibujo técnico necesita para salir al DXF: la escala del plano
+ * (alto de los textos), el rótulo de las coordenadas (N/E si el proyecto está
+ * amarrado) y el centro de cada objeto etiquetado (línea de referencia).
+ */
+async function draftContext(
+  services: AppServices,
+  ctx: ExportContext,
+  zones: Awaited<ReturnType<AppServices['zones']['list']>>,
+): Promise<Parameters<typeof draftDxfEntities>[1]> {
+  const space = ctx.roomId as unknown as string;
+  const geo = ctx.projectId ? await services.topography.getGeoreference(ctx.projectId).catch(() => null) : null;
+  const centers = new Map<string, Point2D>();
+  for (const o of await services.store.listObjects(ctx.roomId)) {
+    if (o instanceof Wall) centers.set(o.id as string, { x: (o.startPoint.x + o.endPoint.x) / 2, y: (o.startPoint.y + o.endPoint.y) / 2 });
+    else if (o instanceof Column) centers.set(o.id as string, o.position);
+  }
+  for (const z of zones) {
+    const poly = z.netPolygon.length ? z.netPolygon : z.polygon;
+    if (poly.length) centers.set(z.id, { x: poly.reduce((a, p) => a + p.x, 0) / poly.length, y: poly.reduce((a, p) => a + p.y, 0) / poly.length });
+  }
+  return {
+    denominator: Number(workspaceStore.getState().scale.denominator) || 50,
+    coordText: (p) => (isGeoreferenced(geo) ? gridLabel(modelToGrid(geo, space, p)) : localLabel(p)),
+    targetCenter: (id) => centers.get(id) ?? null,
+  };
 }

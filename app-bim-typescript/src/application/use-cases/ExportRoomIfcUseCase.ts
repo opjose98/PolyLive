@@ -17,7 +17,7 @@ import {
 import { Window } from '../../domain/objects';
 import { floorZoneId } from '../../domain/objects/floor';
 import { IValidationService, IIFCSerializer, ValidationError } from './types';
-import type { IfcMapConversionInput, IfcZoneInput } from '../../infrastructure/export/ifc/types';
+import type { IfcMapConversionInput, IfcMemberInput, IfcZoneInput } from '../../infrastructure/export/ifc/types';
 
 export interface ExportRoomIfcInput {
   roomId: RoomId;
@@ -35,6 +35,8 @@ export interface ExportRoomIfcInput {
   zones?: readonly IfcZoneInput[];
   /** Georreferencia del proyecto (M2b). */
   mapConversion?: IfcMapConversionInput;
+  /** Estructura dibujada (F6b): vigas, cerchas y correas. */
+  members?: readonly IfcMemberInput[];
 }
 
 export interface ExportRoomIfcOutput {
@@ -92,6 +94,7 @@ export class ExportRoomIfcUseCase {
       author: input.author,
       zones: input.zones,
       mapConversion: input.mapConversion,
+      members: input.members,
       zoneFloors: floors.filter((f) => floorZoneId(f) !== null),
     });
 
