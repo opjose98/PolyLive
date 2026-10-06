@@ -20,49 +20,70 @@ PolyLive/
 
 ---
 
-## `app-bim-typescript` — instalación y arranque
+## `app-bim-typescript` — trabajar en cualquier PC
 
-Requisitos: Node.js 18+, npm, y (para correr en dispositivo/emulador) el
-CLI de Expo.
+### 1. Requisitos
 
-```bash
-cd app-bim-typescript
-npm install
-```
+- **Git** y **Node.js 18 o superior** con npm (probado con Node 24 / npm 11).
+- **Android:** el SDK de Android (basta con *platform-tools* para `adb`) y un
+  teléfono con *Depuración USB* activada. En Windows, `adb` queda en
+  `%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe`.
+- **Cuenta de Expo** (solo para compilar APKs con EAS): `npm i -g eas-cli` y `eas login`.
 
-**Compilar (chequeo de tipos, sin emitir):**
-
-```bash
-npm run build
-```
-
-**Correr los tests:**
+### 2. Clonar e instalar
 
 ```bash
-npm test
+git clone https://github.com/opjose98/PolyLive.git
+cd PolyLive/app-bim-typescript
+npm ci
 ```
 
-**Arrancar el servidor de desarrollo Expo:**
+### 3. Verificar
 
 ```bash
-npm start
+npx tsc --noEmit
+npx jest
 ```
 
-**Compilar y correr en Android/iOS (requiere emulador o dispositivo conectado):**
+Ambos deben terminar limpios antes de cualquier commit (`strict: true`).
 
-```bash
-npm run android
-npm run ios
-```
+### 4. Correr la app en el teléfono (Expo Dev Client)
 
-**Notas:**
-- El proyecto usa Expo SDK 51 en modo managed. Si un módulo nativo lo
-  requiere, hay que migrar a Expo Dev Client (`npx expo install expo-dev-client`).
-- `tsconfig.json` está en modo `strict`. `npm run build` debe terminar sin
-  errores antes de cualquier commit.
-- La arquitectura tiene 5 capas con reglas de dependencia estrictas
-  (Domain → Application → Infrastructure → Native → UI). Ver
-  `_0bsidian/00-Introducción/MOC-PolyLive.md` antes de tocar código.
+La app usa módulos nativos (BLE, Skia, SQLite, impresión), así que **no corre en
+Expo Go**: necesita su propio *dev client* instalado en el teléfono.
+
+1. Compilar el dev client (una vez, o cuando cambien dependencias nativas):
+
+   ```bash
+   eas build --profile development --platform android
+   ```
+
+   Descargar el APK del enlace que da EAS e instalarlo:
+
+   ```bash
+   adb install -r polylive-dev.apk
+   ```
+
+   `-r` conserva los datos del teléfono. Para una versión sin Metro está el perfil
+   `preview` (APK independiente).
+2. Con el teléfono por USB, redirigir el puerto y arrancar Metro:
+
+   ```bash
+   adb reverse tcp:8081 tcp:8081
+   ```
+
+   ```bash
+   npx expo start --dev-client --localhost
+   ```
+
+3. Abrir *PolyLive BIM* en el teléfono: se conecta a `localhost:8081` y carga el
+   código. Los cambios se recargan solos al guardar.
+
+### 5. Flujo de trabajo
+
+- Una rama por cambio y PR a `main`; nada se publica directo en `main`.
+- Documentar cada fase en `docs/` (numerados) y mantener la bóveda `_0bsidian/`.
+- Al cambiar de PC: `git pull` en `main` y `npm ci` si cambió `package-lock.json`.
 
 ---
 
@@ -101,9 +122,11 @@ sincronizada con el código (ver `06-Referencias-Cruzadas/trazabilidad-nota-codi
 
 ## `docs/`
 
-Informes narrativos del experimento que originó el proyecto, en orden:
-del `01-EXPERIMENT-FINAL-REPORT.md` al `13-AUDITORIA-UNIFICACION.md` (el
-más reciente, con el estado real verificado del código).
+Documentación numerada: del `01` al `13`, los informes del experimento que
+originó el proyecto; del `14` en adelante, cada fase de la reconstrucción
+(modos, topografía, avance, revisión, dibujo técnico) y las pruebas en teléfono
+(`21-QA-TELEFONO.md`, `22-F6B-DIBUJO-Y-CONMUTADORES.md`). La auditoría técnica
+integral está en `AUDITORIA_INTEGRAL_POLYLIVE.md`, en la raíz.
 
 ## Historial previo
 
