@@ -30,7 +30,7 @@ export interface IValidationService {
   validateColumn(column: any): ValidationResult;
   validateDoor(door: any, context?: { walls: any[] }): ValidationResult;
   validateWindow(window: any, context?: { walls: any[] }): ValidationResult;
-  validateRoom(room: any, triangulation?: any): ValidationResult;
+  validateRoom(room: any): ValidationResult;
   validateExport(room: any): ValidationResult;
 }
 
@@ -53,10 +53,3 @@ export interface IIFCSerializer {
   }): Promise<string>;
 }
 
-/** Interfaz CDT (Constrained Delaunay Triangulation). */
-export interface ICDT {
-  triangulate(
-    boundary: Array<{ x: number; y: number }>,
-    holes?: Array<Array<{ x: number; y: number }>>,
-  ): Promise<{ totalArea: number; triangles: any[]; valid: boolean; warnings: any[] }>;
-}

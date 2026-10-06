@@ -26,9 +26,11 @@ export interface ProgressSheetsProps {
   supportLabel: (targetKey: string) => string;
   /** Planta coloreada con el avance, como SVG. */
   planSvg: () => string;
+  /** Caras de muro pintadas, cada una como SVG con su nombre. */
+  faceViews: () => { title: string; svg: string }[];
 }
 
-export function ProgressSheets({ progress, projectName, spaceName, operatorName, supportLabel, planSvg }: ProgressSheetsProps) {
+export function ProgressSheets({ progress, projectName, spaceName, operatorName, supportLabel, planSvg, faceViews }: ProgressSheetsProps) {
   return (
     <>
       <BottomSheet open={progress.sheet === 'catalog'} onClose={progress.closeSheet} heightRatio={0.72}>
@@ -42,6 +44,7 @@ export function ProgressSheets({ progress, projectName, spaceName, operatorName,
           operatorName={operatorName}
           supportLabel={supportLabel}
           planSvg={planSvg}
+          faceViews={faceViews}
         />
       </BottomSheet>
     </>
@@ -139,6 +142,7 @@ function ReportBody({
   operatorName,
   supportLabel,
   planSvg,
+  faceViews,
 }: Omit<ProgressSheetsProps, 'progress'> & { progress: Progress }) {
   const styles = useStyles();
   const { state, ctl } = progress;
@@ -176,8 +180,8 @@ function ReportBody({
       ))}
       <View style={styles.actions}>
         <ActionButton label="Exportar CSV" icon="file-delimited-outline" variant="secondary" onPress={() => void saveCsv(`${base}.csv`, reportCsv(meta, rows))} />
-        <ActionButton label="Exportar PDF" icon="file-pdf-box" onPress={() => void savePdf(`${base}.pdf`, reportHtml(meta, rows, planSvg()))} />
-        <ActionButton label="Compartir PDF" icon="share-variant" variant="secondary" onPress={() => void sharePdf(reportHtml(meta, rows, planSvg()), 'Reporte de avance')} />
+        <ActionButton label="Exportar PDF" icon="file-pdf-box" onPress={() => void savePdf(`${base}.pdf`, reportHtml(meta, rows, planSvg(), undefined, faceViews()))} />
+        <ActionButton label="Compartir PDF" icon="share-variant" variant="secondary" onPress={() => void sharePdf(reportHtml(meta, rows, planSvg(), undefined, faceViews()), 'Reporte de avance', `${base}.pdf`)} />
       </View>
     </ScrollView>
   );

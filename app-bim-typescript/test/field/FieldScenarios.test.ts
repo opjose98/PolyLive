@@ -20,17 +20,16 @@ import { Database } from '../../src/infrastructure/sqlite/database';
 import { ObjectStore } from '../../src/infrastructure/sqlite/ObjectStore';
 import { Wall, roomId, levelId, wallId, revitObjectId, Room } from '../../src/domain/objects';
 import { meters, squareMeters } from '../../src/domain/geometry/types';
-import { CDT } from '../../src/domain/geometry/CDT';
 import { CommandStack } from '../../src/application/state/CommandStack';
 import { CreateWallUseCase } from '../../src/application/use-cases/CreateWallUseCase';
-import { CloseRoomUseCase } from '../../src/application/use-cases/CloseRoomUseCase';
+import { DetectRoomsUseCase } from '../../src/application/use-cases/DetectRoomsUseCase';
 import { CaptureMeasurementUseCase } from '../../src/application/use-cases/CaptureMeasurementUseCase';
 import { CapturePhotoUseCase } from '../../src/application/use-cases/CapturePhotoUseCase';
 import { LinkPhotoToObjectUseCase } from '../../src/application/use-cases/LinkPhotoToObjectUseCase';
 import { ExportRoomIfcUseCase } from '../../src/application/use-cases/ExportRoomIfcUseCase';
 import { UpdateObjectPropertyUseCase } from '../../src/application/use-cases/UpdateObjectPropertyUseCase';
 import { IFCSerializer } from '../../src/infrastructure/export/ifc/IFCSerializer';
-import { IValidationService, IBLEManager, ICDT, ValidationResult } from '../../src/application/use-cases/types';
+import { IValidationService, IBLEManager, ValidationResult } from '../../src/application/use-cases/types';
 
 function alwaysValidService(): IValidationService {
   const ok: ValidationResult = { valid: true, warnings: [] };
@@ -44,19 +43,6 @@ function alwaysValidService(): IValidationService {
   };
 }
 
-class RealCdtAdapter implements ICDT {
-  private readonly cdt = new CDT();
-  async triangulate(
-    boundary: Array<{ x: number; y: number }>,
-    holes?: Array<Array<{ x: number; y: number }>>,
-  ) {
-    return this.cdt.triangulate({
-      vertices: boundary as any,
-      holes: holes?.map((h) => ({ vertices: h as any, isClosed: true })),
-      isClosed: true,
-    });
-  }
-}
 
 const ROOM_ID = roomId('field-room');
 const LEVEL_ID = levelId('level-1');
@@ -80,12 +66,12 @@ afterEach(async () => {
 });
 
 // ---------------------------------------------------------------------------
-// #1 — Trazo de 4 muros en habitación real: verificar que CDT calcula área
-// correctamente
+// #1 — Trazo de 4 muros en habitación real: la topología detecta el recinto
+// con su área
 // ---------------------------------------------------------------------------
 
-describe('Caso de campo #1 — Trazo de 4 muros + CDT', () => {
-  it('4 muros perimetrales trazados en secuencia cierran un Room de área correcta (CDT real)', async () => {
+describe('Caso de campo #1 — Trazo de 4 muros + recinto detectado', () => {
+  it('4 muros perimetrales trazados en secuencia forman un recinto de área correcta', async () => {
     const room = new Room({
       id: revitObjectId('field-room') as any,
       roomId: ROOM_ID,
@@ -118,12 +104,11 @@ describe('Caso de campo #1 — Trazo de 4 muros + CDT', () => {
     }
     expect(commandStack.size()).toBe(4);
 
-    const closeUseCase = new CloseRoomUseCase(store, commandStack, validation, new RealCdtAdapter());
-    const output = await closeUseCase.execute({ roomId: ROOM_ID });
-
-    const persisted = (await store.readObject(room.id)) as Room;
-    expect(persisted.area).toEqual(squareMeters(12));
-    expect(output.floor).not.toBeNull();
+    const walls = (await store.listObjects(ROOM_ID)).filter((o): o is Wall => o instanceof Wall);
+    const { suggestions } = new DetectRoomsUseCase().execute({ walls });
+    expect(suggestions).toHaveLength(1);
+    expect(Number(suggestions[0].area)).toBeCloseTo(12, 6);
+    expect(room.isOpen).toBe(true);
   });
 });
 

@@ -78,7 +78,14 @@ export function reportCsv(meta: ReportMeta, rows: readonly ReportRow[]): string 
 const html = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 /** HTML del reporte (expo-print lo convierte en PDF). `svg` es la planta coloreada. */
-export function reportHtml(meta: ReportMeta, rows: readonly ReportRow[], svg: string, title = 'Reporte de avance de obra'): string {
+export function reportHtml(
+  meta: ReportMeta,
+  rows: readonly ReportRow[],
+  svg: string,
+  title = 'Reporte de avance de obra',
+  /** Caras de muro pintadas (alzados con su avance). */
+  faces: readonly { title: string; svg: string }[] = [],
+): string {
   const totals = activityTotals(rows);
   const f2 = (v: number) => v.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const swatch = (c: string) => `<span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${html(c)};margin-right:6px"></span>`;
@@ -95,6 +102,7 @@ export function reportHtml(meta: ReportMeta, rows: readonly ReportRow[], svg: st
 Corte: <b>${html(meta.cut.label || meta.cut.date)}</b> (${html(meta.cut.date)}) · Responsable: ${html(meta.operator || '—')} ·
 Generado: ${html(meta.generatedAt.toLocaleString('es-CO'))}</div>
 <div class="plan">${svg}</div>
+${faces.map((f) => `<h2 style="font-size:13px;margin-top:12px">${html(f.title)}</h2><div class="plan" style="max-width:60%">${f.svg}</div>`).join('\n')}
 <h2 style="font-size:14px;margin-top:14px">Resumen por actividad</h2>
 <table><tr><th>Actividad</th><th>En el corte (m²)</th><th>Acumulado (m²)</th></tr>
 ${totals.map((t) => `<tr><td>${swatch(t.color)}${html(t.activity)}</td><td class="n">${f2(t.inCut)}</td><td class="n">${f2(t.cumulative)}</td></tr>`).join('\n')}
@@ -104,10 +112,10 @@ ${totals.map((t) => `<tr><td>${swatch(t.color)}${html(t.activity)}</td><td class
 ${rows
   .map(
     (r) =>
-      `<tr><td>${swatch(r.color)}${html(r.activity)}</td><td>${html(r.support)}</td><td class="n">${f2(r.inCut)}</td><td class="n">${f2(r.cumulative)}</td><td class="n">${f2(r.supportArea)}</td><td class="n">${r.percent.toFixed(1)} %</td></tr>`,
+      `<tr><td>${swatch(r.color)}${html(r.activity)}</td><td>${html(r.support)}</td><td class="n">${f2(r.inCut)}</td><td class="n">${f2(r.cumulative)}</td><td class="n">${f2(r.supportArea)}</td><td class="n">${r.percent.toLocaleString('es-CO', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %</td></tr>`,
   )
   .join('\n')}
 </table>
-<p style="color:#777;margin-top:10px">Cantidades medidas sobre el modelo: suelos a cara interior de muros; caras de muro descontando vanos. Resolución de medición: 5 cm.</p>
+<p style="color:#777;margin-top:10px">Cantidades medidas sobre el modelo: suelos a cara interior de muros; caras de muro descontando vanos. Resolución de medición: 2 cm.</p>
 </body></html>`;
 }

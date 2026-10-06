@@ -13,14 +13,15 @@
 // Todo con `.runOnJS(true)`: el estado vive en ElevationEditor (hilo JS).
 // =============================================================================
 
-import React, { useLayoutEffect, useMemo, useRef } from 'react';
+import React, { useLayoutEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Canvas, Fill, Group, Picture, createPicture } from '@shopify/react-native-skia';
 import { useDerivedValue, useSharedValue } from 'react-native-reanimated';
 import type { SkCanvas } from '@shopify/react-native-skia';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { SkiaCanvasAdapter } from '../../native/canvas/SkiaCanvasAdapter';
-import { drawElevation, ElevationScene } from './elevationRenderer';
+import { drawElevation, ElevationScene, elevationToScreen } from './elevationRenderer';
+import { drawSketch, EMPTY_SKETCH, SketchSource } from './sketch';
 import { CANVAS_PALETTES } from '../design/canvasThemes';
 import { LONG_PRESS_MS } from '../design/motion';
 import { haptic } from '../design/haptics';
@@ -46,6 +47,11 @@ export interface ElevationCanvasProps {
   onDrawMove?(x: number, y: number): void;
   onDrawEnd?(x: number, y: number): void;
   onDrawCancel?(): void;
+  /**
+   * Trazo en curso (cota, pincel, marca) en (u, v): capa viva aparte. Cambia
+   * con cada movimiento del dedo sin regrabar el muro ni re-renderizar la pantalla.
+   */
+  readonly liveSketch?: SketchSource;
 }
 
 export const ElevationCanvas = React.memo(function ElevationCanvas(props: ElevationCanvasProps) {
@@ -61,6 +67,18 @@ export const ElevationCanvas = React.memo(function ElevationCanvas(props: Elevat
               // Se graba más allá de la pantalla: al panear se ve lo que estaba fuera.
       }, { x: -scene.width, y: -scene.height, width: scene.width * 3, height: scene.height * 3 }),
     [scene],
+  );
+
+  const liveSource = props.liveSketch ?? EMPTY_SKETCH;
+  const liveShapes = useSyncExternalStore(liveSource.subscribe, liveSource.get);
+  const livePicture = useMemo(
+    () =>
+      liveShapes.length
+        ? createPicture((canvas: SkCanvas) => {
+            drawSketch(new SkiaCanvasAdapter(canvas), liveShapes, elevationToScreen(scene), scene.viewport.scale);
+          }, { x: -scene.width, y: -scene.height, width: scene.width * 3, height: scene.height * 3 })
+        : null,
+    [liveShapes, scene],
   );
 
   // Cámara del gesto en el hilo UI: mueve el Picture ya grabado. El alzado
@@ -85,6 +103,18 @@ export const ElevationCanvas = React.memo(function ElevationCanvas(props: Elevat
     let drawing = false;
     let pinchLast = 1;
     let moving = 0;
+    // El alzado se regraba entero con cada punto del trazo: a ~30 Hz como
+    // máximo. Si el hilo JS se atrasa, los eventos encolados se descartan
+    // al instante en vez de redibujar cada uno (antes el trazo iba segundos
+    // detrás del dedo). El final del trazo siempre usa el punto real.
+    let lastMove = 0;
+    const throttled = (fn: () => void) => {
+      const now = Date.now();
+      if (now - lastMove < 33) return;
+      lastMove = now;
+      fn();
+    };
+    const drawMove = (x: number, y: number) => throttled(() => cb.current.onDrawMove?.(x, y));
     const publish = () => {
       dS.value = delta.s;
       dX.value = delta.x;
@@ -112,11 +142,11 @@ export const ElevationCanvas = React.memo(function ElevationCanvas(props: Elevat
       })
       .onChange((e) => {
         if (drawing) {
-          cb.current.onDrawMove?.(e.x, e.y);
+          drawMove(e.x, e.y);
           return;
         }
         if (dragging) {
-          cb.current.onDragMove(e.x, e.y);
+          throttled(() => cb.current.onDragMove(e.x, e.y));
           return;
         }
         delta.x += e.changeX;
@@ -132,6 +162,7 @@ export const ElevationCanvas = React.memo(function ElevationCanvas(props: Elevat
         }
         if (dragging) {
           haptic.commit();
+          cb.current.onDragMove(e.x, e.y); // el último punto, aunque el filtro lo haya saltado
           cb.current.onDragEnd();
         }
       })
@@ -199,6 +230,7 @@ export const ElevationCanvas = React.memo(function ElevationCanvas(props: Elevat
           <Fill color={pal.background} />
           <Group transform={view}>
             <Picture picture={picture} />
+            {livePicture ? <Picture picture={livePicture} /> : null}
           </Group>
         </Canvas>
       </View>

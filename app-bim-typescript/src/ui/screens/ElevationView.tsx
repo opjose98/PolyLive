@@ -21,6 +21,7 @@ import Animated, { FadeIn, FadeOut, ZoomIn } from 'react-native-reanimated';
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 import { ElevationCanvas } from '../canvas/ElevationCanvas';
+import type { SketchShape, SketchSource } from '../canvas/sketch';
 import { ElevationEditor, ElevationEditorState } from '../../application/elevation/ElevationEditor';
 import { workspaceStore } from '../../state/workspaceStore';
 import { PropKey, ZoomAction, categoriesFor, findTool, workModeDef } from '../../application/workspace/catalog';
@@ -41,8 +42,10 @@ import { elevation as shadow, sizes, spacing } from '../design/tokens';
 import { haptic } from '../design/haptics';
 import { themedStyles, useCanvasPalette, useTheme } from '../design/theme';
 import type { Progress } from '../workspace/progress/useProgress';
-import type { ProgressDraft } from '../../application/progress/ProgressController';
 import type { Review } from '../workspace/review/useReview';
+import type { Drafting } from '../workspace/drafting/useDrafting';
+import type { PhotoMarkerView } from '../../application/editor/EditorController';
+import type { PhotoFaceAnchor } from '../../domain/objects/audit-photo';
 import type { ReviewView } from '../../domain/review/review';
 
 const TOUCH_TOL = sizes.canvasTouchTolerance;
@@ -61,13 +64,22 @@ export interface ElevationViewProps {
   readonly progress?: Progress;
   /** Revisión (M4): marcas sobre la cara visible del muro. */
   readonly review?: Review;
+  /** Dibujo técnico (F6b): cotas, textos, vigas… sobre la cara visible. */
+  readonly drafting?: Drafting;
+  onOpenDraftSheet?(): void;
+  /** Fotos del Recinto (las del alzado traen su cara). */
+  readonly photoMarkers?: readonly PhotoMarkerView[];
+  /** Tocar con la herramienta Foto: abrir la cámara para esta cara y punto. */
+  onFacePhoto?(face: PhotoFaceAnchor): void;
+  onOpenPhoto?(photoId: string): void;
   onClose(): void;
 }
 
 export function ElevationView(props: ElevationViewProps) {
   const styles = useStyles();
   const colors = useTheme();
-  const { editor, width, height, levels, chromeTop } = props;
+  const { editor, width, height, levels, chromeTop, onFacePhoto, onOpenPhoto } = props;
+  const palette = useCanvasPalette();
   const [st, setSt] = useState<ElevationEditorState>(() => editor.getState());
   const [sheetOpen, setSheetOpen] = useState(false);
 
@@ -78,6 +90,7 @@ export function ElevationView(props: ElevationViewProps) {
       theme: s.canvasTheme,
       grid: s.grid.lines || s.grid.dots,
       filters: s.filters,
+      coordination: s.layers.coordinacion,
       activeTool: s.activeTool,
       workMode: s.workMode,
       denominator: s.scale.denominator,
@@ -106,23 +119,77 @@ export function ElevationView(props: ElevationViewProps) {
         : null,
     [review, faceView, editor],
   );
-  const [reviewDraftKey, setReviewDraftKey] = useState<unknown>(null);
-  useEffect(() => (review ? review.ctl.subscribe((s) => setReviewDraftKey(s.draft)) : undefined), [review]);
 
-  // El trazo en curso se dibuja en el alzado (que se regraba entero: un muro es barato).
-  const [draft, setDraft] = useState<ProgressDraft | null>(null);
-  useEffect(() => (progress ? progress.ctl.subscribe((s) => setDraft(s.draft)) : undefined), [progress]);
-  const reviewFaceSketch = useMemo(() => {
-    const d = review?.ctl.getState().draft;
-    return d && d.view.kind === 'wallFace' && d.view.wallId === wallDbId && d.view.side === st.side ? review!.draftShapes() : undefined;
-  }, [review, reviewDraftKey, wallDbId, st.side]); // eslint-disable-line react-hooks/exhaustive-deps
-  const faceSketch = useMemo(
+  // --- Dibujo técnico: la cara visible es la vista ---
+  const drafting = props.drafting;
+  const drafts = useMemo(
     () =>
-      draft && draft.target.kind === 'wallFace' && draft.target.wallId === wallDbId && draft.target.side === st.side && progress
-        ? progress.draftShapes()
-        : undefined,
-    [draft, wallDbId, st.side, progress],
+      drafting && faceView
+        ? drafting.faceGestures(faceView, (x, y) => editor.toCsl(x, y), () => 1 / editor.getState().viewport.scale)
+        : null,
+    [drafting, faceView, editor],
   );
+  const faceShapesOf = drafting?.faceShapes;
+  const draftAnnotations = useMemo(
+    () => (faceShapesOf && faceView ? faceShapesOf(faceView, 1 / st.viewport.scale) : undefined),
+    [faceShapesOf, faceView, st.viewport.scale],
+  );
+  const drafting2pt = !!drafting?.drawEnabled;
+
+  // --- Fotos de esta cara ---
+  const facePhotos = useMemo(
+    () =>
+      ws.filters.fotos && wallDbId
+        ? (props.photoMarkers ?? []).filter((m) => m.face && m.face.wallId === wallDbId && m.face.side === st.side)
+        : [],
+    [props.photoMarkers, ws.filters.fotos, wallDbId, st.side],
+  );
+  const photoPins = useMemo(
+    () =>
+      facePhotos.map((m) => ({ kind: 'pin' as const, at: { x: m.face!.x, y: m.face!.y }, label: m.label ?? 'Foto', color: palette.selection })),
+    [facePhotos, palette.selection], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const facePhotoTool = useMemo(() => {
+    if (!ws.activeTool) return false;
+    const b = findTool(categoriesFor(ws.workMode, 'elevation'), ws.activeTool.categoryId, ws.activeTool.toolId)?.tool.binding;
+    return b?.kind === 'facePhoto';
+  }, [ws.activeTool, ws.workMode]);
+
+  // El trazo en curso (cota, pincel, marca) va a la capa viva del lienzo: cambia
+  // con cada movimiento del dedo sin re-renderizar esta pantalla ni regrabar el muro.
+  const reviewCtl = review?.ctl;
+  const reviewDraftShapes = review?.draftShapes;
+  const progressCtl = progress?.ctl;
+  const progressDraftShapes = progress?.draftShapes;
+  const draftingCtl = drafting?.ctl;
+  const draftPreviewFor = drafting?.previewFor;
+  const liveSketch = useMemo((): SketchSource => {
+    let key: unknown[] = [];
+    let cached: SketchShape[] = [];
+    const onFace = (v: { kind: string; wallId?: string; side?: string } | undefined) =>
+      !!v && v.kind === 'wallFace' && v.wallId === wallDbId && v.side === st.side;
+    return {
+      subscribe: (cb) => {
+        const subs = [reviewCtl?.subscribe(() => cb()), progressCtl?.subscribe(() => cb()), draftingCtl?.subscribe(() => cb())];
+        return () => subs.forEach((u) => u?.());
+      },
+      get: () => {
+        const r = reviewCtl?.getState().draft;
+        const p = progressCtl?.getState().draft;
+        const d = draftingCtl?.getState();
+        const scale = editor.getState().viewport.scale;
+        const k = [r, p, d?.draft, d?.polygon, d?.props, scale];
+        if (k.length === key.length && k.every((x, i) => x === key[i])) return cached;
+        key = k;
+        const out: SketchShape[] = [];
+        if (r && onFace(r.view) && reviewDraftShapes) out.push(...reviewDraftShapes());
+        if (p && onFace(p.target) && progressDraftShapes) out.push(...progressDraftShapes());
+        if (draftPreviewFor && faceView) out.push(...draftPreviewFor(faceView, 1 / scale, 1));
+        cached = out;
+        return cached;
+      },
+    };
+  }, [reviewCtl, reviewDraftShapes, progressCtl, progressDraftShapes, draftingCtl, draftPreviewFor, faceView, wallDbId, st.side, editor]);
   useEffect(() => editor.setSize(width, height), [editor, width, height]);
   useEffect(() => editor.setSide(ws.side), [editor, ws.side]);
 
@@ -158,7 +225,7 @@ export function ElevationView(props: ElevationViewProps) {
     }
     const binding = findTool(categoriesFor(workspaceStore.getState().workMode, 'elevation'), activeTool.categoryId, activeTool.toolId)?.tool
       .binding;
-    if (binding?.kind === 'elevation') editor.setTool(binding.opening);
+    editor.setTool(binding?.kind === 'elevation' ? binding.opening : 'select');
   }, [editor, activeTool?.categoryId, activeTool?.toolId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- Escena ---
@@ -169,7 +236,6 @@ export function ElevationView(props: ElevationViewProps) {
     if (ws.filters.ventanas) s.add('window');
     return s;
   }, [ws.filters]);
-  const palette = useCanvasPalette();
   const severity = useMemo(() => editor.severityByOpening, [editor, st.elevation]);
   const scene = useMemo(
     () =>
@@ -190,11 +256,11 @@ export function ElevationView(props: ElevationViewProps) {
             palette,
             visibleTypes,
             progressLayers: painting && wallDbId && progress ? progress.faceLayers(wallDbId, st.side) : undefined,
-            markups: reviewing && review && faceView ? review.shapesFor(faceView) : undefined,
-            sketch: reviewing && review && faceView ? reviewFaceSketch : faceSketch,
+            markups: (reviewing || ws.coordination) && review && faceView ? review.shapesFor(faceView) : undefined,
+            annotations: photoPins.length ? [...(draftAnnotations ?? []), ...photoPins] : draftAnnotations,
           }
         : null,
-    [st, editor, width, height, severity, ws.grid, ws.filters.cotas, palette, visibleTypes, painting, wallDbId, progress, faceSketch, reviewing, review, faceView, reviewFaceSketch],
+    [st, editor, width, height, severity, ws.grid, ws.filters.cotas, palette, visibleTypes, painting, ws.coordination, wallDbId, progress, reviewing, review, faceView, draftAnnotations, photoPins],
   );
 
   // Solo Levantamiento edita vanos; Avance y Revisión miran el alzado.
@@ -214,6 +280,23 @@ export function ElevationView(props: ElevationViewProps) {
       }
       if (reviewing && reviewGestures?.tap(x, y)) return;
       if (painting && face?.tap()) return;
+      if (facePhotoTool && wallDbId) {
+        const p = editor.toCsl(x, y);
+        if (p.x < 0 || p.x > editor.wallLength || p.y < 0) return;
+        haptic.select();
+        onFacePhoto?.({ wallId: wallDbId, side: editor.getState().side, x: p.x, y: p.y });
+        return;
+      }
+      if (drafts?.tap(x, y)) return;
+      if (!w.activeTool && facePhotos.length && onOpenPhoto) {
+        const p = editor.toCsl(x, y);
+        const tol = TOUCH_TOL / editor.getState().viewport.scale;
+        const hit = facePhotos.find((m) => Math.hypot(m.face!.x - p.x, m.face!.y - p.y) < tol);
+        if (hit) {
+          onOpenPhoto(hit.id);
+          return;
+        }
+      }
       const props = w.activeTool?.props;
       const before = editor.getState().selectedId;
       void editor
@@ -225,7 +308,7 @@ export function ElevationView(props: ElevationViewProps) {
           if (after && after !== before) haptic.select();
         });
     },
-    [editor, painting, face, reviewing, reviewGestures],
+    [editor, painting, face, reviewing, reviewGestures, drafts, facePhotoTool, wallDbId, facePhotos, onFacePhoto, onOpenPhoto],
   );
   const onLongPress = useCallback(
     (x: number, y: number) => {
@@ -278,7 +361,19 @@ export function ElevationView(props: ElevationViewProps) {
             onCommit: (v) => commitSel(key, v),
           }))
         : [];
-  const actions: BpcAction[] = editable
+  const dPoly = drafting?.state.polygon;
+  const draftActions: BpcAction[] = drafting
+    ? [
+        ...(drafting.tool === 'polygon' && dPoly && dPoly.points.length >= 3
+          ? [{ icon: 'vector-polygon', label: 'Cerrar polígono', onPress: () => void drafting.ctl.closePolygon() }]
+          : []),
+        ...(drafting.tool === 'polygon' && dPoly ? [{ icon: 'undo-variant', label: 'Quitar punto', onPress: () => drafting.ctl.undoPolygonPoint() }] : []),
+        ...(drafting.state.selectedId && !drafting.tool ? [{ icon: 'draw', label: 'Dibujo', onPress: () => props.onOpenDraftSheet?.() }] : []),
+      ]
+    : [];
+  const actions: BpcAction[] = draftActions.length
+    ? draftActions
+    : editable
     ? [{ icon: 'tune-variant', label: sel ? 'Propiedades' : 'Detalles', onPress: () => setSheetOpen(true) }]
     : reviewing && review
       ? [
@@ -318,6 +413,7 @@ export function ElevationView(props: ElevationViewProps) {
       <Animated.View entering={ZoomIn.duration(180)} style={StyleSheet.absoluteFill}>
         {scene ? (
           <ElevationCanvas
+            liveSketch={liveSketch}
             scene={scene}
             onTap={onTap}
             onDoubleTap={() => editor.zoomToFit()}
@@ -327,11 +423,11 @@ export function ElevationView(props: ElevationViewProps) {
             onDragEnd={() => void editor.endDrag()}
             onDragCancel={() => editor.cancelDrag()}
             onViewDelta={(k, dx, dy) => editor.applyViewDelta(k, dx, dy)}
-            drawEnabled={(painting && !!progress?.drawEnabled) || (reviewing && !!review?.drawEnabled)}
-            onDrawBegin={(x, y) => (reviewing ? reviewGestures?.begin(x, y) : face?.begin(x, y))}
-            onDrawMove={(x, y) => (reviewing ? reviewGestures?.move(x, y) : face?.move(x, y))}
-            onDrawEnd={(x, y) => (reviewing ? reviewGestures?.end(x, y) : face?.end(x, y))}
-            onDrawCancel={() => (reviewing ? reviewGestures?.cancel() : face?.cancel())}
+            drawEnabled={(painting && !!progress?.drawEnabled) || (reviewing && !!review?.drawEnabled) || drafting2pt}
+            onDrawBegin={(x, y) => (reviewing ? reviewGestures?.begin(x, y) : drafting2pt ? drafts?.begin(x, y) : face?.begin(x, y))}
+            onDrawMove={(x, y) => (reviewing ? reviewGestures?.move(x, y) : drafting2pt ? drafts?.move(x, y) : face?.move(x, y))}
+            onDrawEnd={(x, y) => (reviewing ? reviewGestures?.end(x, y) : drafting2pt ? drafts?.end(x, y) : face?.end(x, y))}
+            onDrawCancel={() => (reviewing ? reviewGestures?.cancel() : drafting2pt ? drafts?.cancel() : face?.cancel())}
           />
         ) : (
           <View style={[StyleSheet.absoluteFill, { backgroundColor: palette.background }]} />

@@ -18,7 +18,15 @@ export type SketchShape =
   | { readonly kind: 'rect'; readonly a: Point2D; readonly b: Point2D; readonly color: string; readonly fill?: boolean; readonly opacity?: number }
   | { readonly kind: 'arrow'; readonly a: Point2D; readonly b: Point2D; readonly color: string }
   | { readonly kind: 'cloud'; readonly a: Point2D; readonly b: Point2D; readonly color: string }
-  | { readonly kind: 'text'; readonly at: Point2D; readonly text: string; readonly color: string }
+  | { readonly kind: 'text'; readonly at: Point2D; readonly text: string; readonly color: string; readonly size?: number }
+  /** Segmentos sueltos de ancho en px; `dash` = línea de trazos (elementos ocultos, como vigas en planta). */
+  | { readonly kind: 'segs'; readonly segments: readonly (readonly [Point2D, Point2D])[]; readonly color: string; readonly widthPx: number; readonly dash?: boolean }
+  /** Rótulo de varias líneas con fondo claro (cotas, coordenadas, etiquetas). */
+  | { readonly kind: 'label'; readonly at: Point2D; readonly lines: readonly string[]; readonly color: string; readonly size?: number; readonly align?: 'left' | 'center' }
+  /** Relleno translúcido de un polígono. */
+  | { readonly kind: 'fill'; readonly points: readonly Point2D[]; readonly color: string; readonly opacity: number }
+  /** Contorno de un círculo de radio en metros (tamaño del pincel bajo el dedo). */
+  | { readonly kind: 'ring'; readonly at: Point2D; readonly radius: number; readonly color: string }
   /** Número de comentario (círculo con el número). */
   | { readonly kind: 'pin'; readonly at: Point2D; readonly label: string; readonly color: string; readonly selected?: boolean };
 
@@ -29,6 +37,25 @@ export interface SketchSource {
 }
 
 export const EMPTY_SKETCH: SketchSource = { subscribe: () => () => undefined, get: () => [] };
+
+/** Une varias capas vivas en una (el lienzo tiene una sola). Conserva la identidad mientras nada cambie. */
+export function mergeSketches(...sources: readonly SketchSource[]): SketchSource {
+  let parts: (readonly SketchShape[])[] = [];
+  let cached: SketchShape[] = [];
+  return {
+    subscribe: (cb) => {
+      const subs = sources.map((s) => s.subscribe(cb));
+      return () => subs.forEach((u) => u());
+    },
+    get: () => {
+      const next = sources.map((s) => s.get());
+      if (next.length === parts.length && next.every((p, i) => p === parts[i])) return cached;
+      parts = next;
+      cached = next.flat();
+      return cached;
+    },
+  };
+}
 
 /** #RRGGBB + opacidad → rgba(). */
 export function withAlpha(hex: string, alpha: number): string {
@@ -101,7 +128,55 @@ export function drawSketch(r: ICanvasRenderer, shapes: readonly SketchShape[], t
       case 'text': {
         const p = toScreen(s.at);
         r.setFillStyle(s.color);
-        r.drawText(s.text, p.x, p.y, 14, 'left');
+        r.drawText(s.text, p.x, p.y, s.size ?? 14, 'left');
+        break;
+      }
+      case 'segs': {
+        r.setStrokeStyle(s.color);
+        r.setLineWidth(s.widthPx);
+        for (const [a0, b0] of s.segments) {
+          const a = toScreen(a0);
+          const b = toScreen(b0);
+          if (!s.dash) {
+            r.drawLine(a.x, a.y, b.x, b.y);
+            continue;
+          }
+          // Trazos de 8 px con huecos de 5 px, en pantalla (no cambian con el zoom).
+          const len = Math.hypot(b.x - a.x, b.y - a.y);
+          const ux = (b.x - a.x) / (len || 1);
+          const uy = (b.y - a.y) / (len || 1);
+          for (let t = 0; t < len; t += 13) {
+            const e = Math.min(len, t + 8);
+            r.drawLine(a.x + ux * t, a.y + uy * t, a.x + ux * e, a.y + uy * e);
+          }
+        }
+        break;
+      }
+      case 'label': {
+        const p = toScreen(s.at);
+        const size = s.size ?? 11;
+        const w = Math.max(...s.lines.map((l) => l.length)) * size * 0.56 + 8;
+        const h = s.lines.length * (size + 3) + 4;
+        const x0 = s.align === 'left' ? p.x : p.x - w / 2;
+        r.setFillStyle('rgba(255, 255, 255, 0.85)');
+        r.fillRect(x0, p.y - h / 2, w, h);
+        r.setFillStyle(s.color);
+        s.lines.forEach((line, i) => {
+          const y = p.y - h / 2 + 2 + (i + 1) * (size + 3) - 3;
+          r.drawText(line, s.align === 'left' ? x0 + 4 : p.x, y, size, s.align === 'left' ? 'left' : 'center');
+        });
+        break;
+      }
+      case 'fill': {
+        r.setFillStyle(withAlpha(s.color, s.opacity));
+        r.fillPolygon(s.points.map(toScreen));
+        break;
+      }
+      case 'ring': {
+        const p = toScreen(s.at);
+        r.setStrokeStyle(withAlpha(s.color, 0.9));
+        r.setLineWidth(1.5);
+        r.strokeCircle(p.x, p.y, Math.max(3, s.radius * scale));
         break;
       }
       case 'pin': {

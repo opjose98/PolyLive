@@ -117,6 +117,8 @@ export const ConfigDrawer = React.memo(function ConfigDrawer({ top, info, zoomPe
         <Accordion title="Snap" icon="magnet">
           <View style={styles.tags}>
             <TagToggle label="Nodo" on={s.snap.node} onPress={() => ws().toggleSnap('node')} />
+            <TagToggle label="Vértice" on={s.snap.vertex} onPress={() => ws().toggleSnap('vertex')} />
+            <TagToggle label="Punto medio" on={s.snap.midpoint} onPress={() => ws().toggleSnap('midpoint')} />
             <TagToggle label="Ángulo" on={s.snap.angle} onPress={() => ws().toggleSnap('angle')} />
           </View>
         </Accordion>
@@ -133,6 +135,7 @@ export const ConfigDrawer = React.memo(function ConfigDrawer({ top, info, zoomPe
           <View style={styles.tags}>
             <TagToggle label="Líneas" on={s.grid.lines} onPress={() => ws().toggleGrid('lines')} />
             <TagToggle label="Puntos" on={s.grid.dots} onPress={() => ws().toggleGrid('dots')} />
+            <TagToggle label="Rotación" on={s.grid.rotation} onPress={() => ws().toggleGrid('rotation')} />
           </View>
         </Accordion>
 

@@ -3,7 +3,7 @@
 // =============================================================================
 
 import React from 'react';
-import { Text, TextInput, View } from 'react-native';
+import { Platform, Text, TextInput, View } from 'react-native';
 import { radius, spacing } from '../../design/tokens';
 import { type } from '../../design/typography';
 import { themedStyles, useTheme } from '../../design/theme';
@@ -39,7 +39,7 @@ export function Field({
           style={styles.input}
           value={value}
           onChangeText={onChange}
-          keyboardType={numeric ? 'numbers-and-punctuation' : 'default'}
+          keyboardType={numeric ? (Platform.OS === 'android' ? 'numeric' : 'numbers-and-punctuation') : 'default'}
           placeholder={placeholder}
           placeholderTextColor={colors.textDisabled}
           selectTextOnFocus

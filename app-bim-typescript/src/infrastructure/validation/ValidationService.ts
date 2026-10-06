@@ -12,12 +12,10 @@
 // =============================================================================
 //
 // NOTA SOBRE ValidationWarning.type: el union type `ValidationWarningType`
-// (domain/geometry/types.ts) fue diseñado para warnings de triangulación CDT
+// (domain/geometry/types.ts) nació para warnings geométricos
 // ('degenerate_triangle', 'self_intersecting_polygon', etc.) — no existe un
 // tipo dedicado para "muro demasiado delgado" o "puerta se sale del muro".
-// En vez de ampliar ese union (usado también por CDT.ts, con 12 casos de
-// prueba geométricos ya verificados — un cambio ahí es fuera de alcance de
-// este UseCase), esta implementación reutiliza 'degenerate_triangle' como
+// Esta implementación reutiliza 'degenerate_triangle' como
 // el tipo más cercano para "objeto geométricamente inválido" y deja el
 // detalle real en `message`, que es lo que la UI muestra.
 // =============================================================================
@@ -132,17 +130,9 @@ export class ValidationService implements IValidationService {
     return ok();
   }
 
-  validateRoom(room: any, triangulation?: any): ValidationResult {
+  validateRoom(room: any): ValidationResult {
     if (!room?.geometry || room.geometry.length < 3) {
       return invalid('El Recinto necesita al menos 3 vértices para cerrarse.');
-    }
-    if (triangulation) {
-      // Delegar directamente en las warnings que ya calculó CDT — es la
-      // fuente de verdad geométrica (degenerate_triangle, self_intersecting_polygon, etc.)
-      return {
-        valid: triangulation.valid !== false,
-        warnings: triangulation.warnings ?? [],
-      };
     }
     return ok();
   }

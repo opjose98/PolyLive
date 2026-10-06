@@ -84,12 +84,16 @@ export interface PlanScene {
   } | null;
   /** Cuadrícula de coordenadas reales (líneas de E y N redondos). */
   readonly coordGrid?: readonly { readonly from: Point2D; readonly to: Point2D; readonly label: string }[] | null;
+  /** Vanos genéricos (huecos sin puerta ni ventana) que cortan los muros. */
+  readonly genericOpenings?: readonly { readonly wallId: string; readonly xOffset: number; readonly width: number }[];
   /** Avance de obra (M3): celdas pintadas por actividad (en metros del modelo). */
   readonly progressLayers?: readonly {
     readonly color: string;
     readonly opacity: number;
     readonly runs: readonly { x: number; y: number; w: number; h: number }[];
   }[];
+  /** Dibujo técnico (F6b): cotas, textos, líneas, vigas… */
+  readonly annotations?: readonly SketchShape[];
   /** Marcas de revisión (M4) y otros trazos guardados, encima de todo. */
   readonly markups?: readonly SketchShape[];
   /** Suelos (F6a): contorno neto de su recinto, con trama de piso. */
@@ -243,6 +247,7 @@ export function drawPlan(r: ICanvasRenderer, scene: PlanScene): void {
   drawWalls(ctx);
   drawColumns(ctx);
   drawVanos(ctx);
+  if (scene.genericOpenings?.length) drawGenericOpenings(ctx);
   if (scene.showNodes) drawNodes(ctx);
   drawWallDraft(ctx);
   if (scene.photoMarkers?.length) drawPhotoMarkers(ctx);
@@ -253,6 +258,7 @@ export function drawPlan(r: ICanvasRenderer, scene: PlanScene): void {
   drawSelection(ctx);
   if (scene.snapIndicator) drawSnapIndicator(r, ctx.toScreen(scene.snapIndicator), pal);
   if (scene.showLabels) drawLabels(ctx);
+  if (scene.annotations?.length) drawSketch(r, scene.annotations, ctx.toScreen, ctx.scale);
   if (scene.markups?.length) drawSketch(r, scene.markups, ctx.toScreen, ctx.scale);
 }
 
@@ -383,10 +389,37 @@ function drawFloors({ r, scene, pal, toScreen }: Ctx): void {
 /** Intervalos [inicio, fin] (m, a lo largo del eje) que los vanos cortan en un muro. */
 function gapsOf(ctx: Ctx, wall: Wall): [number, number][] {
   const len = wall.length as number;
-  return (ctx.vanosByWall.get(wall.id as string) ?? []).map((v) => {
+  const gaps = (ctx.vanosByWall.get(wall.id as string) ?? []).map((v): [number, number] => {
     const a = Math.max(0, v.offsetAlongWall as number);
     return [a, Math.min(len, a + (v.width as number))];
   });
+  for (const o of ctx.scene.genericOpenings ?? []) {
+    if (o.wallId === (wall.id as string)) gaps.push([Math.max(0, o.xOffset), Math.min(len, o.xOffset + o.width)]);
+  }
+  return gaps;
+}
+
+/** Vano genérico: el hueco y el dintel en trazos finos (lo que queda por encima del corte). */
+function drawGenericOpenings(ctx: Ctx): void {
+  const { r, pal, toScreen } = ctx;
+  r.setStrokeStyle(pal.ink);
+  r.setLineWidth(STROKE.thin * pal.lineScale);
+  for (const o of ctx.scene.genericOpenings ?? []) {
+    const wall = ctx.wallsById.get(o.wallId);
+    if (!wall) continue;
+    const half = (wall.thickness as number) / 2;
+    for (const side of [half, -half]) {
+      const a = toScreen(wallPoint(wall, o.xOffset, side));
+      const b = toScreen(wallPoint(wall, o.xOffset + o.width, side));
+      const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+      const ux = (b.x - a.x) / len;
+      const uy = (b.y - a.y) / len;
+      for (let t = 0; t < len; t += 8) {
+        const e = Math.min(len, t + 4);
+        r.drawLine(a.x + ux * t, a.y + uy * t, a.x + ux * e, a.y + uy * e);
+      }
+    }
+  }
 }
 
 /** Punto a distancia `along` del inicio del muro y `side` (m) hacia su izquierda. */

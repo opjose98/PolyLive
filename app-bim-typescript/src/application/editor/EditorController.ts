@@ -41,6 +41,7 @@ import { Window } from '../../domain/objects/window';
 import { Floor, floorZoneId } from '../../domain/objects/floor';
 import { distanceToSegment, isPointInPolygon } from '../../domain/geometry/polygon-utils';
 import { generateId } from '../../domain/objects/base';
+import { ElevationSnapshotCommand } from '../commands/ElevationSnapshotCommand';
 import { interiorPoint, netGeometry } from '../../domain/objects/zone';
 import { reconcileZones } from '../topology/reconcileZones';
 import type { ZoneEdit } from '../../infrastructure/sqlite/ZoneStore';
@@ -70,6 +71,7 @@ import { SelectionService, Handle, touchToleranceMeters } from '../canvas/Select
 import { JointWall, WallEndsChange, endsAt, planEndMove, planWallTranslate } from '../../domain/topology/joints';
 import type { AppServices } from '../AppServices';
 import type { AuditPhotoId } from '../../domain/objects/base';
+import type { PhotoFaceAnchor } from '../../domain/objects/audit-photo';
 
 /** Marcador de foto listo para dibujar: lo que el renderer necesita y nada más. */
 export interface PhotoMarkerView {
@@ -77,13 +79,15 @@ export interface PhotoMarkerView {
   readonly position: Point2D;
   readonly direction?: number;
   readonly label?: string;
+  /** Si se tomó en el alzado: la cara y el punto. */
+  readonly face?: PhotoFaceAnchor;
 }
 
 // ---------------------------------------------------------------------------
 // Herramientas y estado
 // ---------------------------------------------------------------------------
 
-export type EditorTool = 'select' | 'wall' | 'door' | 'window' | 'column' | 'floor' | 'measure' | 'photo';
+export type EditorTool = 'select' | 'wall' | 'door' | 'window' | 'column' | 'floor' | 'opening' | 'measure' | 'photo';
 
 /** Valores por defecto de los objetos que el editor crea. Editables en Ajustes. */
 export interface EditorDefaults {
@@ -96,6 +100,8 @@ export interface EditorDefaults {
   columnDiameter: Meters;
   columnHeight: Meters;
   floorThickness: Meters;
+  /** Ancho de un vano genérico (hueco sin puerta ni ventana) creado en planta. */
+  openingWidth: Meters;
 }
 
 export const DEFAULT_EDITOR_DEFAULTS: EditorDefaults = {
@@ -108,6 +114,7 @@ export const DEFAULT_EDITOR_DEFAULTS: EditorDefaults = {
   columnDiameter: meters(0.4),
   columnHeight: meters(2.8),
   floorThickness: meters(0.1),
+  openingWidth: meters(0.8),
 };
 
 /** Formas de creación (nivel 3 del FAB): cómo se dibuja cada herramienta. */
@@ -209,9 +216,14 @@ export interface EditorState {
   readonly pendingPhotoPoint: Point2D | null;
   /** Marcadores de fotos del Recinto, para pintarlos en planta. */
   readonly photoMarkers: readonly PhotoMarkerView[];
+  /** Vanos genéricos (huecos del alzado sin puerta ni ventana), para cortar los muros en planta. */
+  readonly genericOpenings: readonly { readonly wallId: string; readonly xOffset: number; readonly width: number }[];
   readonly transform: CanvasTransform;
   readonly snapEnabled: boolean;
   readonly nodeSnapEnabled: boolean;
+  /** Snap a vértices de recinto (esquinas de la cara interior) y a puntos medios de muro. */
+  readonly vertexSnapEnabled: boolean;
+  readonly midpointSnapEnabled: boolean;
   readonly canUndo: boolean;
   readonly canRedo: boolean;
   readonly busy: boolean;
@@ -331,9 +343,12 @@ export class EditorController {
       measureTargetId: null,
       pendingPhotoPoint: null,
       photoMarkers: [],
+      genericOpenings: [],
       transform: this.canvas.getTransform(),
       snapEnabled: true,
       nodeSnapEnabled: true,
+      vertexSnapEnabled: false,
+      midpointSnapEnabled: false,
       canUndo: false,
       canRedo: false,
       busy: false,
@@ -643,7 +658,9 @@ export class EditorController {
       objects = await this.services.store.listObjects(this.roomId);
     }
     await this.reloadPhotoMarkers();
+    const genericOpenings = await this.loadGenericOpenings();
     this.patch({
+      genericOpenings,
       objects,
       rooms,
       canUndo: this.services.commandStack.canUndo(),
@@ -765,6 +782,37 @@ export class EditorController {
     this.patch({ snapEnabled: enabled });
   }
 
+  setExtraSnaps(snaps: { vertex: boolean; midpoint: boolean }): void {
+    this.patch({ vertexSnapEnabled: snaps.vertex, midpointSnapEnabled: snaps.midpoint });
+  }
+
+  /**
+   * Snaps de vértice y punto medio: el candidato más cercano dentro de `tol`.
+   * Vértices = esquinas de los recintos por la cara interior (lo que se acota
+   * en obra) y por el eje; puntos medios = centro del eje de cada muro.
+   */
+  private extraSnap(world: Point2D, tol: number, walls: readonly Wall[]): Point2D | null {
+    let best: Point2D | null = null;
+    let bestD = tol;
+    const consider = (p: Point2D) => {
+      const d = Math.hypot(p.x - world.x, p.y - world.y);
+      if (d < bestD) {
+        bestD = d;
+        best = p;
+      }
+    };
+    if (this.state.vertexSnapEnabled) {
+      for (const r of this.state.rooms) {
+        for (const p of r.netPolygon ?? []) consider(p);
+        for (const p of r.polygon) consider(p);
+      }
+    }
+    if (this.state.midpointSnapEnabled) {
+      for (const w of walls) consider({ x: (w.startPoint.x + w.endPoint.x) / 2, y: (w.startPoint.y + w.endPoint.y) / 2 });
+    }
+    return best;
+  }
+
   setNodeSnapEnabled(enabled: boolean): void {
     this.patch({ nodeSnapEnabled: enabled });
   }
@@ -778,6 +826,23 @@ export class EditorController {
    * long-press abre propiedades sin obligar a cambiar a Seleccionar). Devuelve
    * el objeto, o `null` si no había nada y la selección no cambió.
    */
+  /** Objeto bajo el dedo, SIN seleccionarlo (Etiqueta, consultas). */
+  objectAt(screenX: number, screenY: number, touchTolerancePx: number): RevitObjectBase | null {
+    const world = this.screenToWorld(screenX, screenY);
+    const tol = touchToleranceMeters(touchTolerancePx, this.state.transform.scale);
+    return this.selection.hitTest({ worldPoint: world, objects: this.pickable, thresholdMeters: tol }) ?? null;
+  }
+
+  /** Centro de un objeto en planta (muro: punto medio; vano: su centro; columna: su posición). */
+  objectCenter(id: string): Point2D | null {
+    const o = this.state.objects.find((x) => (x.id as string) === id);
+    if (o instanceof Wall) return { x: (o.startPoint.x + o.endPoint.x) / 2, y: (o.startPoint.y + o.endPoint.y) / 2 };
+    if (o instanceof Column) return o.position;
+    if (o instanceof Door || o instanceof Window) return this.vanoWorldCenter(o);
+    const zone = this.state.rooms.find((r) => r.id === id);
+    return zone ? zone.centroid : null;
+  }
+
   selectAt(screenX: number, screenY: number, touchTolerancePx: number): RevitObjectBase | null {
     const world = this.screenToWorld(screenX, screenY);
     const tol = touchToleranceMeters(touchTolerancePx, this.state.transform.scale);
@@ -830,8 +895,11 @@ export class EditorController {
   snapToNode(screenX: number, screenY: number, touchTolerancePx: number): { point: Point2D; snapped: boolean } {
     const world = this.screenToWorld(screenX, screenY);
     const tol = touchToleranceMeters(touchTolerancePx, this.state.transform.scale);
-    const node = this.selection.findNearestNode({ worldPoint: world, walls: this.walls, thresholdMeters: tol });
-    return node ? { point: node, snapped: true } : { point: world, snapped: false };
+    const node = this.state.nodeSnapEnabled
+      ? this.selection.findNearestNode({ worldPoint: world, walls: this.walls, thresholdMeters: tol })
+      : null;
+    const hit = node ?? this.extraSnap(world, tol as number, this.walls);
+    return hit ? { point: hit, snapped: true } : { point: world, snapped: false };
   }
 
   /**
@@ -946,6 +1014,8 @@ export class EditorController {
         return this.addColumn(world);
       case 'floor':
         return this.addFloor(screenX, screenY);
+      case 'opening':
+        return this.addGenericOpening(world, tol);
       case 'measure':
         return this.pickMeasureTarget(world, tol);
       case 'photo':
@@ -1107,6 +1177,13 @@ export class EditorController {
       }
     }
     if (!snappedToNode) {
+      const extra = this.extraSnap(world, tol as number, others);
+      if (extra) {
+        point = extra;
+        snappedToNode = true;
+      }
+    }
+    if (!snappedToNode) {
       point = this.snapEndpoint(world, fixed);
       // Llevar el extremo hasta el eje de otro muro lo deja en T (une y divide recintos).
       const onAxis = this.state.nodeSnapEnabled ? this.snapToWallAxis(world, point, fixed, tol, others) : null;
@@ -1260,6 +1337,8 @@ export class EditorController {
       const node = this.selection.findNearestNode({ worldPoint: world, walls: this.walls, thresholdMeters: tol });
       if (node) return { point: node, snappedToNode: true };
     }
+    const extra = this.extraSnap(world, tol as number, this.walls);
+    if (extra) return { point: extra, snappedToNode: true };
     const angled = from !== undefined && this.state.snapEnabled ? this.snap.snapPoint(world, from) : world;
     if (this.state.nodeSnapEnabled) {
       const onAxis = this.snapToWallAxis(world, angled, from, tol, this.walls);
@@ -1437,6 +1516,48 @@ export class EditorController {
       }
     } catch (err) {
       this.fail(err, 'No se pudo crear la columna.');
+    } finally {
+      this.patch({ busy: false });
+    }
+  }
+
+  // --- Vano genérico en planta (F6b) -------------------------------------
+  //
+  // Un hueco sin puerta ni ventana (paso, ducto, hueco de obra). Vive en el
+  // alzado del muro (WallElevation), como los que se crean allí; aquí solo se
+  // elige el muro y el punto. Es un paso de la historia compartida.
+
+  private async loadGenericOpenings(): Promise<EditorState['genericOpenings']> {
+    try {
+      const elevations = await this.services.elevations.listElevations(this.roomId);
+      return elevations.flatMap((e) =>
+        e.openings.filter((o) => o.type === 'opening').map((o) => ({ wallId: e.wallId, xOffset: o.xOffset, width: o.width })),
+      );
+    } catch {
+      return [];
+    }
+  }
+
+  private async addGenericOpening(world: Point2D, tol: Meters): Promise<void> {
+    const host = this.nearestWall(world, tol);
+    if (!host) {
+      this.notify('info', 'Toca sobre un muro para abrir un vano.');
+      return;
+    }
+    const width = this.defaults.openingWidth;
+    const xOffset = this.clampVanoOffset(this.projectOntoWall(world, host), width, host) as number;
+    this.patch({ busy: true });
+    try {
+      const svc = this.services.elevations;
+      const before = await svc.getElevation(host);
+      const r = await svc.addOpening(before, host, { type: 'opening', xOffset, width: width as number });
+      await this.services.commandStack.execute(
+        new ElevationSnapshotCommand((e) => svc.saveElevation(e), { elevation: before, vanos: new Map() }, { elevation: r.elevation, vanos: new Map() }),
+      );
+      await this.reload();
+      if (r.validation.severity === 'warning' && r.validation.message) this.notify('info', r.validation.message);
+    } catch (err) {
+      this.fail(err, 'No se pudo abrir el vano.');
     } finally {
       this.patch({ busy: false });
     }
@@ -1912,6 +2033,7 @@ export class EditorController {
               position: marker.position,
               direction: marker.direction,
               label: photo.metadata.bimCode,
+              face: marker.face,
             },
           ];
         }),
@@ -1949,6 +2071,30 @@ export class EditorController {
       this.notify('success', 'Foto anclada a la planta.');
     } catch (err) {
       this.fail(err, 'No se pudo anclar la foto a la planta.');
+    }
+  }
+
+  /**
+   * Ancla una foto a la cara de un muro (alzado). En planta queda sobre el eje
+   * del muro, a la misma distancia del inicio, para encontrarla desde arriba.
+   */
+  async attachFacePhoto(photoId: AuditPhotoId, face: PhotoFaceAnchor): Promise<void> {
+    try {
+      const wall = this.walls.find((w) => (w.id as string) === face.wallId);
+      const photo = await this.services.store.readAuditPhoto(photoId);
+      if (!photo || !wall) return;
+      const len = (wall.length as number) || 1;
+      const t = Math.max(0, Math.min(1, face.x / len));
+      const position = {
+        x: wall.startPoint.x + (wall.endPoint.x - wall.startPoint.x) * t,
+        y: wall.startPoint.y + (wall.endPoint.y - wall.startPoint.y) * t,
+      };
+      photo.patchMetadata({ marker: { position, face, visible: true }, linkedObjectId: face.wallId });
+      await this.services.store.updateAuditPhoto(photoId, { metadata_json: photo.metadata_json });
+      await this.reload();
+      this.notify('success', `Foto anclada al lado ${face.side} del muro.`);
+    } catch (err) {
+      this.fail(err, 'No se pudo anclar la foto al alzado.');
     }
   }
 

@@ -24,6 +24,16 @@ export interface PhotoMarker {
   readonly direction?: number;
   /** Un marcador oculto sigue existiendo pero no se dibuja en planta. */
   readonly visible?: boolean;
+  /** Foto tomada en el alzado: cara del muro y punto (x desde el inicio del muro, y altura). */
+  readonly face?: PhotoFaceAnchor;
+}
+
+/** Ancla de una foto a la cara de un muro (alzado). */
+export interface PhotoFaceAnchor {
+  readonly wallId: string;
+  readonly side: 'A' | 'B';
+  readonly x: number;
+  readonly y: number;
 }
 
 /** Coordenadas GPS del punto de captura, si se pudieron obtener. */

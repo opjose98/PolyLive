@@ -48,11 +48,9 @@ describe('catálogo', () => {
     expect(icons.filter((i) => !(i in glyphs))).toEqual([]);
   });
 
-  it('las herramientas que el motor ya crea están habilitadas; el resto no', () => {
-    const enabled = CATEGORIES_PLAN.flatMap((c) => c.tools).filter(isToolEnabled).map((t) => t.id);
-    expect(enabled).toEqual(expect.arrayContaining(['muro', 'columna', 'puerta', 'ventana', 'foto', 'medicion']));
-    const cota = CATEGORIES_PLAN[0].tools.find((t) => t.id === 'cota')!;
-    expect(isToolEnabled(cota)).toBe(false);
+  it('todas las herramientas de planta y alzado están habilitadas (F6b completo)', () => {
+    const disabled = [...CATEGORIES_PLAN, ...CATEGORIES_ELEVATION].flatMap((c) => c.tools).filter((t) => !isToolEnabled(t));
+    expect(disabled.map((t) => t.id)).toEqual([]);
   });
 
   it('los valores por defecto de cada herramienta están dentro de su rango', () => {
@@ -291,9 +289,9 @@ describe('workspaceStore', () => {
     expect(st.getState().activeTool?.methodId).toBeUndefined();
   });
 
-  it('una herramienta deshabilitada no se activa', () => {
+  it('una herramienta inexistente no se activa', () => {
     const st = createWorkspaceStore();
-    expect(st.getState().activateTool('acotado', 'cota')).toEqual({ ok: false, reason: 'disabled' });
+    expect(st.getState().activateTool('acotado', 'no-existe').ok).toBe(false);
     expect(st.getState().activeTool).toBeNull();
   });
 

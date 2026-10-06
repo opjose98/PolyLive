@@ -32,6 +32,7 @@ import {
   pointsToCsv,
   toKml,
   PointOrder,
+  clipToConvex,
 } from '../../../application/geo/surveyTools';
 import { categoriesFor, findTool } from '../../../application/workspace/catalog';
 import type { AppServices } from '../../../application/AppServices';
@@ -41,6 +42,7 @@ import { toast, confirm } from '../../primitives';
 import { haptic } from '../../design/haptics';
 import { pickTextFile } from '../../../native/files/pickTextFile';
 import { saveTextToUserFolder } from '../../../native/export/saveToUserFolder';
+import { folderHint } from '../folderHint';
 import { uniqueVertices, type Topography } from './useTopography';
 
 export type TopoToolId = 'inverso' | 'area' | 'replanteo';
@@ -209,7 +211,12 @@ export function useTopoTools({ services, projectId, spaceId, projectName, editor
         min: { x: Math.min(...xs), y: Math.min(...ys) },
         max: { x: Math.max(...xs), y: Math.max(...ys) },
       });
-      return lines.map((l) => ({ from: l.from, to: l.to, label: `${l.kind} ${Math.round(l.value).toLocaleString('es-CO')}` }));
+      const out: { from: Point2D; to: Point2D; label: string }[] = [];
+      for (const l of lines) {
+        const c = clipToConvex(l.from, l.to, corners);
+        if (c) out.push({ from: c[0], to: c[1], label: `${l.kind} ${Math.round(l.value).toLocaleString('es-CO')}` });
+      }
+      return out;
     },
     // La cámara cambia la ventana visible.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -266,6 +273,7 @@ export function useTopoTools({ services, projectId, spaceId, projectName, editor
   }, [topo, editor, gridOf]);
 
   const save = useCallback(async (filename: string, content: string, label: string) => {
+    folderHint();
     const r = await saveTextToUserFolder(filename, content);
     if (r.ok) toast(`${label} guardado en ${r.folderLabel}`, { kind: 'success' });
     else if (r.reason !== 'cancelled') toast(`No se pudo guardar el ${label}`, { kind: 'error' });
@@ -315,3 +323,4 @@ export function useTopoTools({ services, projectId, spaceId, projectName, editor
 }
 
 export type TopoTools = ReturnType<typeof useTopoTools>;
+

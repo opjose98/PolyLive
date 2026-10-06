@@ -17,12 +17,13 @@
 
 import type { EditorTool } from '../editor/EditorController';
 import type { OpeningType } from '../../domain/objects/wall-elevation';
+import type { DraftKind } from '../../domain/drafting/drafting';
 
 // ---------------------------------------------------------------------------
 // Propiedades editables con la píldora de la BPC
 // ---------------------------------------------------------------------------
 
-export type PropKey = 'thickness' | 'side' | 'depth' | 'fontSize' | 'width' | 'height' | 'sill' | 'brush';
+export type PropKey = 'thickness' | 'side' | 'depth' | 'fontSize' | 'width' | 'height' | 'sill' | 'brush' | 'base' | 'offset';
 
 export interface PropDef {
   readonly label: string;
@@ -41,6 +42,8 @@ export const PROPS: Readonly<Record<PropKey, PropDef>> = {
   height: { label: 'Alto', unit: 'cm', min: 30, max: 400, step: 5 },
   sill: { label: 'Antepecho', unit: 'cm', min: 0, max: 300, step: 5 },
   brush: { label: 'Ancho', unit: 'cm', min: 5, max: 200, step: 5 },
+  base: { label: 'Base', unit: 'cm', min: 5, max: 100, step: 5 },
+  offset: { label: 'Separación', unit: 'cm', min: 10, max: 200, step: 5 },
 };
 
 export type PropValues = Partial<Record<PropKey, number>>;
@@ -59,7 +62,11 @@ export type ToolBinding =
   /** Herramientas del modo Avance (M3): pintan sobre suelos y caras de muro. */
   | { readonly kind: 'progress'; readonly tool: 'brush' | 'eraser' | 'fill' | 'rect' }
   /** Herramientas del modo Revisión (M4): marcas sobre el plano o el alzado. */
-  | { readonly kind: 'review'; readonly tool: ReviewToolId };
+  | { readonly kind: 'review'; readonly tool: ReviewToolId }
+  /** Dibujo técnico (F6b): cotas, textos, líneas, vigas… en planta y alzado. */
+  | { readonly kind: 'draft'; readonly tool: DraftKind }
+  /** Foto anclada a la cara visible del muro (alzado). */
+  | { readonly kind: 'facePhoto' };
 
 export type ReviewToolId = 'freehand' | 'arrow' | 'rect' | 'text' | 'cloud';
 
@@ -106,10 +113,10 @@ const ACOTADO_PLANTA: CategoryDef = {
   label: 'Acotado',
   icon: 'ruler',
   tools: [
-    { id: 'cota', label: 'Cota', icon: 'arrow-expand-horizontal' },
+    { id: 'cota', label: 'Cota', icon: 'arrow-expand-horizontal', props: { offset: 40 }, binding: { kind: 'draft', tool: 'dimension' } },
     { id: 'medicion', label: 'Medición láser', icon: 'laser-pointer', binding: { kind: 'plan', tool: 'measure' } },
-    { id: 'texto', label: 'Texto', icon: 'format-text', props: { fontSize: 12 } },
-    { id: 'etiqueta', label: 'Etiqueta', icon: 'tag-outline' },
+    { id: 'texto', label: 'Texto', icon: 'format-text', props: { fontSize: 12 }, binding: { kind: 'draft', tool: 'text' } },
+    { id: 'etiqueta', label: 'Etiqueta', icon: 'tag-outline', binding: { kind: 'draft', tool: 'tag' } },
   ],
 };
 
@@ -118,9 +125,9 @@ const DIBUJO: CategoryDef = {
   label: 'Dibujo',
   icon: 'pencil-outline',
   tools: [
-    { id: 'coordenada', label: 'Coordenada', icon: 'map-marker-outline' },
-    { id: 'linea', label: 'Línea', icon: 'vector-line' },
-    { id: 'poligono', label: 'Polígono', icon: 'vector-polygon' },
+    { id: 'coordenada', label: 'Coordenada', icon: 'map-marker-outline', binding: { kind: 'draft', tool: 'coordinate' } },
+    { id: 'linea', label: 'Línea', icon: 'vector-line', binding: { kind: 'draft', tool: 'line' } },
+    { id: 'poligono', label: 'Polígono', icon: 'vector-polygon', binding: { kind: 'draft', tool: 'polygon' } },
   ],
 };
 
@@ -131,14 +138,10 @@ const AUDITORIA: CategoryDef = {
   tools: [{ id: 'foto', label: 'Foto', icon: 'camera-outline', binding: { kind: 'plan', tool: 'photo' } }],
 };
 
-/**
- * En alzado la foto todavía no se ancla a la cara del muro: la herramienta se
- * ve pero queda deshabilitada (antes salía habilitada con el binding de
- * planta y no hacía nada).
- */
+/** En alzado la foto se ancla a la cara visible del muro, en el punto tocado. */
 const AUDITORIA_ELEVATION: CategoryDef = {
   ...AUDITORIA,
-  tools: [{ id: 'foto', label: 'Foto', icon: 'camera-outline' }],
+  tools: [{ id: 'foto', label: 'Foto', icon: 'camera-outline', binding: { kind: 'facePhoto' } }],
 };
 
 /**
@@ -158,6 +161,7 @@ export const CATEGORIES_PLAN: readonly CategoryDef[] = [
       { id: 'puerta', label: 'Puerta', icon: 'door', props: { width: 90 }, binding: { kind: 'plan', tool: 'door' } },
       { id: 'ventana', label: 'Ventana', icon: 'window-closed-variant', props: { width: 120 }, binding: { kind: 'plan', tool: 'window' } },
       { id: 'suelo', label: 'Suelo', icon: 'floor-plan', props: { thickness: 10 }, binding: { kind: 'plan', tool: 'floor' } },
+      { id: 'vano', label: 'Vano', icon: 'rectangle-outline', props: { width: 80 }, binding: { kind: 'plan', tool: 'opening' } },
     ],
   },
   {
@@ -166,7 +170,7 @@ export const CATEGORIES_PLAN: readonly CategoryDef[] = [
     icon: 'crane',
     tools: [
       { id: 'columna-e', label: 'Columna', icon: 'square', props: { side: 30 }, binding: { kind: 'plan', tool: 'column' }, methods: COLUMN_METHODS },
-      { id: 'viga', label: 'Viga', icon: 'minus-thick', props: { depth: 40 } },
+      { id: 'viga', label: 'Viga', icon: 'minus-thick', props: { base: 30, depth: 40 }, binding: { kind: 'draft', tool: 'beam' } },
     ],
   },
   AUDITORIA,
@@ -193,9 +197,9 @@ export const CATEGORIES_ELEVATION: readonly CategoryDef[] = [
     label: 'Estructural',
     icon: 'crane',
     tools: [
-      { id: 'viga', label: 'Viga', icon: 'minus-thick', props: { depth: 40 } },
-      { id: 'cercha', label: 'Cercha', icon: 'triangle-outline', props: { depth: 60 } },
-      { id: 'correa', label: 'Correa', icon: 'view-sequential', props: { depth: 20 } },
+      { id: 'viga', label: 'Viga', icon: 'minus-thick', props: { base: 30, depth: 40 }, binding: { kind: 'draft', tool: 'beam' } },
+      { id: 'cercha', label: 'Cercha', icon: 'triangle-outline', props: { depth: 60 }, binding: { kind: 'draft', tool: 'truss' } },
+      { id: 'correa', label: 'Correa', icon: 'view-sequential', props: { base: 10, depth: 20 }, binding: { kind: 'draft', tool: 'purlin' } },
     ],
   },
   AUDITORIA_ELEVATION,

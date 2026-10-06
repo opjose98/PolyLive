@@ -14,18 +14,13 @@ import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 import { workspaceStore } from '../../state/workspaceStore';
 import { CORNER_TOOLS, CornerItem, CornerRow, ZoomAction } from '../../application/workspace/catalog';
-import { IconButton, toast } from '../primitives';
+import { IconButton } from '../primitives';
 import { radius, sizes, spacing } from '../design/tokens';
 import { type } from '../design/typography';
 import { STAGGER_MS } from '../design/motion';
 import { themedStyles } from '../design/theme';
 
 /** Opciones que el motor todavía no implementa: se muestran y lo explican. */
-const NOT_YET: Readonly<Record<string, string>> = {
-  'snap:vertex': 'Snap a vértice',
-  'snap:midpoint': 'Snap a punto medio',
-  'grid:rotation': 'Rotación del lienzo',
-};
 
 export interface CornerToolsProps {
   onZoom: (action: ZoomAction) => void;
@@ -62,11 +57,6 @@ export const CornerTools = React.memo(function CornerTools({ onZoom }: CornerToo
   };
 
   const press = (it: CornerItem) => {
-    const key = 'id' in it ? `${it.type}:${it.id}` : '';
-    if (NOT_YET[key]) {
-      toast(`${NOT_YET[key]}: disponible próximamente`);
-      return;
-    }
     switch (it.type) {
       case 'action':
         onZoom(it.action);
@@ -87,7 +77,7 @@ export const CornerTools = React.memo(function CornerTools({ onZoom }: CornerToo
   };
 
   const rowIndicator = (r: CornerRow) =>
-    r.id === 'snap' ? snap.node || snap.angle : r.id === 'grid' ? grid.lines || grid.dots : false;
+    r.id === 'snap' ? snap.node || snap.angle || snap.vertex || snap.midpoint : r.id === 'grid' ? grid.lines || grid.dots : false;
 
   return (
     <View style={styles.wrap} pointerEvents="box-none">

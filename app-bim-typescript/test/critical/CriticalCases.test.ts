@@ -31,13 +31,11 @@ import {
   AuditPhotoId,
 } from '../../src/domain/objects';
 import { meters, squareMeters } from '../../src/domain/geometry/types';
-import { CDT } from '../../src/domain/geometry/CDT';
 import { CommandStack } from '../../src/application/state/CommandStack';
 import { Command } from '../../src/application/commands/Command';
-import { CanvasManager } from '../../src/application/canvas';
+import { CanvasManager } from '../../src/application/canvas/CanvasManager';
 import { CaptureMeasurementUseCase } from '../../src/application/use-cases/CaptureMeasurementUseCase';
-import { IBLEManager, ICDT, IValidationService, ValidationResult } from '../../src/application/use-cases/types';
-import { CloseRoomUseCase } from '../../src/application/use-cases/CloseRoomUseCase';
+import { IBLEManager, IValidationService, ValidationResult } from '../../src/application/use-cases/types';
 import { ExportRoomIfcUseCase } from '../../src/application/use-cases/ExportRoomIfcUseCase';
 import { CreateWallUseCase } from '../../src/application/use-cases/CreateWallUseCase';
 
@@ -120,26 +118,6 @@ describe('Crítico: Door sin Wall padre → FK validation falla (Infrastructure)
 // Caso 2 — Polígono auto-intersectante → CDT rechaza | test/geometry | Domain
 // ---------------------------------------------------------------------------
 
-describe('Crítico: Polígono auto-intersectante → CDT rechaza (Domain)', () => {
-  it('un polígono en forma de "bowtie" (auto-intersectante) es rechazado por el CDT real', () => {
-    const cdt = new CDT();
-    const bowtie = {
-      vertices: [
-        { x: 0, y: 0 },
-        { x: 4, y: 0 },
-        { x: 0, y: 4 },
-        { x: 4, y: 4 },
-      ],
-      isClosed: true,
-    };
-
-    const result = cdt.triangulate(bowtie);
-
-    expect(result.valid).toBe(false);
-    expect(result.triangles).toHaveLength(0);
-    expect(result.warnings.some((w) => w.type === 'self_intersecting_polygon')).toBe(true);
-  });
-});
 
 // ---------------------------------------------------------------------------
 // Caso 3 — CommandStack lleno (100) → FIFO limpia oldest | test/application
@@ -453,94 +431,5 @@ describe('Gaps de implementación corregidos (bugs 1–3)', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Bug 3 — CloseRoomUseCase convierte Column circles a polygon holes
-  // ---------------------------------------------------------------------------
-  it('Bug 3 corregido: CloseRoomUseCase convierte Column.diameter en polígono de hueco antes de llamar al CDT', async () => {
-    const db2 = new Database(':memory:');
-    await db2.open();
-    await db2.migrate();
-    const store2 = new ObjectStore(db2);
-    const commandStack2 = new CommandStack(store2);
-    const validation = alwaysValidServiceCC();
 
-    const rId = roomId('cdt-polygon-test');
-    const room = new Room({
-      id: revitObjectId('cdt-polygon-test') as any,
-      roomId: rId,
-      levelId: levelId('level-1'),
-      geometry: [{ x: 0, y: 0 }, { x: 6, y: 0 }, { x: 6, y: 5 }, { x: 0, y: 5 }],
-      isOpen: true,
-    });
-    await store2.createObject(room);
-
-    // Add a column inside the room — this triggers the circle→polygon conversion
-    const col = new Column({
-      id: revitObjectId('col-polygon-test'),
-      roomId: rId,
-      position: { x: 3, y: 2.5 },
-      diameter: meters(0.4),
-      height: meters(3.0),
-    });
-    await store2.createObject(col);
-
-    // Capture what ICDT.triangulate receives for holes
-    let capturedHoles: any;
-    const capturingCdt: ICDT = {
-      triangulate: jest.fn().mockImplementation(async (_boundary: any, holes: any) => {
-        capturedHoles = holes;
-        return { totalArea: 29.87, triangles: [], valid: true, warnings: [] };
-      }),
-    };
-
-    const closeUseCase = new CloseRoomUseCase(store2, commandStack2, validation, capturingCdt);
-    await closeUseCase.execute({ roomId: rId });
-
-    // Verify: holes must be polygon arrays, not circle descriptors
-    expect(capturedHoles).toHaveLength(1); // one column = one hole
-    expect(Array.isArray(capturedHoles[0])).toBe(true); // polygon = array of points (not {center,radius})
-    expect(capturedHoles[0].length).toBeGreaterThanOrEqual(3); // at least a triangle
-    expect(capturedHoles[0][0]).toHaveProperty('x');
-    expect(capturedHoles[0][0]).toHaveProperty('y');
-    expect(capturedHoles[0][0]).not.toHaveProperty('center'); // NOT a circle descriptor
-    expect(capturedHoles[0][0]).not.toHaveProperty('radius');
-
-    await db2.close();
-  });
-
-  it('Bug 4 corregido (encontrado en auditoría): CloseRoomUseCase retorna room.area/isOpen actualizados, no el objeto stale', async () => {
-    // Antes del fix, `output.room` era la MISMA referencia leída al inicio de
-    // execute() — nunca se mutaba con la nueva área/estado antes de retornar.
-    // Persistía bien en SQLite (por eso ningún test lo detectaba: todos releían
-    // con store.readObject() en vez de confiar en el valor de retorno), pero
-    // cualquier UI que confiara en output.room.area vería siempre `null`.
-    const db3 = new Database(':memory:');
-    await db3.open();
-    await db3.migrate();
-    const store3 = new ObjectStore(db3);
-    const commandStack3 = new CommandStack(store3);
-    const validation = alwaysValidServiceCC();
-
-    const rId = roomId('bug4-room');
-    const room = new Room({
-      id: revitObjectId('bug4-room') as any,
-      roomId: rId,
-      levelId: levelId('level-1'),
-      geometry: [{ x: 0, y: 0 }, { x: 5, y: 0 }, { x: 5, y: 5 }, { x: 0, y: 5 }],
-      isOpen: true,
-    });
-    await store3.createObject(room);
-
-    const cdt: ICDT = {
-      triangulate: jest.fn().mockResolvedValue({ totalArea: 25, triangles: [], valid: true, warnings: [] }),
-    };
-    const closeUseCase = new CloseRoomUseCase(store3, commandStack3, validation, cdt);
-
-    const output = await closeUseCase.execute({ roomId: rId });
-
-    // El valor de retorno DEBE reflejar el cierre, sin necesidad de releer de la BD.
-    expect(output.room.isOpen).toBe(false);
-    expect(output.room.area).toEqual(squareMeters(25));
-
-    await db3.close();
-  });
 });

@@ -34,13 +34,11 @@ export type ColumnSectionShape = 'circular' | 'rectangular';
  * - Si embeddedInWallId es undefined, la columna está libre en el Recinto
  *   (warning si está fuera del Recinto, no bloqueo)
  *
- * TRIANGULACIÓN CDT:
- * - Columnas dentro del Recinto generan huecos que se restan del polígono.
- *   Circulares → hueco circular de radio dimensionX / 2.
- *   Rectangulares → hueco poligonal de 4 vértices, ya rotado (ver footprint()).
+ * HUELLA: circular → radio dimensionX / 2; rectangular → 4 vértices ya
+ * rotados (ver footprint()).
  *
  * COMPATIBILIDAD: `diameter` se conserva como alias de `dimensionX` porque
- * ObjectStore lo persiste con ese nombre y el resto del código (CDT, IFC,
+ * ObjectStore lo persiste con ese nombre y el resto del código (IFC,
  * validación) lo lee así. Para una columna rectangular `diameter` devuelve el
  * ancho, que es la lectura menos engañosa disponible sin romper ese contrato.
  */

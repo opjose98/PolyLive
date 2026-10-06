@@ -23,7 +23,6 @@ import { CreateWallCommand } from '../../src/application/commands/CreateWallComm
 import { MoveObjectCommand, MoveSnapshot } from '../../src/application/commands/MoveObjectCommand';
 import { UpdateObjectPropertyCommand } from '../../src/application/commands/UpdateObjectPropertyCommand';
 import { DeleteObjectCommand } from '../../src/application/commands/DeleteObjectCommand';
-import { CloseRoomCommand } from '../../src/application/commands/CloseRoomCommand';
 
 // ---------------------------------------------------------------------------
 // Mock IObjectStore — in-memory
@@ -257,42 +256,7 @@ describe('Commands', () => {
   });
 
   // =========================================================================
-  // 5. CloseRoomCommand — undo reabre y borra Floor implícito
+
   // =========================================================================
 
-  describe('CloseRoomCommand', () => {
-    it('undo reopens room and soft-deletes implicit floor', async () => {
-      const { Room, Floor } = require('../../src/domain/objects');
-      const { levelId: mkLevelId } = require('../../src/domain/objects');
-
-      const rid = revitObjectId('room-cmd-1');
-      const room = new Room({
-        id: rid,
-        roomId: ROOM_ID,
-        levelId: mkLevelId('level-1'),
-        geometry: [{ x: 0, y: 0 }, { x: 5, y: 0 }, { x: 5, y: 5 }, { x: 0, y: 5 }],
-        isOpen: false,
-        area: 25,
-      });
-      await store.createObject(room);
-
-      const floorId = revitObjectId('floor-1');
-      const floor = new Floor({
-        id: floorId,
-        roomId: ROOM_ID,
-        isImplicit: true,
-      });
-      await store.createObject(floor);
-
-      const cmd = new CloseRoomCommand(rid, floorId);
-      await cmd.undo(store);
-
-      const roomRead = store._get(rid as string) as any;
-      expect(roomRead.isOpen).toBe(true);
-      expect(roomRead.area).toBeNull();
-
-      const floorRead = store._get(floorId as string);
-      expect(floorRead!.is_deleted).toBe(true);
-    });
-  });
 });

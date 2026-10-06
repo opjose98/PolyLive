@@ -322,6 +322,27 @@ CREATE TABLE IF NOT EXISTS review_items (
 CREATE INDEX IF NOT EXISTS idx_review_items_space ON review_items(space_id) WHERE is_deleted = 0;
 `;
 
+/**
+ * Dibujo técnico (F6b): cotas, textos, etiquetas, coordenadas, líneas,
+ * polígonos, vigas, cerchas y correas por espacio. Ver domain/drafting.
+ */
+export const CREATE_DRAFT = `
+CREATE TABLE IF NOT EXISTS draft_items (
+  id           TEXT PRIMARY KEY NOT NULL,
+  space_id     TEXT NOT NULL,
+  view_json    TEXT NOT NULL,
+  level_id     TEXT NOT NULL DEFAULT '',
+  kind         TEXT NOT NULL,
+  points_json  TEXT NOT NULL,
+  text         TEXT NOT NULL DEFAULT '',
+  props_json   TEXT NOT NULL DEFAULT '{}',
+  target_id    TEXT,
+  is_deleted   INTEGER NOT NULL DEFAULT 0 CHECK(is_deleted IN (0, 1)),
+  created_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_draft_items_space ON draft_items(space_id) WHERE is_deleted = 0;
+`;
+
 // ---------------------------------------------------------------------------
 // Índices para consultas frecuentes
 // ---------------------------------------------------------------------------
@@ -383,5 +404,6 @@ export const ALL_DDL: string[] = [
   CREATE_ZONES,
   CREATE_PROGRESS,
   CREATE_REVIEW,
+  CREATE_DRAFT,
   CREATE_INDEXES,
 ];

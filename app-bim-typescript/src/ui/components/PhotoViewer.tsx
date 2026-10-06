@@ -99,6 +99,11 @@ export function PhotoViewer({
                     Planta: ({marker.position.x.toFixed(2)}, {marker.position.y.toFixed(2)}) m
                   </Text>
                 ) : null}
+                {marker?.face ? (
+                  <Text style={styles.overlayText}>
+                    Alzado lado {marker.face.side}: x {marker.face.x.toFixed(2)} m · altura {marker.face.y.toFixed(2)} m
+                  </Text>
+                ) : null}
                 {metadata.operator ? (
                   <Text style={styles.overlayText}>{metadata.operator}</Text>
                 ) : null}

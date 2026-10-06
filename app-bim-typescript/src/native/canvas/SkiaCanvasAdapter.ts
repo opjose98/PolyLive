@@ -88,7 +88,7 @@ export class SkiaCanvasAdapter implements ICanvasRenderer {
     this.strokePaint.setColor(Skia.Color(this.strokeColor));
     this.strokePaint.setStrokeWidth(this.lineWidth);
     this.strokePaint.setStrokeCap(StrokeCap.Round);
-    this.strokePaint.setStrokeJoin(StrokeJoin.Miter);
+    this.strokePaint.setStrokeJoin(StrokeJoin.Round);
   }
 
   // -------------------------------------------------------------------------

@@ -144,7 +144,12 @@ export function useProgress({ services, projectId, spaceId, editor, operatorName
     if (d.tool === 'rect') {
       return d.points.length >= 2 ? [{ kind: 'rect', a: d.points[0], b: d.points[1], color, fill: true, opacity: 0.45 }] : [];
     }
-    return [{ kind: 'stroke', points: d.points, width: d.width, widthIn: 'm', color, opacity: 0.45 }];
+    const tip = d.points[d.points.length - 1];
+    return [
+      { kind: 'stroke', points: d.points, width: d.width, widthIn: 'm', color, opacity: 0.45 },
+      // El tamaño real del pincel bajo el dedo: se ve qué va a cubrir.
+      { kind: 'ring', at: tip, radius: d.width / 2, color: d.tool === 'eraser' ? '#616161' : color },
+    ];
   }, [ctl]);
 
   /** Capa viva para la planta: solo trazos sobre suelos. */

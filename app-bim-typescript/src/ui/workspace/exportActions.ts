@@ -15,6 +15,7 @@ import type { RoomId } from '../../domain/objects/base';
 import type { ProjectMarker } from '../../domain/objects/marker';
 import { AppError } from '../../shared/errors/AppError';
 import { saveTextToUserFolder } from '../../native/export/saveToUserFolder';
+import { folderHint } from './folderHint';
 import { toast } from '../primitives';
 import { haptic } from '../design/haptics';
 import { dxfZones, ifcZones } from '../../application/topology/zoneExport';
@@ -55,6 +56,7 @@ function failureMessage(err: unknown, fallback: string): string {
 }
 
 async function save(ctx: ExportContext, ext: string, content: string, detail?: string): Promise<ExportOutcome> {
+  folderHint();
   const saved = await saveTextToUserFolder(exportFilename(ctx, ext), content);
   if (saved.ok) {
     haptic.commit();
