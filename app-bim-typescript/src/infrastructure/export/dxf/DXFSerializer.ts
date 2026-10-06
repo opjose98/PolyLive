@@ -777,7 +777,13 @@ function normalizeDegrees(degrees: number): number {
  * lo que viene detrás y rompería el archivo completo.
  */
 export function sanitizeDxfText(value: string): string {
-  return value.replace(/[\r\n]+/g, ' ').trim();
+  // R2000 lee el archivo en la página de códigos de Windows, no en UTF-8: "·", "ñ" u
+  // "ó" escritos tal cual salían como "Â·", "Ã±"… Fuera de ASCII se escribe \U+XXXX,
+  // que AutoCAD y los demás lectores decodifican.
+  return value
+    .replace(/[\r\n]+/g, ' ')
+    .trim()
+    .replace(/[^\x20-\x7E]/gu, (ch) => `\\U+${ch.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')}`);
 }
 
 /** Nombre de archivo seguro en cualquier sistema. */
