@@ -26,6 +26,10 @@ _LevON/LevON/log.txt
 # ==== Local tooling ====
 .claude/
 
+# Estado de ventanas de Obsidian: es de cada PC (si se versiona, choca entre equipos)
+_0bsidian/.obsidian/workspace.json
+_0bsidian/.obsidian/workspace-mobile.json
+
 # ==== General ====
 .idea/
 .vscode/
