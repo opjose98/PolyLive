@@ -62,6 +62,8 @@ import { StakeoutSheet } from '../workspace/topo/StakeoutSheet';
 import { useProgress } from '../workspace/progress/useProgress';
 import { ProgressSheets } from '../workspace/progress/ProgressSheets';
 import { planSvg, faceSvg } from '../../application/report/planSvg';
+import { areaRowsOf, exportAreaCsv, exportPhotoRegister, exportPlanSheet } from '../workspace/deliverableActions';
+import { exportProjectPackage } from '../workspace/projectPackageActions';
 import { useReview } from '../workspace/review/useReview';
 import { useDrafting } from '../workspace/drafting/useDrafting';
 import { DraftSheets, KIND_LABEL } from '../workspace/drafting/DraftSheets';
@@ -1114,6 +1116,48 @@ export function SurveyScreen({
     [services, projectId, roomId, projectName, operatorName, roomName],
   );
 
+  // --- Entregables: plano PDF con cuadro de áreas, CSV de áreas, registro fotográfico, paquete ---
+  const sheetMeta = useCallback(
+    () => ({
+      project: projectName,
+      projectCode,
+      space: roomName ?? 'Espacio',
+      level: projectId ? levelInfo.active.name : undefined,
+      operator: operatorName,
+      generatedAt: new Date(),
+    }),
+    [projectName, projectCode, roomName, projectId, levelInfo.active.name, operatorName],
+  );
+  const areaRows = useCallback(() => areaRowsOf(state.rooms, projectId ? levelInfo.active.name : ''), [state.rooms, projectId, levelInfo.active.name]);
+  const handlePlanSheet = useCallback(
+    () =>
+      exportPlanSheet(
+        sheetMeta(),
+        planSvg({
+          walls: editor.walls.map((w) => ({ start: w.startPoint, end: w.endPoint, thickness: w.thickness as number })),
+          zones: state.rooms
+            .filter((r) => (r.netPolygon?.length ?? 0) >= 3)
+            .map((r) => ({
+              polygon: r.netPolygon!,
+              label: `${r.number !== undefined ? zoneCodeOf({ number: r.number }) + ' ' : ''}${r.name ?? 'Recinto'}`,
+              sublabel: `${(r.netArea ?? r.area).toFixed(2)} m²`,
+              at: r.centroid,
+            })),
+          scaleBar: true,
+        }),
+        areaRows(),
+      ),
+    [sheetMeta, areaRows, editor, state.rooms],
+  );
+  const wallNameOf = useCallback(
+    (id: string) => {
+      const i = editor.walls.findIndex((w) => (w.id as string) === id);
+      const w = editor.walls[i];
+      return w ? ((w.properties.name as string | undefined) ?? `Muro ${i + 1}`) : 'Muro';
+    },
+    [editor],
+  );
+
   const menuItems = useMemo((): MainMenuItem[] => {
     const go = (s: MenuScreen) => () => onNavigate?.(s);
     return [
@@ -1122,11 +1166,17 @@ export function SurveyScreen({
       ...(onExit ? [{ icon: 'view-grid-outline', label: 'Otros espacios del proyecto', onPress: onExit }] : []),
       { section: 'Exportar', icon: 'file-export-outline', label: 'IFC para Revit', detail: 'Pisos por nivel y restricciones', onPress: () => void handleExportIfc() },
       { icon: 'file-cad', label: 'IFC y DXF del recinto', onPress: go('export') },
+      { icon: 'file-pdf-box', label: 'Plano PDF', detail: 'Rótulo, escala gráfica y cuadro de áreas', onPress: () => void handlePlanSheet() },
+      { icon: 'table', label: 'Cuadro de áreas (CSV)', onPress: () => void exportAreaCsv(sheetMeta(), areaRows()) },
+      { icon: 'camera-burst', label: 'Registro fotográfico (PDF)', detail: 'Fotos con fecha, autor y ubicación', onPress: () => void exportPhotoRegister(services, roomId, sheetMeta(), wallNameOf) },
+      ...(projectId
+        ? [{ icon: 'package-variant-closed', label: 'Respaldar proyecto (.polylive)', detail: 'Proyecto completo con fotos, a Drive u otra carpeta', onPress: () => void exportProjectPackage(services, projectId, operatorName) }]
+        : []),
       ...(onExitProject ? [{ section: 'Proyecto', icon: 'folder-outline', label: 'Cambiar de proyecto', onPress: onExitProject }] : []),
       { section: 'App', icon: 'account-circle-outline', label: 'Operador', detail: operatorName || undefined, onPress: go('profile') },
       { icon: 'cog-outline', label: 'Ajustes y respaldos', onPress: go('settings') },
     ];
-  }, [onExit, onExitProject, onNavigate, handleZoom, handleExportIfc, operatorName]);
+  }, [onExit, onExitProject, onNavigate, handleZoom, handleExportIfc, operatorName, handlePlanSheet, sheetMeta, areaRows, services, roomId, wallNameOf, projectId]);
 
   const topoVertices = useMemo(() => uniqueVertices(editor.walls), [editor, state.objects, levelInfo]); // eslint-disable-line react-hooks/exhaustive-deps
 

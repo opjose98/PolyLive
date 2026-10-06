@@ -61,6 +61,15 @@ export const MIGRATIONS: readonly Migration[] = [
       }
     },
   },
+  {
+    version: 3,
+    name: 'Proyectos: fecha del último paquete exportado (respaldo fuera del teléfono)',
+    async up(db) {
+      if (!(await hasColumn(db, 'projects', 'last_package_at'))) {
+        await db.exec(`ALTER TABLE projects ADD COLUMN last_package_at TEXT`);
+      }
+    },
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

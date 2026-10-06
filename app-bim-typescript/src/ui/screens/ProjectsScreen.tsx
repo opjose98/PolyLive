@@ -16,6 +16,8 @@
 // =============================================================================
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { exportProjectPackage, importProjectPackageFlow, packagedLabel } from '../workspace/projectPackageActions';
+import { lastPackagedAt } from '../../infrastructure/package/projectPackage';
 import {
   View,
   Text,
@@ -76,8 +78,15 @@ export function ProjectsScreen({
   const [editing, setEditing] = useState<Project | null>(null);
   const [creating, setCreating] = useState(false);
 
+  // Último respaldo externo (paquete .polylive) de cada proyecto.
+  const [packaged, setPackaged] = useState<Record<string, Date | null>>({});
   const load = useCallback(async () => {
-    setSummaries(await services.projects.listProjectSummaries());
+    const list = await services.projects.listProjectSummaries();
+    setSummaries(list);
+    const entries = await Promise.all(
+      list.map(async (s) => [s.project.id as string, await lastPackagedAt(services.db, s.project.id as string).catch(() => null)] as const),
+    );
+    setPackaged(Object.fromEntries(entries));
   }, [services]);
 
   useEffect(() => {
@@ -198,12 +207,19 @@ export function ProjectsScreen({
             onOpen={() => onOpenProject(item.project)}
             onEdit={() => setEditing(item.project)}
             onDelete={() => handleDelete(item.project)}
+            packagedAt={packaged[item.project.id as string] ?? null}
+            onExport={() => void exportProjectPackage(services, item.project.id as string, operator.name).then((ok) => (ok ? load() : undefined))}
           />
         )}
       />
 
       <View style={styles.footer}>
         <ActionButton label="+ Nuevo proyecto" onPress={() => setCreating(true)} />
+        <ActionButton
+          label="Importar proyecto (.polylive)"
+          variant="secondary"
+          onPress={() => void importProjectPackageFlow(services).then((id) => (id ? load() : undefined))}
+        />
       </View>
 
       <ProjectDialog
@@ -260,11 +276,15 @@ function ProjectCard({
   onOpen,
   onEdit,
   onDelete,
+  onExport,
+  packagedAt,
 }: {
   summary: ProjectSummary;
   onOpen: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onExport: () => void;
+  packagedAt: Date | null;
 }) {
   const styles = useStyles();
   const { project, spaceCount, totalAreaM2, openSpaceCount } = summary;
@@ -305,8 +325,19 @@ function ProjectCard({
           <Text style={[styles.cardStat, styles.cardStatWarning]}>{openSpaceCount} sin cerrar</Text>
         ) : null}
       </View>
+      <Text style={[styles.cardMeta, (!packagedAt || Date.now() - packagedAt.getTime() > 3 * 86400000) && styles.cardStatWarning]}>
+        {packagedLabel(packagedAt)}
+      </Text>
 
       <View style={styles.cardActions}>
+        <TouchableOpacity
+          style={styles.cardActionButton}
+          onPress={onExport}
+          accessibilityRole="button"
+          accessibilityLabel={`Exportar y respaldar ${project.name}`}
+        >
+          <Text style={styles.cardActionText}>Exportar</Text>
+        </TouchableOpacity>
         <TouchableOpacity
           style={styles.cardActionButton}
           onPress={onEdit}
@@ -619,7 +650,8 @@ const useStyles = themedStyles((colors) => ({
     color: colors.error,
   },
   footer: {
-    flexDirection: 'row',
+    flexDirection: 'column',
+    gap: spacing.sm,
     padding: spacing.md,
     borderTopWidth: 1,
     borderTopColor: colors.border,

@@ -40,6 +40,7 @@
     "expo-sqlite": "~57.0.4",
     "expo-status-bar": "~57.0.1",
     "expo-updates": "~57.0.25",
+    "fflate": "^0.8.3",
     "proj4": "^2.22.0",
     "react": "19.2.3",
     "react-native": "0.86.3",
