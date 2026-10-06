@@ -66,6 +66,8 @@ export interface ElevationScene {
   }[];
   /** Marcas de revisión (M4) de esta cara, en (u, v). */
   readonly markups?: readonly SketchShape[];
+  /** Dibujo técnico (F6b) de esta cara: cotas, textos, vigas… */
+  readonly annotations?: readonly SketchShape[];
   /** Trazo en curso (pincel o marca), en (u, v). */
   readonly sketch?: readonly SketchShape[];
 }
@@ -104,6 +106,7 @@ export function drawElevation(r: ICanvasRenderer, scene: ElevationScene): void {
   drawReferenceLines(ctx);
   if (scene.showLabels) drawElevationLabels(ctx);
   drawLevelLabels(ctx);
+  if (scene.annotations?.length) drawSketch(r, scene.annotations, toScreen, viewport.scale);
   if (scene.markups?.length) drawSketch(r, scene.markups, toScreen, viewport.scale);
   if (scene.sketch?.length) drawSketch(r, scene.sketch, toScreen, viewport.scale);
 }

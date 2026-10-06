@@ -101,6 +101,8 @@ export interface PlanCanvasProps {
    * múltiplos de 90°: p. ej. el que deja el norte arriba.
    */
   rotationSnaps?: readonly number[];
+  /** Giro con dos dedos (Cuadrícula → Rotación). Por defecto, sí. */
+  rotationEnabled?: boolean;
 
   onTap: (x: number, y: number) => void;
   onDoubleTap?: (x: number, y: number) => void;
@@ -283,7 +285,7 @@ export function PlanCanvas(props: PlanCanvasProps) {
     objects, selectedId, handles, showLabels, rooms, roomName, showNodes,
     measureTargetId, photoMarkers, selectedPhotoMarkerId, underlay,
     existingIds, benchmarks, selectedBenchmarkId, coordLabels, selectedZoneId, floors, measure, coordGrid,
-    progressLayers, markups,
+    progressLayers, markups, genericOpenings, annotations,
   } = scene;
   const picture = useMemo(
     () =>
@@ -293,7 +295,7 @@ export function PlanCanvas(props: PlanCanvasProps) {
           objects, selectedId, handles, showLabels, rooms, roomName, showNodes,
           measureTargetId, photoMarkers, selectedPhotoMarkerId, underlay, existingIds,
           benchmarks, selectedBenchmarkId, coordLabels, selectedZoneId, floors, measure, coordGrid,
-          progressLayers, markups,
+          progressLayers, markups, genericOpenings, annotations,
           transform: { scale: recScale, offsetX: 0, offsetY: 0 },
           width,
           height,
@@ -302,7 +304,7 @@ export function PlanCanvas(props: PlanCanvasProps) {
         });
       }, WORLD_BOUNDS),
     [objects, selectedId, handles, showLabels, rooms, roomName, showNodes, measureTargetId, photoMarkers,
-      selectedPhotoMarkerId, underlay, existingIds, benchmarks, selectedBenchmarkId, coordLabels, selectedZoneId, floors, measure, coordGrid, progressLayers, markups, recScale, width, height, palette],
+      selectedPhotoMarkerId, underlay, existingIds, benchmarks, selectedBenchmarkId, coordLabels, selectedZoneId, floors, measure, coordGrid, progressLayers, markups, genericOpenings, annotations, recScale, width, height, palette],
   );
   const overlay = useMemo(
     () =>
@@ -639,6 +641,7 @@ export function PlanCanvas(props: PlanCanvasProps) {
       return { r: raw, snapped: false };
     };
     const rotation = Gesture.Rotation()
+      .enabled(props.rotationEnabled !== false)
       .runOnJS(true)
       .onStart(() => {
         stopCamera();
@@ -666,7 +669,7 @@ export function PlanCanvas(props: PlanCanvasProps) {
     return Gesture.Simultaneous(Gesture.Exclusive(longPress, Gesture.Simultaneous(tap, doubleTap)), pan, pinch, rotation);
     // Los gestos solo se reconstruyen cuando cambia qué está habilitado.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.doubleTapEnabled, props.longPressEnabled, !!props.onDoubleTap, !!props.onLongPress]);
+  }, [props.doubleTapEnabled, props.longPressEnabled, !!props.onDoubleTap, !!props.onLongPress, props.rotationEnabled]);
 
   return (
     <GestureDetector gesture={gesture}>

@@ -17,6 +17,7 @@ import { MarkerStore } from '../infrastructure/sqlite/MarkerStore';
 import { ZoneStore } from '../infrastructure/sqlite/ZoneStore';
 import { ProgressStore } from '../infrastructure/sqlite/ProgressStore';
 import { ReviewStore } from '../infrastructure/sqlite/ReviewStore';
+import { DraftStore } from '../infrastructure/sqlite/DraftStore';
 import { IDatabase } from '../infrastructure/sqlite/database';
 import { LevelId, levelId } from '../domain/objects/base';
 import { ObjectStore } from '../infrastructure/sqlite/ObjectStore';
@@ -74,6 +75,8 @@ export interface AppServices {
   progress: ProgressStore;
   /** Revisión (M4): observaciones con marca y comentario. */
   review: ReviewStore;
+  /** Dibujo técnico (F6b): cotas, textos, líneas, vigas… */
+  drafts: DraftStore;
   /** Topografía: georreferencia del proyecto y mojones. */
   geo: GeoStore;
   /** Amarres, mojones y coordenadas reales (usa `geo`). */
@@ -129,6 +132,7 @@ export function createAppServices(db: IDatabase): AppServices {
     zones: new ZoneStore(db),
     progress: new ProgressStore(db),
     review: new ReviewStore(db),
+    drafts: new DraftStore(db),
     geo: geoStore,
     topography: new TopographyService(geoStore),
     useCases: {

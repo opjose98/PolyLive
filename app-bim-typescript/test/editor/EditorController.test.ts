@@ -793,6 +793,57 @@ describe('EditorController', () => {
       expect(editor.getState().rooms).toHaveLength(2);
     });
 
+    it('Vano en planta: abre un hueco genérico en el muro tocado, se ve en planta y se deshace', async () => {
+      await drawRectangle();
+      editor.setTool('opening');
+      await editor.handleTap(px(2), px(0), TOL_PX);
+      expect(editor.getState().genericOpenings).toHaveLength(1);
+      const o = editor.getState().genericOpenings[0];
+      expect(o.width).toBeCloseTo(0.8);
+      expect(o.xOffset).toBeCloseTo(1.6);
+      await editor.undo();
+      expect(editor.getState().genericOpenings).toHaveLength(0);
+      await editor.redo();
+      expect(editor.getState().genericOpenings).toHaveLength(1);
+    });
+
+    it('Foto en alzado: se ancla a la cara del muro y aparece en planta sobre su eje', async () => {
+      await drawRectangle();
+      const wall = editor.walls.find((w) => w.startPoint.y === 0 && w.endPoint.y === 0)!;
+      const captured = await services.useCases.capturePhoto.execute({
+        roomId: ROOM_ID,
+        photoData: new Uint8Array([1]),
+        filename: 'foto-cara.jpg',
+        metadata: { bimCode: 'FOT009' },
+      });
+      await editor.attachFacePhoto(captured.photoId, { wallId: wall.id as string, side: 'B', x: 1, y: 1.2 });
+      const m = editor.getState().photoMarkers.find((p) => p.id === (captured.photoId as string))!;
+      expect(m.face).toEqual({ wallId: wall.id, side: 'B', x: 1, y: 1.2 });
+      const len = wall.length as number;
+      const t = 1 / len;
+      expect(m.position.x).toBeCloseTo(wall.startPoint.x + (wall.endPoint.x - wall.startPoint.x) * t);
+      expect(m.position.y).toBeCloseTo(0);
+      const photo = await services.store.readAuditPhoto(captured.photoId);
+      expect(photo!.metadata.linkedObjectId).toBe(wall.id);
+    });
+
+    it('snap a vértice (esquina interior del recinto) y a punto medio de muro, solo si están activos', async () => {
+      await drawRectangle();
+      const room = editor.getState().rooms[0];
+      const corner = (room.netPolygon ?? room.polygon).reduce((best, p) => (p.x + p.y < best.x + best.y ? p : best));
+      const near = { x: corner.x + 0.02, y: corner.y + 0.02 };
+      expect(editor.snapToNode(px(near.x), px(near.y), TOL_PX).snapped).toBe(false);
+      editor.setExtraSnaps({ vertex: true, midpoint: false });
+      const v = editor.snapToNode(px(near.x), px(near.y), TOL_PX);
+      expect(v.snapped).toBe(true);
+      expect(v.point.x).toBeCloseTo(corner.x);
+      expect(v.point.y).toBeCloseTo(corner.y);
+      editor.setExtraSnaps({ vertex: false, midpoint: true });
+      const m = editor.snapToNode(px(2.03), px(0.02), TOL_PX);
+      expect(m.snapped).toBe(true);
+      expect(m.point).toEqual({ x: 2, y: 0 });
+    });
+
     it('Suelo fuera de un recinto avisa y no crea nada', async () => {
       await drawRectangle();
       editor.setTool('floor');

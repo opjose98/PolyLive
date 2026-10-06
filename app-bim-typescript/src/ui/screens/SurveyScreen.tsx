@@ -62,6 +62,26 @@ import { useProgress } from '../workspace/progress/useProgress';
 import { ProgressSheets } from '../workspace/progress/ProgressSheets';
 import { planSvg, faceSvg } from '../../application/report/planSvg';
 import { useReview } from '../workspace/review/useReview';
+import { useDrafting } from '../workspace/drafting/useDrafting';
+import { DraftSheets } from '../workspace/drafting/DraftSheets';
+import { mergeSketches } from '../canvas/sketch';
+import type { DraftKind } from '../../domain/drafting/drafting';
+import type { PhotoFaceAnchor } from '../../domain/objects/audit-photo';
+
+/** Qué hacer con cada herramienta de dibujo técnico (texto de la BPC). */
+const DRAFT_HINT: Record<DraftKind, string> = {
+  dimension: 'Arrastra de un punto a otro · se pega a los nodos',
+  text: 'Toca donde va el texto',
+  tag: 'Toca un muro, columna, vano o recinto',
+  coordinate: 'Toca el punto a rotular',
+  line: 'Arrastra de un punto a otro',
+  polygon: 'Toca los vértices · toca el primero o "Cerrar polígono"',
+  beam: 'Arrastra el eje de la viga',
+  truss: 'Arrastra de apoyo a apoyo',
+  purlin: 'Arrastra el eje de la correa',
+};
+import { gridLabel, isGeoreferenced as isGeoref, localLabel } from '../../application/geo/coordinateText';
+import { modelToGrid } from '../../domain/geo/georeference';
 import { ReviewSheets } from '../workspace/review/ReviewSheets';
 import { reviewSvgMarks } from '../../application/review/reviewReport';
 import { countByStatus, ReviewItem, ReviewView } from '../../domain/review/review';
@@ -172,6 +192,9 @@ export function SurveyScreen({
       gridDots: s.grid.dots,
       snapNode: s.snap.node,
       snapAngle: s.snap.angle,
+      snapVertex: s.snap.vertex,
+      gridRotation: s.grid.rotation,
+      snapMidpoint: s.snap.midpoint,
       activeTool: s.activeTool,
       workMode: s.workMode,
       filters: s.filters,
@@ -219,6 +242,16 @@ export function SurveyScreen({
   // --- El cromo manda sobre el motor: snap, rejilla y herramienta activa ---
   useEffect(() => editor.setNodeSnapEnabled(wsState.snapNode), [editor, wsState.snapNode]);
   useEffect(() => editor.setSnapEnabled(wsState.snapAngle), [editor, wsState.snapAngle]);
+  // Apagar la rotación devuelve la vista al norte arriba (el modelo nunca gira).
+  useEffect(() => {
+    if (!wsState.gridRotation && (editor.getState().transform.rotation ?? 0) !== 0) {
+      editor.setRotation(0, canvasSize.w / 2, canvasSize.h / 2);
+    }
+  }, [editor, wsState.gridRotation]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(
+    () => editor.setExtraSnaps({ vertex: wsState.snapVertex, midpoint: wsState.snapMidpoint }),
+    [editor, wsState.snapVertex, wsState.snapMidpoint],
+  );
 
   const activeTool = wsState.activeTool;
   useEffect(() => {
@@ -248,6 +281,7 @@ export function SurveyScreen({
       ...(p.side !== undefined && { columnDiameter: cm(p.side)! }),
       ...(p.width !== undefined && activeTool?.toolId === 'puerta' && { doorWidth: cm(p.width)! }),
       ...(p.width !== undefined && activeTool?.toolId === 'ventana' && { windowWidth: cm(p.width)! }),
+      ...(p.width !== undefined && activeTool?.toolId === 'vano' && { openingWidth: cm(p.width)! }),
     });
   }, [editor, activeTool]);
 
@@ -364,6 +398,40 @@ export function SurveyScreen({
     touchTolerancePx: CANVAS_TOUCH_TOLERANCE_PX,
   });
 
+  // --- Dibujo técnico (F6b): cotas, textos, etiquetas, coordenadas, líneas, polígonos, vigas… ---
+  const coordText = useCallback(
+    (p: { x: number; y: number }) => (isGeoref(topo.geo) ? gridLabel(modelToGrid(topo.geo, roomId as unknown as string, p)) : localLabel(p)),
+    [topo.geo, roomId],
+  );
+  const tagAt = useCallback(
+    (x: number, y: number) => {
+      const o = editor.objectAt(x, y, CANVAS_TOUCH_TOLERANCE_PX);
+      if (o instanceof Wall) {
+        return { targetId: o.id as string, text: `Muro · ${Math.round(Number(o.thickness) * 100)} cm · ${Number(o.length).toFixed(2)} m${o.material ? ` · ${o.material}` : ''}` };
+      }
+      if (o instanceof Column) return { targetId: o.id as string, text: `Columna ${Math.round(Number(o.dimensionX) * 100)}${o.isCircular ? ' Ø' : `×${Math.round(Number(o.dimensionY ?? o.dimensionX) * 100)}`} cm` };
+      if (o instanceof Door) return { targetId: o.id as string, text: `Puerta ${Number(o.width).toFixed(2)} × ${Number(o.height).toFixed(2)}` };
+      if (o instanceof Window) return { targetId: o.id as string, text: `Ventana ${Number(o.width).toFixed(2)} × ${Number(o.height).toFixed(2)}` };
+      const z = editor.zoneAt(x, y);
+      if (z?.id) return { targetId: z.id, text: `${z.name ?? 'Recinto'}\n${(z.netArea ?? z.area).toFixed(2)} m²` };
+      return null;
+    },
+    [editor],
+  );
+  const targetCenter = useCallback((id: string) => editor.objectCenter(id), [editor]);
+  const drafting = useDrafting({
+    services,
+    spaceId: roomId as unknown as string,
+    editor,
+    levelId: levelInfo.active.id,
+    touchTolerancePx: CANVAS_TOUCH_TOLERANCE_PX,
+    coordText,
+    tagAt,
+    targetCenter,
+    colors: { ink: canvasPalette.label, accent: canvasPalette.selection },
+  });
+  const [draftSheetOpen, setDraftSheetOpen] = useState(false);
+
   const topoBack = topo.back;
 
   // --- Alzado (F4): vive encima de la planta, que queda intacta debajo ---
@@ -417,6 +485,22 @@ export function SurveyScreen({
         review.ctl.cancelText();
         return true;
       }
+      if (drafting.state.pendingText) {
+        drafting.ctl.cancelText();
+        return true;
+      }
+      if (draftSheetOpen) {
+        setDraftSheetOpen(false);
+        return true;
+      }
+      if (drafting.state.polygon) {
+        drafting.ctl.undoPolygonPoint();
+        return true;
+      }
+      if (drafting.state.selectedId) {
+        drafting.ctl.select(null);
+        return true;
+      }
       if (review.sheet) {
         review.closeSheet();
         return true;
@@ -455,7 +539,7 @@ export function SurveyScreen({
       return false;
     });
     return () => sub.remove();
-  }, [elevWallId, onExit, panelOpen, topoBack, zoneSheetOpen, review, progress, topoTools]);
+  }, [elevWallId, onExit, panelOpen, topoBack, zoneSheetOpen, review, progress, topoTools, drafting, draftSheetOpen]);
 
   const closeElevation = useCallback(() => {
     setElevWallId(null);
@@ -502,6 +586,13 @@ export function SurveyScreen({
    * foto por eso sería absurdo. La foto sin coordenadas sigue teniendo su
    * marcador en la planta, que es la ubicación que de verdad hace falta.
    */
+  // Foto del alzado: la cara y el punto esperan a que la cámara entregue la foto.
+  const [pendingFacePhoto, setPendingFacePhoto] = useState<PhotoFaceAnchor | null>(null);
+  const closeCamera = useCallback(() => {
+    setPendingFacePhoto(null);
+    editor.clearPendingPhotoPoint();
+  }, [editor]);
+
   const handlePhotoCaptured = useCallback(
     async (photo: { base64: string }) => {
       try {
@@ -532,16 +623,19 @@ export function SurveyScreen({
           metadata: { bimCode, geo },
         });
 
-        await editor.attachPhotoMarker(result.photoId);
+        if (pendingFacePhoto) {
+          setPendingFacePhoto(null);
+          await editor.attachFacePhoto(result.photoId, pendingFacePhoto);
+        } else await editor.attachPhotoMarker(result.photoId);
       } catch (err: unknown) {
         alertDialog(
           'Error',
           err instanceof AppError ? err.userMessage : 'No se pudo guardar la foto.',
         );
-        editor.clearPendingPhotoPoint();
+        closeCamera();
       }
     },
-    [photoFs, gps, services, roomId, editor],
+    [photoFs, gps, services, roomId, editor, pendingFacePhoto, closeCamera],
   );
 
   // Tocar solo selecciona (o dibuja); las propiedades se abren con long-press,
@@ -556,6 +650,7 @@ export function SurveyScreen({
         return;
       }
       if (review.plan.tap(x, y)) return;
+      if (drafting.planTap(x, y)) return;
       if (progress.handleTap(x, y)) return;
       if (topoTools.handleTap(x, y)) return;
       if (topo.handleTap(x, y)) return;
@@ -574,7 +669,7 @@ export function SurveyScreen({
         if (editor.getState().tool === 'select' && after && after !== before) haptic.select();
       });
     },
-    [editor, topo.handleTap, topoTools.handleTap, progress.handleTap, review.plan, onOpenPhoto],
+    [editor, topo.handleTap, topoTools.handleTap, progress.handleTap, review.plan, drafting.planTap, onOpenPhoto],
   );
 
   // Propiedades (con edición y borrado) solo donde se edita el modelo: en los
@@ -650,11 +745,12 @@ export function SurveyScreen({
       roomName,
       selectedZoneId: state.selectedZoneId,
       floors: editor.floorViews,
+      genericOpenings: state.genericOpenings,
       showNodes: state.tool === 'wall',
       measureTargetId: state.measureTargetId as unknown as string | null,
       photoMarkers: state.photoMarkers,
     }),
-    [displayObjects, dragging, state.selectedId, handles, state.rooms, roomName, state.selectedZoneId, state.tool, state.measureTargetId, state.photoMarkers],
+    [displayObjects, dragging, state.selectedId, handles, state.rooms, roomName, state.selectedZoneId, state.tool, state.measureTargetId, state.photoMarkers, state.genericOpenings],
   );
   const parentWallLength = useMemo(() => {
     if (!(selected instanceof Door) && !(selected instanceof Window)) return undefined;
@@ -698,7 +794,7 @@ export function SurveyScreen({
       objects: visibleObjects,
       showLabels: filters.cotas,
       photoMarkers: filters.fotos ? canvasScene.photoMarkers : [],
-      benchmarks: topo.planBenchmarks,
+      benchmarks: topo.active || layers.topografia ? topo.planBenchmarks : [],
       selectedBenchmarkId: topo.selectedBenchmark?.id ?? null,
       coordLabels: topo.coordLabels,
       // Topografía no dibuja: los nodos se ven para tocarlos y leer coordenadas.
@@ -706,9 +802,11 @@ export function SurveyScreen({
       measure: topoTools.overlay,
       coordGrid: topoGrid,
       progressLayers: progress.active ? progress.planLayers : undefined,
-      markups: review.active ? review.planMarkups : undefined,
+      // Capa Coordinación: las observaciones de Revisión se ven también en los demás modos.
+      markups: review.active || layers.coordinacion ? review.planMarkups : undefined,
+      annotations: drafting.planShapes,
     }),
-    [canvasScene, underlay, existingIds, visibleObjects, filters.cotas, filters.fotos, topo.planBenchmarks, topo.selectedBenchmark, topo.coordLabels, topo.active, filters.vertices, topoTools.overlay, topoGrid, progress.active, progress.planLayers, review.active, review.planMarkups],
+    [canvasScene, underlay, existingIds, visibleObjects, filters.cotas, filters.fotos, topo.planBenchmarks, topo.selectedBenchmark, topo.coordLabels, topo.active, filters.vertices, topoTools.overlay, topoGrid, progress.active, progress.planLayers, review.active, review.planMarkups, drafting.planShapes, layers],
   );
 
   // --- Selector de base y tope: qué edita ---
@@ -890,6 +988,16 @@ export function SurveyScreen({
         : [];
 
   const bpcActions: BpcAction[] = [];
+  const draftPolygon = drafting.state.polygon;
+  if (drafting.tool === 'polygon' && draftPolygon) {
+    if (draftPolygon.points.length >= 3) {
+      bpcActions.push({ icon: 'vector-polygon', label: 'Cerrar polígono', onPress: () => void drafting.ctl.closePolygon() });
+    }
+    bpcActions.push({ icon: 'undo-variant', label: 'Quitar punto', onPress: () => drafting.ctl.undoPolygonPoint() });
+  }
+  if (drafting.state.selectedId && !drafting.tool) {
+    bpcActions.push({ icon: 'tune-variant', label: 'Dibujo', onPress: () => setDraftSheetOpen(true) });
+  }
   if (review.active) {
     if (review.tool) bpcActions.push({ icon: 'palette', label: 'Color', onPress: () => review.ctl.cycleColor() });
     bpcActions.push({ icon: 'format-list-numbered', label: 'Observaciones', onPress: review.openList });
@@ -935,7 +1043,9 @@ export function SurveyScreen({
     ? { canUndo: review.state.canUndo, canRedo: review.state.canRedo, undo: () => review.ctl.undo(), redo: () => review.ctl.redo() }
     : progress.active
       ? { canUndo: progress.state.canUndo, canRedo: progress.state.canRedo, undo: () => progress.ctl.undo(), redo: () => progress.ctl.redo() }
-      : null;
+      : drafting.tool || drafting.state.selectedId
+        ? { canUndo: drafting.state.canUndo, canRedo: drafting.state.canRedo, undo: () => drafting.ctl.undo(), redo: () => drafting.ctl.redo() }
+        : null;
   const handleUndo = useCallback(
     () => void (modeHistory ? modeHistory.undo() : editor.undo().then(() => elevEditor?.load(false))),
     [editor, elevEditor, modeHistory],
@@ -1100,6 +1210,24 @@ export function SurveyScreen({
     [review, photoFs, services, roomId],
   );
 
+  // Un solo dueño del trazo de un dedo en la planta, según la herramienta activa.
+  const planDrawTarget = review.drawEnabled
+    ? review.plan
+    : progress.drawEnabled
+      ? progress.planDraw
+      : drafting.drawEnabled
+        ? drafting.planDraw
+        : {
+            begin: (x: number, y: number) => editor.drawBegin(x, y),
+            move: (x: number, y: number) => editor.drawMove(x, y),
+            end: (x: number, y: number) => void editor.drawEnd(x, y),
+            cancel: () => editor.drawCancel(),
+          };
+  const planSketch = useMemo(
+    () => mergeSketches(review.planSketch, progress.planSketch, drafting.planSketch),
+    [review.planSketch, progress.planSketch, drafting.planSketch],
+  );
+
   const chromeTop = chromeSpacing.sm;
   const belowBpc = chromeTop + chromeSizes.bpcHeight + chromeSpacing.sm;
   const spaceName = roomName ?? 'Espacio';
@@ -1136,10 +1264,11 @@ export function SurveyScreen({
           palette={canvasPalette}
           grid={{ show: gridLines || gridDots, lines: gridLines, dots: gridDots }}
           dragEnabled={editable && state.tool === 'select' && !state.busy}
-          drawEnabled={(editable && state.tool === 'wall') || progress.drawEnabled || review.drawEnabled}
-          sketch={review.active ? review.planSketch : progress.planSketch}
+          drawEnabled={(editable && state.tool === 'wall') || progress.drawEnabled || review.drawEnabled || drafting.drawEnabled}
+          sketch={planSketch}
           doubleTapEnabled={state.tool === 'select' && wsState.workMode !== 'topografia'}
           rotationSnaps={topo.rotationSnaps}
+          rotationEnabled={wsState.gridRotation}
           longPressEnabled
           live={live}
           draftThickness={(activeTool?.props?.thickness ?? 15) / 100}
@@ -1150,21 +1279,13 @@ export function SurveyScreen({
           onDragMove={handleDragMove}
           onDragEnd={handleDragEnd}
           onDragCancel={handleDragCancel}
-          onDrawBegin={(x, y) =>
-            review.drawEnabled ? review.plan.begin(x, y) : progress.drawEnabled ? progress.planDraw.begin(x, y) : editor.drawBegin(x, y)
-          }
-          onDrawMove={(x, y) =>
-            review.drawEnabled ? review.plan.move(x, y) : progress.drawEnabled ? progress.planDraw.move(x, y) : editor.drawMove(x, y)
-          }
+          onDrawBegin={(x, y) => planDrawTarget.begin(x, y)}
+          onDrawMove={(x, y) => planDrawTarget.move(x, y)}
           onDrawEnd={(x, y) => {
             haptic.commit();
-            if (review.drawEnabled) review.plan.end(x, y);
-            else if (progress.drawEnabled) progress.planDraw.end(x, y);
-            else void editor.drawEnd(x, y);
+            planDrawTarget.end(x, y);
           }}
-          onDrawCancel={() =>
-            review.drawEnabled ? review.plan.cancel() : progress.drawEnabled ? progress.planDraw.cancel() : editor.drawCancel()
-          }
+          onDrawCancel={() => planDrawTarget.cancel()}
           onCameraChange={(t) => editor.setTransform(t)}
         />
 
@@ -1180,6 +1301,11 @@ export function SurveyScreen({
             chromeTop={chromeTop}
             progress={progress}
             review={review}
+            drafting={drafting}
+            onOpenDraftSheet={() => setDraftSheetOpen(true)}
+            photoMarkers={state.photoMarkers}
+            onFacePhoto={setPendingFacePhoto}
+            onOpenPhoto={onOpenPhoto}
             onClose={closeElevation}
           />
         ) : (
@@ -1187,7 +1313,9 @@ export function SurveyScreen({
             <Bpc
               context={bpcContext}
               toolDetail={
-                review.tool
+                drafting.tool
+                  ? DRAFT_HINT[drafting.tool]
+                  : review.tool
                   ? 'Dibuja sobre el plano · el color se cambia en la BPC'
                   : progress.tool
                   ? progressItems.join(' · ')
@@ -1309,6 +1437,7 @@ export function SurveyScreen({
       </BottomSheet>
 
       {projectId ? <TopographySheets topo={topo} vertices={topoVertices} /> : null}
+      <DraftSheets drafting={drafting} open={draftSheetOpen} onClose={() => setDraftSheetOpen(false)} />
       <ReviewSheets
         review={review}
         projectName={projectName}
@@ -1342,14 +1471,14 @@ export function SurveyScreen({
 
       {/* --- Cámara anclada a la planta --- */}
       <Modal
-        visible={state.pendingPhotoPoint !== null}
+        visible={state.pendingPhotoPoint !== null || pendingFacePhoto !== null}
         animationType="slide"
-        onRequestClose={() => editor.clearPendingPhotoPoint()}
+        onRequestClose={closeCamera}
       >
         <CameraCaptureView
           capture={photoCapture}
           onCapture={handlePhotoCaptured}
-          onClose={() => editor.clearPendingPhotoPoint()}
+          onClose={closeCamera}
         />
       </Modal>
 
