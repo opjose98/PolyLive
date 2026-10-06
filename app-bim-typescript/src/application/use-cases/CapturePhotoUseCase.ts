@@ -5,6 +5,7 @@
 
 import { sealPhoto } from '../../domain/evidence/seal';
 import {
+  auditPhotoId,
   IObjectStore,
   RoomId,
   AuditPhotoId,
@@ -58,7 +59,7 @@ export class CapturePhotoUseCase {
   ) {}
 
   async execute(input: CapturePhotoInput): Promise<CapturePhotoOutput> {
-    const photoId = generateId() as unknown as AuditPhotoId;
+    const photoId = auditPhotoId(generateId());
     const timestamp = Date.now();
     const filename = input.filename ?? `room-${input.roomId}-${timestamp}.jpg`;
 

@@ -10,6 +10,7 @@
 
 import type { StoreApi } from 'zustand/vanilla';
 import type { WorkspaceState } from './workspaceStore';
+import { record } from '../shared/diagnostics';
 
 export const PREF_KEYS = ['canvasTheme', 'grid', 'snap', 'scale', 'layers'] as const;
 export type WorkspacePrefs = Partial<Pick<WorkspaceState, (typeof PREF_KEYS)[number]>>;
@@ -42,8 +43,9 @@ export async function bindWorkspacePrefs(store: StoreApi<WorkspaceState>, storag
   try {
     const saved = await storage.load();
     if (saved) store.setState(mergePrefs(store.getState(), saved));
-  } catch {
+  } catch (err) {
     // Unas preferencias ilegibles no deben impedir trabajar: se usan las de fábrica.
+    record('warn', 'prefs', 'Preferencias ilegibles: se usan las de fábrica', err);
   }
   let last = JSON.stringify(pickPrefs(store.getState()));
   let timer: ReturnType<typeof setTimeout> | null = null;

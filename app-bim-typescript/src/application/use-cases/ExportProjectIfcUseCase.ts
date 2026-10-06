@@ -8,7 +8,7 @@
 // validación se omiten y se informan.
 // =============================================================================
 
-import type { IObjectStore, RevitObjectId, RoomId } from '../../domain/objects/base';
+import { revitObjectId, type IObjectStore, type RoomId } from '../../domain/objects/base';
 import { Column } from '../../domain/objects/column';
 import { Door } from '../../domain/objects/door';
 import { Floor, floorZoneId } from '../../domain/objects/floor';
@@ -44,7 +44,7 @@ export class ExportProjectIfcUseCase {
     const spaces: SpaceContent[] = [];
     const skipped: string[] = [];
     for (const s of input.spaces) {
-      const room = await this.store.readObject(s.roomId as unknown as RevitObjectId);
+      const room = await this.store.readObject(revitObjectId(s.roomId));
       if (!(room instanceof Room)) {
         skipped.push(s.roomId as string);
         continue;

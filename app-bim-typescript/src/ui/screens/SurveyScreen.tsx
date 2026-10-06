@@ -129,6 +129,7 @@ export interface SurveyScreenProps {
 /** Pantallas que se abren desde el menú ☰, por encima del levantamiento. */
 export type { MenuScreen } from '../workspace/useSurveyMenu';
 import type { MenuScreen } from '../workspace/useSurveyMenu';
+import { record } from '../../shared/diagnostics';
 
 // ---------------------------------------------------------------------------
 // Componente
@@ -161,7 +162,7 @@ export function SurveyScreen({
       new EditorController({
         services,
         roomId,
-        roomObjectId: revitObjectId(roomId as unknown as string),
+        roomObjectId: revitObjectId(roomId as string),
         initialTransform: { scale: 100, offsetX: screenWidth / 2, offsetY: canvasHeight / 2 },
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- el tamaño inicial no recrea el editor
@@ -350,7 +351,7 @@ export function SurveyScreen({
   const topo = useTopography({
     services,
     projectId,
-    spaceId: roomId as unknown as string,
+    spaceId: roomId as string,
     editor,
     levelZ: Number.isFinite(levelInfo.active.value) ? levelInfo.active.value : 0,
     operatorName,
@@ -361,7 +362,7 @@ export function SurveyScreen({
   const topoTools = useTopoTools({
     services,
     projectId,
-    spaceId: roomId as unknown as string,
+    spaceId: roomId as string,
     projectName,
     editor,
     topo,
@@ -373,7 +374,7 @@ export function SurveyScreen({
   const progress = useProgress({
     services,
     projectId,
-    spaceId: roomId as unknown as string,
+    spaceId: roomId as string,
     editor,
     operatorName,
     objectsVersion: state.objects,
@@ -382,7 +383,7 @@ export function SurveyScreen({
   // --- Revisión (M4): marcas y observaciones ---
   const review = useReview({
     services,
-    spaceId: roomId as unknown as string,
+    spaceId: roomId as string,
     editor,
     operatorName,
     touchTolerancePx: CANVAS_TOUCH_TOLERANCE_PX,
@@ -402,7 +403,7 @@ export function SurveyScreen({
   const drafting = useEditorDrafting({
     services,
     editor,
-    spaceId: roomId as unknown as string,
+    spaceId: roomId as string,
     levelId: levelInfo.active.id,
     geo: topo.geo,
     palette: canvasPalette,
@@ -702,7 +703,7 @@ export function SurveyScreen({
       floors: editor.floorViews,
       genericOpenings: state.genericOpenings,
       showNodes: state.tool === 'wall',
-      measureTargetId: state.measureTargetId as unknown as string | null,
+      measureTargetId: state.measureTargetId as string | null,
       photoMarkers: state.photoMarkers,
     }),
     [displayObjects, dragging, state.selectedId, handles, state.rooms, roomName, state.selectedZoneId, state.tool, state.measureTargetId, state.photoMarkers, state.genericOpenings],
@@ -1122,8 +1123,9 @@ export function SurveyScreen({
         try {
           const p = await services.store.readAuditPhoto(id as never);
           if (p?.foto) out.set(id, `data:image/jpeg;base64,${uint8ArrayToBase64(p.foto as Uint8Array)}`);
-        } catch {
+        } catch (err) {
           // Sin la foto el acta igual sale (dice "Con foto").
+          record('warn', 'review-report', `Foto ${id} no disponible para el acta`, err);
         }
       }
       return out;
@@ -1140,7 +1142,7 @@ export function SurveyScreen({
       try {
         const { photoId, bimCode } = await saveFieldPhoto({ services, fs: photoFs, roomId, base64: photo.base64, operator: operatorName, notes: 'Revisión' });
         const result = { photoId };
-        await review.ctl.attachPhoto(itemId, result.photoId as unknown as string);
+        await review.ctl.attachPhoto(itemId, result.photoId as string);
         toast(`Foto ${bimCode} adjunta`, { kind: 'success' });
       } catch (err: unknown) {
         alertDialog('Error', err instanceof AppError ? err.userMessage : 'No se pudo guardar la foto.');

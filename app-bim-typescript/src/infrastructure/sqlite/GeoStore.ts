@@ -126,7 +126,7 @@ export class GeoStore {
 
   /** Crea el mojón en la biblioteca y lo enlaza al proyecto. */
   async createBenchmark(projectId: string, input: NewBenchmark): Promise<ProjectBenchmark> {
-    const id = generateId() as unknown as string;
+    const id = generateId() as string;
     const createdAt = new Date().toISOString();
     await this.db.run(
       `INSERT INTO benchmarks (id, name, description, lat, lon, h, source, accuracy, created_by, created_at)

@@ -55,7 +55,7 @@ export function draggedIds(s: EditorState): ReadonlySet<string> {
   const walls = new Set<string>([id, ...s.dragLinked.map((o) => o.id as string)]);
   const out = new Set<string>(walls);
   for (const o of s.objects) {
-    if ((o instanceof Door || o instanceof Window) && walls.has(o.parentWallId as unknown as string)) out.add(o.id as string);
+    if ((o instanceof Door || o instanceof Window) && walls.has(o.parentWallId as string)) out.add(o.id as string);
   }
   return out;
 }
@@ -80,7 +80,7 @@ export function createLiveSource(editor: EditorController): LiveSource {
         objects.push(preview, ...s.dragLinked);
         const moving = new Set(objects.map((o) => o.id as string));
         for (const o of s.objects) {
-          if ((o instanceof Door || o instanceof Window) && moving.has(o.parentWallId as unknown as string)) objects.push(o);
+          if ((o instanceof Door || o instanceof Window) && moving.has(o.parentWallId as string)) objects.push(o);
         }
       }
       const snapIndicator =

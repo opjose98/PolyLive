@@ -90,7 +90,7 @@ export class ProjectService {
     }
 
     const project = new Project({
-      id: toProjectId(generateId() as unknown as string),
+      id: toProjectId(generateId() as string),
       bimCode,
       name: input.name,
       description: input.description,
@@ -156,7 +156,7 @@ export class ProjectService {
     const newRoomId = generateId();
     const room = new Room({
       id: newRoomId,
-      roomId: toRoomId(newRoomId as unknown as string),
+      roomId: toRoomId(newRoomId as string),
       levelId: this.defaultLevelId,
       geometry: [],
       isOpen: true,
@@ -165,7 +165,7 @@ export class ProjectService {
 
     const space = new ProjectSpace({
       projectId: input.projectId,
-      roomId: newRoomId as unknown as string,
+      roomId: newRoomId as string,
       bimCode,
       name: input.name,
       orderIndex: existingSpaces.length,
@@ -223,7 +223,7 @@ export class ProjectService {
 
   /** Proyecto al que pertenece un Recinto, o `null`. */
   projectOfRoom(roomId: RoomId): Promise<ProjectId | null> {
-    return this.projects.projectOfRoom(roomId as unknown as string);
+    return this.projects.projectOfRoom(roomId as string);
   }
 
   // -------------------------------------------------------------------------

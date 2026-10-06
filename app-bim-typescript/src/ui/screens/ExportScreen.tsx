@@ -60,7 +60,7 @@ export function ExportScreen({ services, roomId, projectId, projectName = 'Proye
 
   const loadRoom = useCallback(async () => {
     try {
-      const obj = await services.store.readObject(revitObjectId(roomId as unknown as string));
+      const obj = await services.store.readObject(revitObjectId(roomId as string));
       setRoom(obj instanceof Room ? obj : null);
     } catch {
       setRoom(null);

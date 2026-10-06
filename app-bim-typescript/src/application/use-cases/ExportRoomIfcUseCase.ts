@@ -5,6 +5,7 @@
 
 import { ValidationWarning } from '../../domain/geometry/types';
 import {
+  revitObjectId,
   IObjectStore,
   Room,
   Wall,
@@ -60,7 +61,7 @@ export class ExportRoomIfcUseCase {
     const startTime = Date.now();
 
     // 1. Validar
-    const room = await this.store.readObject(input.roomId as unknown as RevitObjectId);
+    const room = await this.store.readObject(revitObjectId(input.roomId));
     if (!room || !(room instanceof Room)) throw new Error('Room no existe');
 
     const validationResult = this.validationService.validateExport(room);

@@ -251,7 +251,7 @@ export class WallElevationService {
     const objects = await this.store.listObjects(wall.roomId);
     const vanos = objects.filter(
       (o): o is Door | Window =>
-        (o instanceof Door || o instanceof Window) && (o.parentWallId as unknown as string) === (wall.id as string),
+        (o instanceof Door || o instanceof Window) && (o.parentWallId as string) === (wall.id as string),
     );
     const byId = new Map(vanos.map((v) => [v.id as string, v]));
     const used = new Set<string>();
@@ -442,7 +442,7 @@ export class WallElevationService {
   ): Promise<{ elevation: WallElevation; opening: WallOpening; validation: ElevationValidation }> {
     const defaults = OPENING_DEFAULTS[params.type];
     const opening: WallOpening = {
-      id: wallOpeningId(generateId() as unknown as string),
+      id: wallOpeningId(generateId() as string),
       type: params.type,
       xOffset: params.xOffset,
       width: params.width ?? defaults.width,

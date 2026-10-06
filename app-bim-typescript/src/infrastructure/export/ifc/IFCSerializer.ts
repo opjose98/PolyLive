@@ -367,7 +367,7 @@ export class IFCSerializer {
       // 4c. Puertas y ventanas (vano + relleno), relativos a su muro
       // ------------------------------------------------------------------
       const writeFilling = (vano: Door | Window, kind: 'door' | 'window') => {
-        const host = hosts.get(vano.parentWallId as unknown as string);
+        const host = hosts.get(vano.parentWallId as string);
         if (!host) return;
         const width = vano.width as number;
         const height = vano.height as number;
@@ -421,7 +421,7 @@ export class IFCSerializer {
         });
         w.propertySet(vano.id as string, REVIT_CONSTRAINTS_PSET, fill, [
           ['PolyLiveId', { identifier: vano.id as string }],
-          ['HostWallId', { identifier: vano.parentWallId as unknown as string }],
+          ['HostWallId', { identifier: vano.parentWallId as string }],
           ['OffsetAlongWall', { length: along }],
           ['SillHeight', { length: sill }],
           ['Phase', { label: phaseName(vano) }],

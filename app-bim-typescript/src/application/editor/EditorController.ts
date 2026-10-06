@@ -118,7 +118,7 @@ export class EditorController extends EditorCreation {
     const zone = this.state.rooms.find((r) => r.id === zoneId);
     const d = zone ? controlDiagonal(zone.netPolygon && zone.netPolygon.length >= 4 ? zone.netPolygon : zone.polygon) : null;
     if (!d) return null;
-    const last = (await this.services.store.listMeasurementsForWall(zoneId as unknown as WallId)).find((m) => m.reference === 'diagonal');
+    const last = (await this.services.store.listMeasurementsForWall(zoneId as WallId)).find((m) => m.reference === 'diagonal');
     return { model: d.length, check: last ? checkClosure(d.length, last.average as number) : null };
   }
 
@@ -129,7 +129,7 @@ export class EditorController extends EditorCreation {
     try {
       const r = await this.services.useCases.captureMeasurement.execute({
         roomId: this.roomId,
-        wallId: zoneId as unknown as WallId,
+        wallId: zoneId as WallId,
         method: 'manual',
         value: measured,
         reference: 'diagonal',
@@ -151,7 +151,7 @@ export class EditorController extends EditorCreation {
 
   protected measureTargetWall(): Wall | null {
     const target = this.state.measureTargetId;
-    return target ? (this.walls.find((w) => (w.id as string) === (target as unknown as string)) ?? null) : null;
+    return target ? (this.walls.find((w) => (w.id as string) === (target as string)) ?? null) : null;
   }
 
   /** Muros unidos (con espesor) y recintos del nivel, para medir de cara a cara. */
@@ -173,7 +173,7 @@ export class EditorController extends EditorCreation {
    */
   async applyMeasurementToWall(distance: Meters, reference: MeasureReference = 'axis'): Promise<void> {
     const target = this.state.measureTargetId;
-    const wall = target ? this.walls.find((w) => (w.id as string) === (target as unknown as string)) : null;
+    const wall = target ? this.walls.find((w) => (w.id as string) === (target as string)) : null;
     if (!wall) {
       this.notify('info', 'Elige primero el muro a corregir con la herramienta Medir.');
       return;

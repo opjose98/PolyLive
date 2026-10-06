@@ -5,6 +5,7 @@
 
 import { Meters, meters } from '../../domain/geometry/types';
 import {
+  measurementId,
   IObjectStore,
   WallId,
   RoomId,
@@ -90,7 +91,7 @@ export class CaptureMeasurementUseCase {
     const average = meters(avg);
 
     // Persistir
-    const id = generateId() as unknown as MeasurementId;
+    const id = measurementId(generateId());
     const measurement = new Measurement({
       id,
       roomId: input.roomId,

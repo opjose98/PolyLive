@@ -5,6 +5,7 @@
 
 import { Meters, ValidationWarning } from '../../domain/geometry/types';
 import {
+  revitObjectId,
   IObjectStore,
   Wall,
   RoomId,
@@ -48,7 +49,7 @@ export class CreateWindowUseCase {
 
   async execute(input: CreateWindowInput): Promise<CreateWindowOutput> {
     // 1. Verificar Wall padre
-    const parentWall = await this.store.readObject(input.parentWallId as unknown as RevitObjectId);
+    const parentWall = await this.store.readObject(revitObjectId(input.parentWallId));
     if (!parentWall || !(parentWall instanceof Wall)) {
       throw new Error('Wall padre no existe o no es un Wall');
     }

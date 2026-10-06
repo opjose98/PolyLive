@@ -301,7 +301,7 @@ export class ProgressController {
 
   private addMark(target: ProgressTarget, shape: ProgressShape, erase: boolean): Promise<void> {
     const mark: ProgressMark = {
-      id: generateId() as unknown as string,
+      id: generateId() as string,
       spaceId: this.spaceId,
       cutId: this.state.cutId!,
       activityId: this.state.activityId!,

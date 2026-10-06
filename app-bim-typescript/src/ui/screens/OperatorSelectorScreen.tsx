@@ -55,7 +55,7 @@ export function OperatorSelectorScreen({ store, onSelect }: OperatorSelectorScre
     }
     setCreating(true);
     try {
-      const operator = new Operator({ id: operatorId(generateId() as unknown as string), name: trimmed });
+      const operator = new Operator({ id: operatorId(generateId() as string), name: trimmed });
       await store.createOperator(operator);
       setNewName('');
       await loadOperators();

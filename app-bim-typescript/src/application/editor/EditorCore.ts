@@ -549,7 +549,7 @@ export abstract class EditorCore {
    */
   protected levelVisible(o: RevitObjectBase, lv: LevelScope): boolean {
     if (o instanceof Door || o instanceof Window) {
-      const host = this.wallById(o.parentWallId as unknown as string);
+      const host = this.wallById(o.parentWallId as string);
       if (host) return this.levelVisible(host, lv);
     }
     if (this.levelOf(o, lv) === lv.active) return true;
@@ -623,7 +623,7 @@ export abstract class EditorCore {
 
   /** Muro padre de un vano, o `null` si ya no existe. */
   parentWallOf(vano: Door | Window): Wall | null {
-    const id = vano.parentWallId as unknown as string;
+    const id = vano.parentWallId as string;
     return this.walls.find((w) => (w.id as string) === id) ?? null;
   }
 
@@ -699,7 +699,7 @@ export abstract class EditorCore {
   protected syncZones(contours: readonly DetectedRoom[], walls: readonly Wall[]): Promise<DetectedRoom[]> {
     const run = async (): Promise<DetectedRoom[]> => {
       const zones = this.services.zones;
-      const space = this.roomId as unknown as string;
+      const space = this.roomId as string;
       const lv = this.levelScope;
       const level = lv?.active ?? '';
       const all = await zones.list(space);
@@ -712,7 +712,7 @@ export abstract class EditorCore {
         spaceId: space,
         levelId: level,
         nextNumber: Math.max(0, ...all.map((z) => z.number)) + 1,
-        newId: () => generateId() as unknown as string,
+        newId: () => generateId() as string,
         now: new Date().toISOString(),
       });
       await zones.saveGeometry(changed);

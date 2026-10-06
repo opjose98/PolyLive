@@ -103,7 +103,7 @@ export class ProgressStore {
   }
 
   private async insertActivity(projectId: string, name: string, color: string, order: number): Promise<string> {
-    const id = generateId() as unknown as string;
+    const id = generateId() as string;
     await this.db.run(`INSERT INTO progress_activities (id, project_id, name, color, order_index) VALUES (?, ?, ?, ?, ?)`, [
       id,
       projectId,
@@ -146,7 +146,7 @@ export class ProgressStore {
   }
 
   async addCut(projectId: string, date: string, label = ''): Promise<ProgressCut> {
-    const cut: ProgressCut = { id: generateId() as unknown as string, projectId, date, label, createdAt: new Date().toISOString() };
+    const cut: ProgressCut = { id: generateId() as string, projectId, date, label, createdAt: new Date().toISOString() };
     await this.db.run(`INSERT INTO progress_cuts (id, project_id, date, label, created_at) VALUES (?, ?, ?, ?, ?)`, [
       cut.id,
       projectId,

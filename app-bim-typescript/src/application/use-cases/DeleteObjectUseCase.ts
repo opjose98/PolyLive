@@ -42,7 +42,7 @@ export class DeleteObjectUseCase {
       const vanos = allObjects.filter(
         (o) =>
           (o instanceof Door || o instanceof Window) &&
-          o.parentWallId === (object.id as unknown as string),
+          o.parentWallId === (object.id as string),
       );
 
       for (const vano of vanos) {

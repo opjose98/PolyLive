@@ -14,7 +14,7 @@
 // de los motivos para tener DXF. Se exporta lo que haya.
 // =============================================================================
 
-import { RoomId, RevitObjectId, IObjectStore } from '../../domain/objects/base';
+import { RoomId, IObjectStore, revitObjectId } from '../../domain/objects/base';
 import { Room } from '../../domain/objects/room';
 import { Wall } from '../../domain/objects/wall';
 import { Column } from '../../domain/objects/column';
@@ -58,7 +58,7 @@ export class ExportRoomDxfUseCase {
     const startTime = Date.now();
 
     const room = (await this.store.readObject(
-      input.roomId as unknown as RevitObjectId,
+      revitObjectId(input.roomId),
     )) as Room | null;
 
     const objects = await this.store.listObjects(input.roomId);

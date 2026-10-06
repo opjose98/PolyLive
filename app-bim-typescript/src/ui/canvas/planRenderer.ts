@@ -214,7 +214,7 @@ function makeCtx(r: ICanvasRenderer, scene: PlanScene): Ctx {
   const vanosByWall = new Map<string, (Door | Window)[]>();
   for (const o of scene.objects) {
     if (!(o instanceof Door) && !(o instanceof Window)) continue;
-    const key = o.parentWallId as unknown as string;
+    const key = o.parentWallId as string;
     vanosByWall.set(key, [...(vanosByWall.get(key) ?? []), o]);
   }
   return {
@@ -832,7 +832,7 @@ function drawSelection(ctx: Ctx): void {
   } else if (selected instanceof Room && selected.geometry.length >= 3) {
     r.strokePolygon(selected.geometry.map(toScreen));
   } else if (selected instanceof Door || selected instanceof Window) {
-    const wall = ctx.wallsById.get(selected.parentWallId as unknown as string);
+    const wall = ctx.wallsById.get(selected.parentWallId as string);
     if (wall) {
       const a = Math.max(0, selected.offsetAlongWall as number);
       const b = a + (selected.width as number);

@@ -47,7 +47,7 @@ export abstract class Command implements ICommand {
   abstract readonly type: string;
 
   constructor() {
-    this.id = generateId() as unknown as CommandId;
+    this.id = commandId(generateId());
     this.timestamp = new Date();
   }
 

@@ -86,7 +86,7 @@ async function save(ctx: ExportContext, ext: string, content: string, detail?: s
 /** Dibujo técnico del espacio; si falla la lectura, el plano sale sin él (no se pierde la exportación). */
 async function loadDrafts(services: AppServices, ctx: ExportContext): Promise<DraftItem[]> {
   try {
-    return await services.drafts.list(ctx.roomId as unknown as string);
+    return await services.drafts.list(ctx.roomId as string);
   } catch (err) {
     console.warn('[export-drafts]', err);
     return [];
@@ -101,7 +101,7 @@ export async function exportRevitIfc(services: AppServices, ctx: ExportContext):
   try {
     const none = Promise.resolve([] as ProjectMarker[]);
     const geo = ctx.projectId ? await services.topography.getGeoreference(ctx.projectId) : null;
-    const space = ctx.roomId as unknown as string;
+    const space = ctx.roomId as string;
     // Proyecto amarrado: el IFC sale georreferenciado (coordenadas compartidas en Revit).
     const mapConversion = isGeoreferenced(geo)
       ? mapConversionFor(geo, space, workingCrs(geo.crs), crsDef(workingCrs(geo.crs)).name)
@@ -110,7 +110,7 @@ export async function exportRevitIfc(services: AppServices, ctx: ExportContext):
       ctx.projectId ? services.markers.list(ctx.projectId, 'level') : none,
       ctx.projectId ? services.markers.list(ctx.projectId, 'phase') : none,
       services.elevations.listElevations(ctx.roomId),
-      services.zones.list(ctx.roomId as unknown as string),
+      services.zones.list(ctx.roomId as string),
     ]);
     const sills = new Map<string, number>();
     for (const e of elevs) for (const o of e.openings) if (o.vanoId) sills.set(o.vanoId, o.sillHeight);
@@ -149,7 +149,7 @@ export async function exportPlanDxf(services: AppServices, ctx: ExportContext): 
     const elevations = await services.elevations.listElevations(ctx.roomId);
     // La planta del DXF es la del nivel base: sus recintos (los de otros niveles se superpondrían).
     const base = ctx.projectId ? (await services.markers.list(ctx.projectId, 'level')).find((m) => m.isBase)?.id : undefined;
-    const allZones = await services.zones.list(ctx.roomId as unknown as string);
+    const allZones = await services.zones.list(ctx.roomId as string);
     const zones = dxfZones(allZones, base ?? '');
     // Dibujo técnico del mismo nivel (el de planta; lo de alzado no va al plano de planta).
     const drafts = (await loadDrafts(services, ctx)).filter(
@@ -180,7 +180,7 @@ async function draftContext(
   ctx: ExportContext,
   zones: Awaited<ReturnType<AppServices['zones']['list']>>,
 ): Promise<Parameters<typeof draftDxfEntities>[1]> {
-  const space = ctx.roomId as unknown as string;
+  const space = ctx.roomId as string;
   const geo = ctx.projectId ? await services.topography.getGeoreference(ctx.projectId).catch(() => null) : null;
   const centers = new Map<string, Point2D>();
   for (const o of await services.store.listObjects(ctx.roomId)) {
@@ -208,7 +208,7 @@ export async function exportProjectIfc(
   ctx: { readonly projectId: string; readonly projectName: string; readonly author?: string },
 ): Promise<ExportOutcome> {
   toast('Generando IFC del proyecto…', { kind: 'info', durationMs: 1200 });
-  const fileCtx: ExportContext = { roomId: '' as unknown as RoomId, projectId: ctx.projectId, projectName: ctx.projectName, spaceName: 'proyecto', author: ctx.author };
+  const fileCtx: ExportContext = { roomId: '' as RoomId, projectId: ctx.projectId, projectName: ctx.projectName, spaceName: 'proyecto', author: ctx.author };
   try {
     const geo = await services.topography.getGeoreference(ctx.projectId).catch(() => null);
     // El origen del IFC es el del proyecto (no el de un espacio): giro e x,y nulos.
@@ -224,7 +224,7 @@ export async function exportProjectIfc(
     let memberCount = 0;
     for (const d of details) {
       if (!d.room) continue;
-      const roomId = d.space.roomId as unknown as RoomId;
+      const roomId = d.space.roomId as RoomId;
       const spaceCtx: ExportContext = { ...fileCtx, roomId, spaceName: d.space.name };
       const [elevs, zones, drafts] = await Promise.all([
         services.elevations.listElevations(roomId),

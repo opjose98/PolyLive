@@ -255,7 +255,7 @@ export class DraftingController {
 
   private async create(view: DraftView, kind: DraftKind, points: readonly Point2D[], text: string, targetId?: string): Promise<DraftItem> {
     const item: DraftItem = {
-      id: generateId() as unknown as string,
+      id: generateId() as string,
       spaceId: this.spaceId,
       view,
       levelId: view.kind === 'plan' ? this.levelId : '',

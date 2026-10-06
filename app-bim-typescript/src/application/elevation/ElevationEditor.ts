@@ -498,7 +498,7 @@ export class ElevationEditor {
   private async snapshot(wall: Wall): Promise<ElevationSnapshot> {
     const vanos = new Map<string, VanoSnapshot | null>();
     for (const o of await this.services.store.listObjects(wall.roomId)) {
-      if ((o instanceof Door || o instanceof Window) && (o.parentWallId as unknown as string) === (wall.id as string)) {
+      if ((o instanceof Door || o instanceof Window) && (o.parentWallId as string) === (wall.id as string)) {
         vanos.set(o.id as string, {
           offsetAlongWall: o.offsetAlongWall as number,
           width: o.width as number,

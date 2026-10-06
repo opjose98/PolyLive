@@ -24,7 +24,7 @@ export class ReshapeWallsUseCase {
   async execute(input: ReshapeWallsInput): Promise<{ changed: number }> {
     const snapshots: WallEndsSnapshot[] = [];
     for (const c of input.changes) {
-      const wall = await this.store.readObject(c.id as unknown as RevitObjectId);
+      const wall = await this.store.readObject(c.id as RevitObjectId);
       if (!(wall instanceof Wall)) continue;
       const after = { start: c.start ?? wall.startPoint, end: c.end ?? wall.endPoint };
       if (Math.hypot(after.end.x - after.start.x, after.end.y - after.start.y) < MIN_RESHAPED_LENGTH) {

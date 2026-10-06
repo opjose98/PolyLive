@@ -86,7 +86,7 @@ export class MoveObjectUseCase {
       const vanos = allObjects.filter(
         (o) =>
           (o instanceof Door || o instanceof Window) &&
-          o.parentWallId === (object.id as unknown as string),
+          o.parentWallId === (object.id as string),
       );
       affectedVanos = vanos.map((v) => v.id);
     } else if (object instanceof Column) {

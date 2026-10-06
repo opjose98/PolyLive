@@ -127,7 +127,7 @@ function uniqueWallIds(edges: readonly TopologyEdge[]): RevitObjectId[] {
   const ids: RevitObjectId[] = [];
   for (const edge of edges) {
     const id = edge.sourceWall.id;
-    const key = id as unknown as string;
+    const key = id as string;
     if (seen.has(key)) continue;
     seen.add(key);
     ids.push(id);

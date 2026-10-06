@@ -31,7 +31,7 @@ import { SettingsScreen } from './screens/SettingsScreen';
 import { PermissionsManager } from '../native/permissions/PermissionsManager';
 import { ExpoSQLiteDatabase } from '../native/sqlite/ExpoSQLiteDatabase';
 import { ExpoBackupDatabaseUseCase } from '../native/backup/ExpoBackupDatabaseUseCase';
-import { diagnostics } from '../shared/diagnostics';
+import { diagnostics, record } from '../shared/diagnostics';
 import { startDiagnosticsLog } from '../native/diagnostics/diagnosticsLog';
 import { bindWorkspacePrefs } from '../state/workspacePrefs';
 import { workspaceStore } from '../state/workspaceStore';
@@ -99,8 +99,9 @@ export default function App() {
           permManager.checkAll(),
           new Promise((_, reject) => setTimeout(() => reject(new Error('permissions timeout')), 3000)),
         ]);
-      } catch {
+      } catch (err) {
         // Los permisos se piden individualmente cuando hagan falta.
+        record('warn', 'permissions', 'No se pudo leer el estado de los permisos al arrancar', err);
       }
       if (!settled) {
         settled = true;
@@ -305,7 +306,7 @@ export default function App() {
             <ExportScreen
               services={services}
               roomId={activeRoomId}
-              projectId={project?.id as unknown as string | undefined}
+              projectId={project?.id as string | undefined}
               projectName={project?.name}
               operatorName={operator.name}
             />
@@ -351,7 +352,7 @@ export default function App() {
       <SurveyScreen
         services={services}
         roomId={activeRoomId}
-        projectId={project.id as unknown as string}
+        projectId={project.id as string}
         projectName={project.name}
         projectCode={project.bimCode}
         operatorName={operator.name}
