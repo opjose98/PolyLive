@@ -4,7 +4,7 @@
 
 import { saveBase64ToUserFolder, saveTextToUserFolder } from '../../native/export/saveToUserFolder';
 import { folderHint } from './folderHint';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { shareExistingFile, shareFile } from '../../native/export/shareFile';
 import { htmlToPdf } from '../../native/export/printPdf';
 import { toast } from '../primitives';

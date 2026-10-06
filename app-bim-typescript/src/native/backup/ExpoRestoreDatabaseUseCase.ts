@@ -28,7 +28,7 @@
 // restaurar desde el dispositivo — es decir, en la práctica, sin copias.
 // =============================================================================
 
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { AppError, AppErrorCode } from '../../shared/errors/AppError';
 
 const BACKUP_PREFIX = 'polylive-backup-';

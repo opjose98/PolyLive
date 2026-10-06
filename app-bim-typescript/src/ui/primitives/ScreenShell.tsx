@@ -70,7 +70,7 @@ export function ScreenShell({
 }
 
 const useStyles = themedStyles((colors) => ({
-  root: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.background },
+  root: { ...StyleSheet.absoluteFill, backgroundColor: colors.background },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

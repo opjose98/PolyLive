@@ -12,7 +12,7 @@
 // - Directorio creado automáticamente si no existe
 // =============================================================================
 
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 
 // ---------------------------------------------------------------------------
 // Types

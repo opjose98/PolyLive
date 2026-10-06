@@ -22,6 +22,7 @@ import { Wall } from '../../src/domain/objects/wall';
 import { Door } from '../../src/domain/objects/door';
 import { Window } from '../../src/domain/objects/window';
 import { Column } from '../../src/domain/objects/column';
+import { Floor } from '../../src/domain/objects/floor';
 import { revitObjectId, roomId, levelId, wallId } from '../../src/domain/objects/base';
 import { meters, squareMeters } from '../../src/domain/geometry/types';
 import { WallVertical, extent, uniformWall } from '../../src/domain/objects/vertical';
@@ -351,7 +352,6 @@ describe('IFCSerializer — recintos con identidad (T0)', () => {
 
 describe('IFCSerializer — suelos de recinto (F6a)', () => {
   it('un IfcSlab por suelo ligado, con el contorno neto de su recinto', async () => {
-    const { Floor } = await import('../../src/domain/objects/floor');
     const z = {
       id: 'za',
       code: 'R-01',

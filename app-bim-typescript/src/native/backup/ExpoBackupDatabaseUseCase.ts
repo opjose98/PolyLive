@@ -34,7 +34,7 @@
 // (y el asunto de los sidecars WAL) en ExpoRestoreDatabaseUseCase.ts.
 // =============================================================================
 
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { IDatabase } from '../../infrastructure/sqlite/database';
 import { AppError, AppErrorCode } from '../../shared/errors/AppError';
 

@@ -11,7 +11,7 @@
 // decide qué hacer (en iOS, guardar en los documentos de la app).
 // =============================================================================
 
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
 
 let rememberedDir: string | null = null;
