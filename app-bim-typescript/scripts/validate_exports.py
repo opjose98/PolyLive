@@ -1,6 +1,6 @@
 """Valida los IFC y DXF de muestra con herramientas externas (CI).
 
-Uso: python scripts/validate_exports.py <carpeta con sample.ifc y sample.dxf>
+Uso: python scripts/validate_exports.py <carpeta con sample.ifc, sample.dxf y sample-project.ifc>
 
 Falla (código 1) si:
   · ezdxf encuentra errores en el DXF (R2000) o un texto queda ilegible;
@@ -67,6 +67,10 @@ def check_ifc(path: str) -> list[str]:
 def main() -> int:
     folder = sys.argv[1] if len(sys.argv) > 1 else "artifacts"
     problems = check_dxf(os.path.join(folder, "sample.dxf")) + check_ifc(os.path.join(folder, "sample.ifc"))
+    # IFC del proyecto completo (varios espacios en un modelo), si se generó.
+    project = os.path.join(folder, "sample-project.ifc")
+    if os.path.exists(project):
+        problems += check_ifc(project)
     for p in problems:
         print("ERROR", p)
     return 1 if problems else 0

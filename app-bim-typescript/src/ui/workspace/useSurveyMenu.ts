@@ -2,7 +2,8 @@
 // useSurveyMenu.ts — Menú ☰ del espacio y sus entregables
 // =============================================================================
 //
-// Qué se puede sacar de un espacio: IFC para Revit, IFC y DXF del recinto,
+// Qué se puede sacar de un espacio: IFC para Revit (del espacio o del proyecto
+// completo), IFC y DXF del recinto,
 // plano PDF con cuadro de áreas, cuadro de áreas en CSV, registro fotográfico
 // y el paquete del proyecto (respaldo fuera del teléfono). Más la navegación
 // del menú (galería, otros espacios, operador, ajustes).
@@ -15,7 +16,7 @@ import { planSvg } from '../../application/report/planSvg';
 import type { RoomId } from '../../domain/objects/base';
 import { zoneCode } from '../../domain/objects/zone';
 import type { MainMenuItem } from './MainMenu';
-import { exportRevitIfc } from './exportActions';
+import { exportProjectIfc, exportRevitIfc } from './exportActions';
 import { areaRowsOf, exportAreaCsv, exportPhotoRegister, exportPlanSheet } from './deliverableActions';
 import { exportProjectPackage } from './projectPackageActions';
 
@@ -86,6 +87,9 @@ export function useSurveyMenu(i: SurveyMenuInput): MainMenuItem[] {
       { icon: 'image-multiple-outline', label: 'Galería de fotos', onPress: go('gallery') },
       ...(onExit ? [{ icon: 'view-grid-outline', label: 'Otros espacios del proyecto', onPress: onExit }] : []),
       { section: 'Exportar', icon: 'file-export-outline', label: 'IFC para Revit', detail: 'Pisos por nivel y restricciones', onPress: () => void handleExportIfc() },
+      ...(projectId
+        ? [{ icon: 'office-building-outline', label: 'IFC del proyecto', detail: 'Todos los espacios en un modelo', onPress: () => void exportProjectIfc(services, { projectId, projectName, author: operatorName }) }]
+        : []),
       { icon: 'file-cad', label: 'IFC y DXF del recinto', onPress: go('export') },
       { icon: 'file-pdf-box', label: 'Plano PDF', detail: 'Rótulo, escala gráfica y cuadro de áreas', onPress: () => void handlePlanSheet() },
       { icon: 'table', label: 'Cuadro de áreas (CSV)', onPress: () => void exportAreaCsv(sheetMeta(), areaRows()) },
@@ -97,5 +101,5 @@ export function useSurveyMenu(i: SurveyMenuInput): MainMenuItem[] {
       { section: 'App', icon: 'account-circle-outline', label: 'Operador', detail: operatorName || undefined, onPress: go('profile') },
       { icon: 'cog-outline', label: 'Ajustes y respaldos', onPress: go('settings') },
     ];
-  }, [onExit, onExitProject, onNavigate, onZoomFit, handleExportIfc, operatorName, handlePlanSheet, sheetMeta, areaRows, services, roomId, wallNameOf, projectId]);
+  }, [onExit, onExitProject, onNavigate, onZoomFit, handleExportIfc, operatorName, handlePlanSheet, sheetMeta, areaRows, services, roomId, wallNameOf, projectId, projectName]);
 }

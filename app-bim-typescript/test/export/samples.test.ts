@@ -95,4 +95,36 @@ describe('Muestras de exportación (validación externa en CI)', () => {
       fs.writeFileSync(path.join(out, 'sample.dxf'), dxf);
     }
   });
+
+  it('genera el IFC del proyecto (dos espacios, el segundo desplazado y girado)', async () => {
+    const R2 = roomId('sample-2');
+    const w2 = walls.map(
+      (w, i) => new Wall({ id: revitObjectId(`b${i}`), roomId: R2, startPoint: w.startPoint, endPoint: w.endPoint, thickness: meters(0.2), height: meters(2.6) }),
+    );
+    const room2 = new Room({
+      id: revitObjectId('sample-2'),
+      roomId: R2,
+      levelId: levelId('n0'),
+      geometry: room.geometry,
+      isOpen: false,
+      isClosed: true,
+      area: squareMeters(24),
+      properties: { name: 'Cocina de muestra' },
+    });
+    const ifc = await new IFCSerializer().serializeProject({
+      levels: [{ id: 'n0', name: 'Nivel 0', elevation: 0, isBase: true }],
+      projectName: 'Muestra CI (proyecto)',
+      projectKey: 'ci-sample-project',
+      spaces: [
+        { room, walls, doors: [door], windows: [win], columns: [col], floor: null },
+        { room: room2, walls: w2, doors: [], windows: [], columns: [], floor: null, placement: { x: 10, y: 2, rotation: Math.PI / 2 } },
+      ],
+    });
+    expect(ifc.spaces).toBe(2);
+    const out = process.env.EXPORT_SAMPLES;
+    if (out) {
+      fs.mkdirSync(out, { recursive: true });
+      fs.writeFileSync(path.join(out, 'sample-project.ifc'), ifc.content);
+    }
+  });
 });

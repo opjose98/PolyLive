@@ -13,6 +13,7 @@ import type { AppServices } from '../../application/AppServices';
 import { ValidationError } from '../../application/use-cases/types';
 import type { RoomId } from '../../domain/objects/base';
 import type { ProjectMarker } from '../../domain/objects/marker';
+import { projectId as toProjectId } from '../../domain/objects/project';
 import { AppError } from '../../shared/errors/AppError';
 import { saveTextToUserFolder } from '../../native/export/saveToUserFolder';
 import { folderHint } from './folderHint';
@@ -196,3 +197,78 @@ async function draftContext(
     targetCenter: (id) => centers.get(id) ?? null,
   };
 }
+
+/**
+ * El PROYECTO completo en un IFC: todos sus espacios, cada uno en su ubicación
+ * (amarre), con un solo IfcProject/sitio/edificio y un piso por nivel. Revit lo
+ * abre como un modelo, sin vincular un archivo por espacio.
+ */
+export async function exportProjectIfc(
+  services: AppServices,
+  ctx: { readonly projectId: string; readonly projectName: string; readonly author?: string },
+): Promise<ExportOutcome> {
+  toast('Generando IFC del proyecto…', { kind: 'info', durationMs: 1200 });
+  const fileCtx: ExportContext = { roomId: '' as unknown as RoomId, projectId: ctx.projectId, projectName: ctx.projectName, spaceName: 'proyecto', author: ctx.author };
+  try {
+    const geo = await services.topography.getGeoreference(ctx.projectId).catch(() => null);
+    // El origen del IFC es el del proyecto (no el de un espacio): giro e x,y nulos.
+    const mapConversion = isGeoreferenced(geo)
+      ? mapConversionFor(geo, PROJECT_ORIGIN, workingCrs(geo.crs), crsDef(workingCrs(geo.crs)).name)
+      : undefined;
+    const [lv, ph, details] = await Promise.all([
+      services.markers.list(ctx.projectId, 'level'),
+      services.markers.list(ctx.projectId, 'phase'),
+      services.projects.listSpaceDetails(toProjectId(ctx.projectId)),
+    ]);
+    const spaces = [];
+    let memberCount = 0;
+    for (const d of details) {
+      if (!d.room) continue;
+      const roomId = d.space.roomId as unknown as RoomId;
+      const spaceCtx: ExportContext = { ...fileCtx, roomId, spaceName: d.space.name };
+      const [elevs, zones, drafts] = await Promise.all([
+        services.elevations.listElevations(roomId),
+        services.zones.list(d.space.roomId as string),
+        loadDrafts(services, spaceCtx),
+      ]);
+      const sills = new Map<string, number>();
+      for (const e of elevs) for (const o of e.openings) if (o.vanoId) sills.set(o.vanoId, o.sillHeight);
+      const members = draftIfcMembers(drafts);
+      memberCount += members.length;
+      spaces.push({ roomId, placement: geo?.placements[d.space.roomId as string], zones: ifcZones(zones), openingSills: sills, members });
+    }
+    if (!spaces.length) {
+      const message = 'El proyecto no tiene espacios con datos para exportar.';
+      toast(message, { kind: 'error' });
+      return { ok: false, message };
+    }
+    const out = await services.useCases.exportProjectIfc.execute({
+      levels: lv.map((m) => ({ id: m.id, name: m.name, elevation: m.value, isBase: m.isBase })),
+      phaseNames: new Map(ph.map((m) => [m.id, m.name] as [string, string])),
+      projectName: ctx.projectName,
+      projectKey: ctx.projectId,
+      author: ctx.author,
+      mapConversion,
+      spaces,
+    });
+    if (!out.spaces) {
+      const message = `No se puede exportar: ningún espacio pasa la validación (${out.skipped.join(', ')}).`;
+      toast(message, { kind: 'error' });
+      return { ok: false, message };
+    }
+    const detail =
+      `${out.spaces} espacio(s), ${lv.length || 1} nivel(es)` +
+      summarize(memberCount, 'barra de dibujo', 'barras de dibujo') +
+      (mapConversion ? ', georreferenciado' : '') +
+      (out.skipped.length ? ` · omitidos: ${out.skipped.join(', ')}` : '');
+    return await save(fileCtx, 'ifc', out.ifcContent, detail);
+  } catch (err) {
+    console.warn('[export-project-ifc]', err);
+    const message = failureMessage(err, 'No se pudo exportar el IFC del proyecto.');
+    toast(message, { kind: 'error' });
+    return { ok: false, message };
+  }
+}
+
+/** Id que no es de ningún espacio: su ubicación es la identidad (el origen del proyecto). */
+const PROJECT_ORIGIN = '__project__';

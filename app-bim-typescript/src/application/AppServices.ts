@@ -12,6 +12,8 @@
 // =============================================================================
 
 import { TopographyService } from './geo/TopographyService';
+import { ExportProjectIfcUseCase } from './use-cases/ExportProjectIfcUseCase';
+import { IFCSerializer } from '../infrastructure/export/ifc/IFCSerializer';
 import { GeoStore } from '../infrastructure/sqlite/GeoStore';
 import { MarkerStore } from '../infrastructure/sqlite/MarkerStore';
 import { ZoneStore } from '../infrastructure/sqlite/ZoneStore';
@@ -97,6 +99,7 @@ export interface AppServices {
     linkPhotoToObject: LinkPhotoToObjectUseCase;
     captureMeasurement: CaptureMeasurementUseCase;
     exportRoomIfc: ExportRoomIfcUseCase;
+    exportProjectIfc: ExportProjectIfcUseCase;
     /** Exportación a DXF R2000 (portada de LevON). */
     exportRoomDxf: ExportRoomDxfUseCase;
     /** Detección automática de recintos (motor portado de LevON); la usa el editor en cada recarga. */
@@ -149,6 +152,7 @@ export function createAppServices(db: IDatabase): AppServices {
       linkPhotoToObject: new LinkPhotoToObjectUseCase(store, commandStack),
       captureMeasurement: new CaptureMeasurementUseCase(store),
       exportRoomIfc: new ExportRoomIfcUseCase(store, validationService, ifcSerializer),
+      exportProjectIfc: new ExportProjectIfcUseCase(store, new IFCSerializer()),
       exportRoomDxf: new ExportRoomDxfUseCase(store),
       // Sin dependencias: es una función pura sobre una lista de muros.
       detectRooms: new DetectRoomsUseCase(),
