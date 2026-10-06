@@ -320,7 +320,7 @@ export class ObjectStore implements IObjectStore {
   /** Mediciones de un Recinto (excluye soft-deleted), más recientes primero. */
   async listMeasurements(room: RoomId): Promise<Measurement[]> {
     const rows = await this.db.all<MeasurementRow>(
-      `SELECT * FROM measurements WHERE room_id = ? AND is_deleted = 0 ORDER BY created_at DESC`,
+      `SELECT * FROM measurements WHERE room_id = ? AND is_deleted = 0 ORDER BY created_at DESC, rowid DESC`,
       [room as string],
     );
     return rows.map((row) => this.measurementRowToObject(row));
@@ -329,7 +329,7 @@ export class ObjectStore implements IObjectStore {
   /** Mediciones tomadas contra un muro concreto, más recientes primero. */
   async listMeasurementsForWall(wall: WallId): Promise<Measurement[]> {
     const rows = await this.db.all<MeasurementRow>(
-      `SELECT * FROM measurements WHERE wall_id = ? AND is_deleted = 0 ORDER BY created_at DESC`,
+      `SELECT * FROM measurements WHERE wall_id = ? AND is_deleted = 0 ORDER BY created_at DESC, rowid DESC`,
       [wall as string],
     );
     return rows.map((row) => this.measurementRowToObject(row));
@@ -407,7 +407,7 @@ export class ObjectStore implements IObjectStore {
    */
   async listAuditPhotos(room: RoomId): Promise<AuditPhoto[]> {
     const rows = await this.db.all<AuditPhotoRow>(
-      `SELECT ${PHOTO_COLUMNS_WITHOUT_IMAGE} FROM audit_photos WHERE room_id = ? AND is_deleted = 0 ORDER BY created_at DESC`,
+      `SELECT ${PHOTO_COLUMNS_WITHOUT_IMAGE} FROM audit_photos WHERE room_id = ? AND is_deleted = 0 ORDER BY created_at DESC, rowid DESC`,
       [room as string],
     );
     return rows.map((row) => this.auditPhotoRowToObject(row));
@@ -496,7 +496,7 @@ export class ObjectStore implements IObjectStore {
   /** Lista los Operadores no borrados, más recientes primero. */
   async listOperators(): Promise<Operator[]> {
     const rows = await this.db.all<OperatorRow>(
-      `SELECT * FROM operators WHERE is_deleted = 0 ORDER BY created_at DESC`,
+      `SELECT * FROM operators WHERE is_deleted = 0 ORDER BY created_at DESC, rowid DESC`,
     );
     return rows.map((row) => this.operatorRowToObject(row));
   }
@@ -552,7 +552,7 @@ export class ObjectStore implements IObjectStore {
   /** Lista todos los objetos Room no borrados de toda la base, más recientes primero. */
   async listAllRooms(): Promise<Room[]> {
     const rows = await this.db.all<RevitObjectRow>(
-      `SELECT * FROM revit_objects WHERE object_type = 'Room' AND is_deleted = 0 ORDER BY created_at DESC`,
+      `SELECT * FROM revit_objects WHERE object_type = 'Room' AND is_deleted = 0 ORDER BY created_at DESC, rowid DESC`,
     );
     return mapTolerant(rows, (row) => this.rowToObject(row) as Room, 'revit_objects', (row) => row.id);
   }
