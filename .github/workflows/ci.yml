@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  app:
+    name: tsc · ESLint · Jest · validación IFC/DXF
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app-bim-typescript
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app-bim-typescript/package-lock.json
+
+      - name: Dependencias
+        run: npm ci
+
+      - name: Tipos (tsc)
+        run: npm run typecheck
+
+      - name: Lint (ESLint)
+        run: npm run lint
+
+      - name: Tests (Jest) + muestras de exportación
+        run: npx jest --ci
+        env:
+          EXPORT_SAMPLES: ${{ github.workspace }}/app-bim-typescript/artifacts
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validación externa (ifcopenshell + ezdxf)
+        run: |
+          pip install --quiet ifcopenshell ezdxf
+          python scripts/validate_exports.py artifacts
+
+      - name: Muestras exportadas
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: muestras-ifc-dxf
+          path: app-bim-typescript/artifacts
+          if-no-files-found: ignore

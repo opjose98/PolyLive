@@ -38,6 +38,8 @@ export interface PhotoEntry {
   readonly gps?: string;
   /** Imagen como data URI (o null si no se pudo leer). */
   readonly dataUri: string | null;
+  /** Sello de evidencia: hash corto y si la imagen sigue íntegra (null: foto sin sello). */
+  readonly seal?: { readonly hash: string; readonly intact: boolean } | null;
 }
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -114,7 +116,8 @@ export function photoRegisterHtml(meta: SheetMeta, photos: readonly PhotoEntry[]
   const card = (p: PhotoEntry) => `<div class="ph">
   ${p.dataUri ? `<img src="${p.dataUri}"/>` : '<div class="noimg">Imagen no disponible</div>'}
   <div class="pd"><b>${esc(p.code)}</b> · ${esc(when(p.takenAt))} · ${esc(p.author || '—')}<br/>
-  ${esc(p.where)}${p.gps ? `<br/><span class="muted">GPS ${esc(p.gps)}</span>` : ''}${p.notes ? `<br/>${esc(p.notes)}` : ''}</div>
+  ${esc(p.where)}${p.gps ? `<br/><span class="muted">GPS ${esc(p.gps)}</span>` : ''}${p.notes ? `<br/>${esc(p.notes)}` : ''}
+  ${p.seal ? `<br/><span class="muted">Sello SHA-256 ${esc(p.seal.hash)}… · ${p.seal.intact ? 'íntegra' : '<b style="color:#c62828">ALTERADA</b>'}</span>` : ''}</div>
 </div>`;
   return `<!doctype html><html><head><meta charset="utf-8"/><style>${BASE_CSS}
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}

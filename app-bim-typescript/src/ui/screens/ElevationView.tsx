@@ -147,7 +147,7 @@ export function ElevationView(props: ElevationViewProps) {
   const photoPins = useMemo(
     () =>
       facePhotos.map((m) => ({ kind: 'pin' as const, at: { x: m.face!.x, y: m.face!.y }, label: m.label ?? 'Foto', color: palette.selection })),
-    [facePhotos, palette.selection], // eslint-disable-line react-hooks/exhaustive-deps
+    [facePhotos, palette.selection],  
   );
   const facePhotoTool = useMemo(() => {
     if (!ws.activeTool) return false;

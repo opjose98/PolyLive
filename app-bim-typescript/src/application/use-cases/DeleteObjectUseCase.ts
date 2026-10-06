@@ -8,8 +8,7 @@ import {
   RevitObjectId,
   Wall,
   Door,
-} from '../../domain/objects';
-import { Window } from '../../domain/objects';
+ Window } from '../../domain/objects';
 import { CommandStack } from '../state/CommandStack';
 import { DeleteObjectCommand } from '../commands/DeleteObjectCommand';
 import { CommandId } from '../commands/Command';

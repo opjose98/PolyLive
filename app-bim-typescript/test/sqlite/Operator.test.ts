@@ -3,11 +3,11 @@
 // =============================================================================
 
 import { Database } from '../../src/infrastructure/sqlite/database';
-import { Wall } from '../../src/domain/objects';
+import { Wall , Room, roomId, levelId, revitObjectId } from '../../src/domain/objects';
 import { meters } from '../../src/domain/geometry/types';
 import { ObjectStore } from '../../src/infrastructure/sqlite/ObjectStore';
 import { Operator, operatorId } from '../../src/domain/objects/operator';
-import { Room, roomId, levelId, revitObjectId } from '../../src/domain/objects';
+
 
 describe('Operator (domain)', () => {
   it('rechaza un nombre vacío', () => {

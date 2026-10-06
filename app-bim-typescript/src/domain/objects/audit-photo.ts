@@ -63,6 +63,8 @@ export interface PhotoMetadata {
   geo?: PhotoGeoTag;
   /** Operador que la tomó, para trazabilidad. */
   operator?: string;
+  /** Sello de evidencia (integridad + autor declarado), al capturar. */
+  seal?: import('../evidence/seal').EvidenceSeal;
   [key: string]: unknown;
 }
 

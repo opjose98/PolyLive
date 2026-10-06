@@ -43,3 +43,6 @@ yarn-error.*
 .env
 .env.local
 .env*.local
+
+# Muestras de exportación generadas por la CI / tests
+app-bim-typescript/artifacts/

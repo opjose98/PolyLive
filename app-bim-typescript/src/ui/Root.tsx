@@ -14,6 +14,10 @@ import { useFonts } from 'expo-font';
 import { fontAssets } from './design/typography';
 import { DialogHost, ToastHost } from './primitives';
 import App from './App';
+import { ErrorBoundary } from './primitives/ErrorBoundary';
+import { shareDiagnostics } from '../native/diagnostics/diagnosticsLog';
+import { LATEST_SCHEMA_VERSION } from '../infrastructure/sqlite/migrations';
+import appJson from '../../app.json';
 import { themedStyles } from './design/theme';
 
 export default function Root() {
@@ -28,7 +32,9 @@ export default function Root() {
             lo maneja cada pantalla (la barra de pestañas ya lo hace). */}
         <SafeAreaView edges={['top', 'left', 'right']} style={styles.safe}>
           {/* Si las fuentes fallan se sigue con la del sistema: no es motivo para no arrancar. */}
-          {fontsLoaded || fontError ? <App /> : <View style={styles.splash} />}
+          <ErrorBoundary onShareDiagnostics={() => void shareDiagnostics({ app: appJson.expo.version, schema: LATEST_SCHEMA_VERSION })}>
+            {fontsLoaded || fontError ? <App /> : <View style={styles.splash} />}
+          </ErrorBoundary>
         </SafeAreaView>
         <ToastHost />
         <DialogHost />

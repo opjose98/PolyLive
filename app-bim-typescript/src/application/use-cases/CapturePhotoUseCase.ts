@@ -3,6 +3,7 @@
 // Basado en: CapturePhotoUseCase.md (Obsidian 02-Aplicación/use-cases)
 // =============================================================================
 
+import { sealPhoto } from '../../domain/evidence/seal';
 import {
   IObjectStore,
   RoomId,
@@ -67,7 +68,13 @@ export class CapturePhotoUseCase {
       foto: input.photoData,
       // `timestamp` y `filename` van DESPUÉS del spread: son responsabilidad de
       // este UseCase y no deben poder pisarse desde fuera.
-      metadata_json: JSON.stringify({ ...input.metadata, timestamp, filename }),
+      metadata_json: JSON.stringify({
+        ...input.metadata,
+        timestamp,
+        filename,
+        // Sello de evidencia: imagen + código + operador + fecha + GPS (domain/evidence/seal.ts).
+        seal: sealPhoto(input.photoData, { bimCode: input.metadata?.bimCode, operator: input.metadata?.operator, timestamp, geo: input.metadata?.geo }),
+      }),
     });
 
     await (this.store as any).createAuditPhoto(photo);

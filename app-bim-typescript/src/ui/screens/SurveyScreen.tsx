@@ -18,9 +18,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { View, Text, Dimensions, Modal, BackHandler } from 'react-native';
 
 import { PlanCanvas } from '../canvas/PlanCanvas';
-import { BottomSheet, toast, alertDialog, TagToggle } from '../primitives';
+import { BottomSheet, toast, alertDialog, TagToggle , ActionButton } from '../primitives';
 import type { MeasureReference } from '../../domain/objects/measurement';
-import { sizes } from '../design/tokens';
+import { sizes , sizes as chromeSizes, spacing as chromeSpacing , radius, spacing } from '../design/tokens';
 import { themedStyles, useCanvasPalette } from '../design/theme';
 import { haptic } from '../design/haptics';
 import { workspaceStore } from '../../state/workspaceStore';
@@ -41,7 +41,7 @@ import { LevelChip } from '../workspace/LevelChip';
 import { ConfigDrawer } from '../workspace/ConfigDrawer';
 import { MainMenu, MainMenuItem } from '../workspace/MainMenu';
 import { RangeSelectors } from '../workspace/RangeSelector';
-import { DEFAULT_EDITOR_DEFAULTS } from '../../application/editor/EditorController';
+import { DEFAULT_EDITOR_DEFAULTS , EditorController, EditorState } from '../../application/editor/EditorController';
 import { ConstraintSelector } from '../workspace/ConstraintSelector';
 import {
   ConstraintEdit,
@@ -69,6 +69,42 @@ import { useDrafting } from '../workspace/drafting/useDrafting';
 import { DraftSheets, KIND_LABEL } from '../workspace/drafting/DraftSheets';
 import { mergeSketches } from '../canvas/sketch';
 import { DraftItem, DraftKind, itemLength, polygonMetrics } from '../../domain/drafting/drafting';
+import type { PhotoFaceAnchor } from '../../domain/objects/audit-photo';
+import { gridLabel, isGeoreferenced as isGeoref, localLabel , amarreSummary, coordinateInline } from '../../application/geo/coordinateText';
+import { modelToGrid } from '../../domain/geo/georeference';
+import { ReviewSheets } from '../workspace/review/ReviewSheets';
+import { reviewSvgMarks } from '../../application/review/reviewReport';
+import { countByStatus, ReviewItem, ReviewView } from '../../domain/review/review';
+import { zoneCode as zoneCodeOf , zoneCode } from '../../domain/objects/zone';
+
+import { ElevationEditor } from '../../application/elevation/ElevationEditor';
+import { ElevationView } from './ElevationView';
+import type { CanvasTransform } from '../../domain/geometry/types';
+
+import { useStore } from 'zustand';
+import { CameraCaptureView } from '../components/CameraCaptureView';
+import { ExpoPhotoCapture } from '../../native/camera/ExpoPhotoCapture';
+import { ExpoFileSystem } from '../../native/filesystem/ExpoFileSystem';
+import { ExpoGpsProvider } from '../../native/location/ExpoGpsProvider';
+import { base64ToUint8Array, uint8ArrayToBase64 } from '../../shared/encoding/base64';
+import { PHOTO_BIM_CODE_PREFIX } from '../../domain/objects/audit-photo';
+import { generateBimCode } from '../../domain/objects/project';
+
+import { PropertiesPanel } from '../components/PropertiesPanel';
+import { ZoneSheet } from '../workspace/ZoneSheet';
+
+import { NumberField } from '../components/fields';
+import { AppServices } from '../../application/AppServices';
+
+import { Wall } from '../../domain/objects/wall';
+import { Door } from '../../domain/objects/door';
+import { Window } from '../../domain/objects/window';
+import { Measurement } from '../../domain/objects/measurement';
+import { RoomId, revitObjectId, wallId } from '../../domain/objects/base';
+import { AppError } from '../../shared/errors/AppError';
+import { meters } from '../../domain/geometry/types';
+
+import { type } from '../design/typography';
 
 /** Lo que dice la BPC de un elemento de dibujo seleccionado. */
 function draftDetail(i: DraftItem): string {
@@ -77,7 +113,6 @@ function draftDetail(i: DraftItem): string {
   if (i.kind === 'coordinate') return 'Punto rotulado';
   return `${itemLength(i).toFixed(2)} m`;
 }
-import type { PhotoFaceAnchor } from '../../domain/objects/audit-photo';
 
 /** Qué hacer con cada herramienta de dibujo técnico (texto de la BPC). */
 const DRAFT_HINT: Record<DraftKind, string> = {
@@ -91,41 +126,6 @@ const DRAFT_HINT: Record<DraftKind, string> = {
   truss: 'Arrastra de apoyo a apoyo',
   purlin: 'Toca donde va la correa (en sección)',
 };
-import { gridLabel, isGeoreferenced as isGeoref, localLabel } from '../../application/geo/coordinateText';
-import { modelToGrid } from '../../domain/geo/georeference';
-import { ReviewSheets } from '../workspace/review/ReviewSheets';
-import { reviewSvgMarks } from '../../application/review/reviewReport';
-import { countByStatus, ReviewItem, ReviewView } from '../../domain/review/review';
-import { zoneCode as zoneCodeOf } from '../../domain/objects/zone';
-import { amarreSummary, coordinateInline } from '../../application/geo/coordinateText';
-import { ElevationEditor } from '../../application/elevation/ElevationEditor';
-import { ElevationView } from './ElevationView';
-import type { CanvasTransform } from '../../domain/geometry/types';
-import { sizes as chromeSizes, spacing as chromeSpacing } from '../design/tokens';
-import { useStore } from 'zustand';
-import { CameraCaptureView } from '../components/CameraCaptureView';
-import { ExpoPhotoCapture } from '../../native/camera/ExpoPhotoCapture';
-import { ExpoFileSystem } from '../../native/filesystem/ExpoFileSystem';
-import { ExpoGpsProvider } from '../../native/location/ExpoGpsProvider';
-import { base64ToUint8Array, uint8ArrayToBase64 } from '../../shared/encoding/base64';
-import { PHOTO_BIM_CODE_PREFIX } from '../../domain/objects/audit-photo';
-import { generateBimCode } from '../../domain/objects/project';
-import { ActionButton } from '../primitives';
-import { PropertiesPanel } from '../components/PropertiesPanel';
-import { ZoneSheet } from '../workspace/ZoneSheet';
-import { zoneCode } from '../../domain/objects/zone';
-import { NumberField } from '../components/fields';
-import { AppServices } from '../../application/AppServices';
-import { EditorController, EditorState } from '../../application/editor/EditorController';
-import { Wall } from '../../domain/objects/wall';
-import { Door } from '../../domain/objects/door';
-import { Window } from '../../domain/objects/window';
-import { Measurement } from '../../domain/objects/measurement';
-import { RoomId, revitObjectId, wallId } from '../../domain/objects/base';
-import { AppError } from '../../shared/errors/AppError';
-import { meters } from '../../domain/geometry/types';
-import { radius, spacing } from '../design/tokens';
-import { type } from '../design/typography';
 
 const CANVAS_TOUCH_TOLERANCE_PX = sizes.canvasTouchTolerance;
 
@@ -645,7 +645,7 @@ export function SurveyScreen({
           roomId,
           photoData: base64ToUint8Array(photo.base64),
           filename: saved.filename,
-          metadata: { bimCode, geo },
+          metadata: { bimCode, geo, operator: operatorName || undefined },
         });
 
         if (pendingFacePhoto) {
@@ -1276,7 +1276,7 @@ export function SurveyScreen({
           roomId,
           photoData: base64ToUint8Array(photo.base64),
           filename: saved.filename,
-          metadata: { bimCode, notes: 'Revisión' },
+          metadata: { bimCode, notes: 'Revisión', operator: operatorName || undefined },
         });
         await review.ctl.attachPhoto(itemId, result.photoId as unknown as string);
         toast(`Foto ${bimCode} adjunta`, { kind: 'success' });

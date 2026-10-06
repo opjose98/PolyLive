@@ -12,8 +12,8 @@ import {
   RevitObjectId,
   generateId,
   ObjectProperties,
-} from '../../domain/objects';
-import { Window } from '../../domain/objects';
+ Window } from '../../domain/objects';
+
 import { CommandStack } from '../state/CommandStack';
 import { CreateWindowCommand } from '../commands/CreateWindowCommand';
 import { CommandId } from '../commands/Command';

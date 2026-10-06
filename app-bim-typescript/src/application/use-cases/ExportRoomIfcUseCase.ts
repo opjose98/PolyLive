@@ -13,8 +13,8 @@ import {
   Floor,
   RoomId,
   RevitObjectId,
-} from '../../domain/objects';
-import { Window } from '../../domain/objects';
+ Window } from '../../domain/objects';
+
 import { floorZoneId } from '../../domain/objects/floor';
 import { IValidationService, IIFCSerializer, ValidationError } from './types';
 import type { IfcMapConversionInput, IfcMemberInput, IfcZoneInput } from '../../infrastructure/export/ifc/types';

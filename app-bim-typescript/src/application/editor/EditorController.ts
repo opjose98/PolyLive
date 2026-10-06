@@ -32,7 +32,7 @@
 // =============================================================================
 
 import { Point2D, Meters, meters, squareMeters, CanvasTransform } from '../../domain/geometry/types';
-import { RevitObjectBase, RevitObjectId, RoomId, WallId, wallId } from '../../domain/objects/base';
+import { RevitObjectBase, RevitObjectId, RoomId, WallId, wallId , generateId } from '../../domain/objects/base';
 import { Wall } from '../../domain/objects/wall';
 import { Room } from '../../domain/objects/room';
 import { Column } from '../../domain/objects/column';
@@ -40,7 +40,7 @@ import { Door } from '../../domain/objects/door';
 import { Window } from '../../domain/objects/window';
 import { Floor, floorZoneId } from '../../domain/objects/floor';
 import { distanceToSegment, isPointInPolygon } from '../../domain/geometry/polygon-utils';
-import { generateId } from '../../domain/objects/base';
+
 import { ElevationSnapshotCommand } from '../commands/ElevationSnapshotCommand';
 import { interiorPoint, netGeometry } from '../../domain/objects/zone';
 import { reconcileZones } from '../topology/reconcileZones';
@@ -72,9 +72,9 @@ import { JointWall, WallEndsChange, endsAt, planEndMove, planMeasureMove, planWa
 import { FaceWall, Side, axisLengthFor, faceLength, interiorSide } from '../../domain/topology/faceMeasure';
 import { ClosureCheck, checkClosure, controlDiagonal } from '../../domain/topology/closure';
 import type { MeasureReference } from '../../domain/objects/measurement';
-import type { MeasurementId } from '../../domain/objects/base';
+import type { MeasurementId , AuditPhotoId } from '../../domain/objects/base';
 import type { AppServices } from '../AppServices';
-import type { AuditPhotoId } from '../../domain/objects/base';
+
 import type { PhotoFaceAnchor } from '../../domain/objects/audit-photo';
 
 /** Marcador de foto listo para dibujar: lo que el renderer necesita y nada más. */

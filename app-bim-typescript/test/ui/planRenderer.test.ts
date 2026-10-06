@@ -17,7 +17,7 @@ import { Column } from '../../src/domain/objects/column';
 import { Door } from '../../src/domain/objects/door';
 import { Window } from '../../src/domain/objects/window';
 import { revitObjectId, roomId, levelId, wallId } from '../../src/domain/objects/base';
-import { meters, squareMeters } from '../../src/domain/geometry/types';
+import { meters } from '../../src/domain/geometry/types';
 import { CANVAS_PALETTES } from '../../src/ui/design/canvasThemes';
 
 const GRID_COLOR = CANVAS_PALETTES.claro.grid;

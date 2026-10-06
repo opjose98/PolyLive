@@ -11,8 +11,8 @@ import {
   Wall,
   Column,
   Door,
-} from '../../domain/objects';
-import { Window } from '../../domain/objects';
+ Window } from '../../domain/objects';
+
 import { CommandStack } from '../state/CommandStack';
 import { UpdateObjectPropertyCommand } from '../commands/UpdateObjectPropertyCommand';
 import { CommandId } from '../commands/Command';

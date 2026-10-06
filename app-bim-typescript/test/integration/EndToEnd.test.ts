@@ -18,17 +18,17 @@ import { Database } from '../../src/infrastructure/sqlite/database';
 import { ObjectStore } from '../../src/infrastructure/sqlite/ObjectStore';
 import {
   Wall,
-  Door,
+  
   Room,
   RevitObjectId,
-  RoomId,
-  WallId,
+  
+  
   roomId,
   wallId,
   levelId,
   revitObjectId,
 } from '../../src/domain/objects';
-import { meters, squareMeters, Point2D } from '../../src/domain/geometry/types';
+import { meters, squareMeters } from '../../src/domain/geometry/types';
 import { CommandStack } from '../../src/application/state/CommandStack';
 import { CanvasManager } from '../../src/application/canvas/CanvasManager';
 import { canvasPoint } from '../../src/application/canvas/types';

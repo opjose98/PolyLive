@@ -39,7 +39,7 @@ export const StrokeJoin = { Miter: 0 };
 
 export const Canvas = 'Canvas';
 export const Picture = 'Picture';
-export const createPicture = (cb: any, _rect?: any) => {
+export const createPicture = (_cb: any, _rect?: any) => {
   // Return a mock SkPicture
   return { __typename: 'SkPicture' };
 };

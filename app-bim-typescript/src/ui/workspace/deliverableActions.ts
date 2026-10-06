@@ -10,6 +10,7 @@ import { zoneCode } from '../../domain/objects/zone';
 import { uint8ArrayToBase64 } from '../../shared/encoding/base64';
 import { diagnostics } from '../../shared/diagnostics';
 import { toast } from '../primitives';
+import { shortHash, verifySeal } from '../../domain/evidence/seal';
 import { safeName, saveCsv, savePdf } from './reportActions';
 
 /** Filas del cuadro de áreas desde los recintos del nivel. */
@@ -74,6 +75,13 @@ export async function exportPhotoRegister(
         notes: md.notes ?? '',
         gps: md.geo ? `${md.geo.latitude.toFixed(6)}, ${md.geo.longitude.toFixed(6)} (±${md.geo.accuracyMeters.toFixed(0)} m)` : undefined,
         dataUri: full?.foto?.length ? `data:image/jpeg;base64,${uint8ArrayToBase64(full.foto)}` : null,
+        seal:
+          md.seal && full?.foto?.length
+            ? {
+                hash: shortHash(md.seal.imageSha256),
+                intact: verifySeal(full.foto, { bimCode: md.bimCode, operator: md.operator, timestamp: md.timestamp, geo: md.geo }, md.seal),
+              }
+            : null,
       });
     }
     await savePdf(`${base(meta, 'registro-fotografico')}.pdf`, photoRegisterHtml(meta, entries));

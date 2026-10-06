@@ -275,7 +275,7 @@ export function ProjectWorkspaceScreen({
           <ScrollView contentContainerStyle={styles.dialog} keyboardShouldPersistTaps="handled" style={styles.dialogCard}>
             <Text style={styles.dialogTitle}>Nuevo espacio</Text>
             <Text style={styles.muted}>
-              Se creará un Recinto nuevo dentro de "{project.name}" y se le asignará el siguiente código
+              Se creará un Recinto nuevo dentro de «{project.name}» y se le asignará el siguiente código
               de espacio libre.
             </Text>
             <TextField

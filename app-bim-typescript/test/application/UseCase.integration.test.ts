@@ -4,17 +4,17 @@
 
 import {
   Wall,
-  Column,
+  
   Door,
-  Floor,
+  
   Room,
   RevitObjectBase,
   RevitObjectId,
   RoomId,
   WallId,
-  LevelId,
-  AuditPhotoId,
-  MeasurementId,
+  
+  
+  
   IObjectStore,
   Measurement,
   AuditPhoto,
@@ -22,18 +22,18 @@ import {
   roomId,
   wallId,
   levelId,
-  generateId,
-} from '../../src/domain/objects';
-import { Window } from '../../src/domain/objects';
-import { meters, squareMeters, Point2D, ValidationWarning } from '../../src/domain/geometry/types';
+  
+  } from '../../src/domain/objects';
+
+import { meters, squareMeters } from '../../src/domain/geometry/types';
 import { CommandStack } from '../../src/application/state/CommandStack';
-import { IValidationService, IBLEManager, IIFCSerializer, ValidationResult } from '../../src/application/use-cases/types';
+import { IValidationService, IIFCSerializer, ValidationResult } from '../../src/application/use-cases/types';
 import { CreateWallUseCase, CreateWallInput } from '../../src/application/use-cases/CreateWallUseCase';
 import { CreateDoorUseCase, CreateDoorInput } from '../../src/application/use-cases/CreateDoorUseCase';
 import { MoveObjectUseCase, MoveObjectInput } from '../../src/application/use-cases/MoveObjectUseCase';
-import { DeleteObjectUseCase, DeleteObjectInput } from '../../src/application/use-cases/DeleteObjectUseCase';
-import { UpdateObjectPropertyUseCase, UpdateObjectPropertyInput } from '../../src/application/use-cases/UpdateObjectPropertyUseCase';
-import { ExportRoomIfcUseCase, ExportRoomIfcInput } from '../../src/application/use-cases/ExportRoomIfcUseCase';
+import { DeleteObjectUseCase } from '../../src/application/use-cases/DeleteObjectUseCase';
+import { UpdateObjectPropertyUseCase } from '../../src/application/use-cases/UpdateObjectPropertyUseCase';
+import { ExportRoomIfcUseCase } from '../../src/application/use-cases/ExportRoomIfcUseCase';
 
 // ---------------------------------------------------------------------------
 // Mock IObjectStore — in-memory con createMeasurement/createAuditPhoto
@@ -243,7 +243,7 @@ describe('UseCases — Integration', () => {
         // No se pasa newEndPoint — se calcula por delta
       };
 
-      const moveOut = await moveUseCase.execute(moveInput);
+      const _moveOut = await moveUseCase.execute(moveInput);
 
       // endPoint debería haberse movido delta = (2,2)
       const movedWall = await store.readObject(wallOut.wall.id) as Wall;
@@ -323,7 +323,7 @@ describe('UseCases — Integration', () => {
       });
 
       const updateUseCase = new UpdateObjectPropertyUseCase(store, commandStack, validationService);
-      const updateOut = await updateUseCase.execute({
+      const _updateOut = await updateUseCase.execute({
         objectId: wallOut.wall.id,
         property: 'material',
         newValue: 'ladrillo',

@@ -12,8 +12,7 @@ import {
   Wall,
   Column,
   Door,
-} from '../../domain/objects';
-import { Window } from '../../domain/objects';
+ Window } from '../../domain/objects';
 import { CommandStack } from '../state/CommandStack';
 import { MoveObjectCommand, MoveSnapshot } from '../commands/MoveObjectCommand';
 import { CommandId } from '../commands/Command';

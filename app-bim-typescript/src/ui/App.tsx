@@ -32,6 +32,10 @@ import { PermissionsManager } from '../native/permissions/PermissionsManager';
 import { ExpoSQLiteDatabase } from '../native/sqlite/ExpoSQLiteDatabase';
 import { ExpoBackupDatabaseUseCase } from '../native/backup/ExpoBackupDatabaseUseCase';
 import { diagnostics } from '../shared/diagnostics';
+import { startDiagnosticsLog } from '../native/diagnostics/diagnosticsLog';
+import { bindWorkspacePrefs } from '../state/workspacePrefs';
+import { workspaceStore } from '../state/workspaceStore';
+import { AppPrefs, loadAppPrefs, workspacePrefsFile } from '../native/prefs/prefsFile';
 import { MigrationError } from '../infrastructure/sqlite/migrations';
 import { createAppServices, AppServices } from '../application/AppServices';
 import { RoomId } from '../domain/objects';
@@ -88,9 +92,12 @@ export default function App() {
         // arranca igual en vez de quedarse congelada para siempre en "Iniciando
         // PolyLive" — el permiso pendiente se vuelve a pedir más tarde, cuando
         // la función que lo necesita (cámara, BLE, GPS) se use.
+        // Ya no se piden todos los permisos al arrancar: cámara, ubicación y
+        // Bluetooth se piden cuando la función que los usa se abre (lo que exige
+        // Google Play y lo que entiende el usuario). Aquí solo se lee el estado.
         await Promise.race([
-          permManager.requestAll(),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('permissions timeout')), 8000)),
+          permManager.checkAll(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('permissions timeout')), 3000)),
         ]);
       } catch {
         // Los permisos se piden individualmente cuando hagan falta.
@@ -118,6 +125,11 @@ export default function App() {
       try {
         // ExpoSQLiteDatabase y no `Database` (paquete npm sqlite3): ese último
         // es un addon nativo de Node, incompatible con Hermes/React Native.
+        // Registro de diagnóstico persistente y preferencias del lienzo (tema, snaps…).
+        await startDiagnosticsLog().catch(() => undefined);
+        void bindWorkspacePrefs(workspaceStore, workspacePrefsFile);
+        const appPrefs = await loadAppPrefs().catch(() => ({}) as AppPrefs);
+
         const db = new ExpoSQLiteDatabase(DB_NAME);
         await db.open();
         await db.migrate();
@@ -150,7 +162,7 @@ export default function App() {
 
         // Respaldo rotacional al arrancar, como mucho cada 12 h (con fotos dentro de la
         // base, copiarla en cada arranque costaba tiempo y batería). No bloquea.
-        new ExpoBackupDatabaseUseCase()
+        if (appPrefs.autoBackup !== false) new ExpoBackupDatabaseUseCase()
           .execute({ db, minIntervalMs: 12 * 3600 * 1000 })
           .then((r) => r.skipped || diagnostics.info('backup', `Respaldo local: ${r.backupPath}`))
           .catch((err) => diagnostics.error('backup', 'El respaldo automático falló (no bloqueante)', err instanceof AppError ? err.toLogObject() : err));
@@ -283,6 +295,7 @@ export default function App() {
               roomId={activeRoomId}
               objectId={galleryFocus?.objectId}
               photoId={galleryFocus?.photoId}
+              operatorName={operator.name}
             />
           </ScreenShell>
         ) : null;

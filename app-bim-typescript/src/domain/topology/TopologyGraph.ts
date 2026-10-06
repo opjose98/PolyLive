@@ -350,8 +350,8 @@ export class TopologyGraph {
   /** Por cada nodo, sus aristas ordenadas por ángulo de salida ascendente. */
   private buildRotationSystem(
     wallEdges: readonly TopologyEdge[],
-  ): Map<string, Array<{ angle: number; edgeId: string }>> {
-    const outAngles = new Map<string, Array<{ angle: number; edgeId: string }>>();
+  ): Map<string, { angle: number; edgeId: string }[]> {
+    const outAngles = new Map<string, { angle: number; edgeId: string }[]>();
 
     for (const edge of wallEdges) {
       for (const nodeId of [edge.startNodeId, edge.endNodeId]) {
@@ -376,7 +376,7 @@ export class TopologyGraph {
   private nextHalfEdge(
     toNode: string,
     incomingEdgeId: string,
-    outAngles: Map<string, Array<{ angle: number; edgeId: string }>>,
+    outAngles: Map<string, { angle: number; edgeId: string }[]>,
   ): string | null {
     const angles = outAngles.get(toNode);
     if (!angles || angles.length < 2) return null;

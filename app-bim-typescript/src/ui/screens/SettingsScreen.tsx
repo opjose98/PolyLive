@@ -20,6 +20,10 @@ import {
   BackupEntry,
 } from '../../native/backup/ExpoRestoreDatabaseUseCase';
 import { AppError } from '../../shared/errors/AppError';
+import { loadAppPrefs, saveAppPrefs } from '../../native/prefs/prefsFile';
+import { shareDiagnostics } from '../../native/diagnostics/diagnosticsLog';
+import { LATEST_SCHEMA_VERSION } from '../../infrastructure/sqlite/migrations';
+import appJson from '../../../app.json';
 import { ActionButton, alertDialog } from '../primitives';
 import { ToggleRow, ReadonlyRow } from '../components/fields';
 import { spacing, radius, sizes } from '../design/tokens';
@@ -63,6 +67,9 @@ export function SettingsScreen({
   const [creating, setCreating] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [autoBackup, setAutoBackup] = useState(true);
+  useEffect(() => {
+    void loadAppPrefs().then((p) => setAutoBackup(p.autoBackup !== false));
+  }, []);
 
   const restoreUseCase = useState(() => new ExpoRestoreDatabaseUseCase())[0];
 
@@ -170,15 +177,7 @@ export function SettingsScreen({
             value={autoBackup}
             onChange={(value) => {
               setAutoBackup(value);
-              // Sinceridad sobre el alcance: la preferencia no se persiste
-              // todavía (no hay almacén de preferencias), así que se dice en
-              // vez de fingir que quedó guardada.
-              if (!value) {
-                alertDialog(
-                  'Solo esta sesión',
-                  'Esta preferencia todavía no se guarda entre arranques: al reabrir la app volverá a estar activada.',
-                );
-              }
+              void saveAppPrefs({ autoBackup: value });
             }}
           />
 
@@ -224,9 +223,25 @@ export function SettingsScreen({
           />
         </View>
 
+        {/* --- Diagnóstico --- */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Diagnóstico</Text>
+          <Text style={styles.subtitle}>
+            Si algo falla, envía el registro de diagnóstico (errores y avisos de la app, sin tus datos de proyecto) por
+            correo o WhatsApp a soporte.
+          </Text>
+          <ActionButton
+            label="Enviar diagnóstico"
+            variant="secondary"
+            onPress={() => void shareDiagnostics({ app: appJson.expo.version, schema: LATEST_SCHEMA_VERSION })}
+          />
+        </View>
+
         {/* --- Información --- */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Información</Text>
+          <ReadonlyRow label="Versión" value={appJson.expo.version} />
+          <ReadonlyRow label="Esquema de datos" value={`v${LATEST_SCHEMA_VERSION}`} />
           <ReadonlyRow label="Base de datos" value={dbName} />
           <ReadonlyRow label="Nivel por defecto" value={services.defaultLevelId as string} />
         </View>

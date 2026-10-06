@@ -10,7 +10,7 @@
 // ExpoPhotoCapture ya estaba implementada y probada por separado.
 // =============================================================================
 
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { View, TouchableOpacity, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { CameraView } from 'expo-camera';
 import { ExpoPhotoCapture, PhotoResult } from '../../native/camera/ExpoPhotoCapture';
@@ -25,6 +25,19 @@ export interface CameraCaptureViewProps {
 export function CameraCaptureView({ capture, onCapture, onClose }: CameraCaptureViewProps) {
   const cameraRef = useRef<InstanceType<typeof CameraView> | null>(null);
   const [capturing, setCapturing] = useState(false);
+  // El permiso se pide aquí, al abrir la cámara (no al arrancar la app): Android
+  // y Google Play esperan que cada permiso se pida en el momento en que se usa.
+  const [allowed, setAllowed] = useState<boolean | null>(null);
+  useEffect(() => {
+    let alive = true;
+    capture
+      .requestPermission()
+      .then((s) => alive && setAllowed(s === 'granted'))
+      .catch(() => alive && setAllowed(false));
+    return () => {
+      alive = false;
+    };
+  }, [capture]);
 
   const handleShutterPress = useCallback(async () => {
     if (capturing) return;
@@ -40,9 +53,20 @@ export function CameraCaptureView({ capture, onCapture, onClose }: CameraCapture
     }
   }, [capture, capturing, onCapture]);
 
+  if (allowed === false) {
+    return (
+      <View style={[styles.container, styles.denied]}>
+        <Text style={styles.deniedText}>PolyLive necesita la cámara para tomar fotos de evidencia. Actívala en Ajustes del teléfono → Apps → PolyLive BIM → Permisos.</Text>
+        <TouchableOpacity style={styles.deniedButton} onPress={onClose}>
+          <Text style={styles.deniedButtonText}>Volver</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      <CameraView ref={cameraRef} style={styles.camera} facing="back" />
+      {allowed ? <CameraView ref={cameraRef} style={styles.camera} facing="back" /> : <ActivityIndicator style={styles.camera} color="#FFFFFF" />}
 
       <TouchableOpacity style={styles.closeButton} onPress={onClose} disabled={capturing}>
         <Text style={styles.closeButtonText}>✕</Text>
@@ -69,6 +93,10 @@ const styles = StyleSheet.create({
   camera: {
     flex: 1,
   },
+  denied: { justifyContent: 'center', alignItems: 'center', padding: 24, gap: 16 },
+  deniedText: { color: '#FFFFFF', fontSize: 16, textAlign: 'center' },
+  deniedButton: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8, backgroundColor: '#FFFFFF' },
+  deniedButtonText: { color: '#000000', fontSize: 16 },
   closeButton: {
     position: 'absolute',
     top: 48,

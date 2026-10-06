@@ -18,7 +18,7 @@ import {
   roomId as toRoomId,
   wallId as toWallId,
   RevitObjectType,
-} from '../../domain/objects/base';
+ MeasurementId, AuditPhotoId, measurementId, auditPhotoId, levelId } from '../../domain/objects/base';
 import { Wall } from '../../domain/objects/wall';
 import { Door } from '../../domain/objects/door';
 import { Window } from '../../domain/objects/window';
@@ -29,7 +29,7 @@ import { parseExtent, parseWallVertical } from '../../domain/objects/vertical';
 import { Measurement, CaptureMethod } from '../../domain/objects/measurement';
 import { AuditPhoto } from '../../domain/objects/audit-photo';
 import { meters, squareMeters } from '../../domain/geometry/types';
-import { MeasurementId, AuditPhotoId, measurementId, auditPhotoId, levelId } from '../../domain/objects/base';
+
 import { Operator, operatorId, OperatorId } from '../../domain/objects/operator';
 
 /**
@@ -644,7 +644,7 @@ export class ObjectStore implements IObjectStore {
    * Convierte una fila SQL a un objeto BIM del tipo correcto.
    */
   private rowToObject(row: RevitObjectRow): RevitObjectBase {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const props = parseRowJson<any>(row.properties_json, 'revit_objects', row.id);
     const id = revitObjectId(row.id);
     const rId = toRoomId(row.room_id);

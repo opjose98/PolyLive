@@ -69,13 +69,15 @@ export interface GalleryScreenProps {
   objectId?: string;
   /** Abre el visor en esta foto (al tocar su marcador en la planta). */
   photoId?: string;
+  /** Quién toma las fotos (va en su sello de evidencia). */
+  operatorName?: string;
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export function GalleryScreen({ services, roomId, objectId, photoId }: GalleryScreenProps) {
+export function GalleryScreen({ services, roomId, objectId, photoId, operatorName }: GalleryScreenProps) {
   const styles = useStyles();
   const [photos, setPhotos] = useState<StoredPhoto[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -182,7 +184,7 @@ export function GalleryScreen({ services, roomId, objectId, photoId }: GallerySc
           roomId,
           photoData: photoBytes,
           filename: saved.filename,
-          metadata: { bimCode },
+          metadata: { bimCode, operator: operatorName || undefined },
         });
 
         await loadPhotos();

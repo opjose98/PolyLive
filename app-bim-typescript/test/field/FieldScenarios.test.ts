@@ -87,7 +87,7 @@ describe('Caso de campo #1 — Trazo de 4 muros + recinto detectado', () => {
     await store.createObject(room);
 
     const createWall = new CreateWallUseCase(store, commandStack, validation);
-    const perimeter: Array<[{ x: number; y: number }, { x: number; y: number }]> = [
+    const perimeter: [{ x: number; y: number }, { x: number; y: number }][] = [
       [{ x: 0, y: 0 }, { x: 4, y: 0 }],
       [{ x: 4, y: 0 }, { x: 4, y: 3 }],
       [{ x: 4, y: 3 }, { x: 0, y: 3 }],

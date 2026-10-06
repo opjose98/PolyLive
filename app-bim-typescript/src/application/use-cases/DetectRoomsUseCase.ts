@@ -46,7 +46,7 @@ export interface DetectRoomsInput {
 export interface DetectRoomsOutput {
   readonly suggestions: RoomSuggestion[];
   /** Ciclos hallados pero descartados, con el motivo. Útil para diagnóstico. */
-  readonly rejected: Array<{ reason: string }>;
+  readonly rejected: { reason: string }[];
 }
 
 // ---------------------------------------------------------------------------
@@ -65,7 +65,7 @@ export class DetectRoomsUseCase {
 
     const validator = new PolygonValidator({ minArea: input.minArea });
     const suggestions: RoomSuggestion[] = [];
-    const rejected: Array<{ reason: string }> = [];
+    const rejected: { reason: string }[] = [];
 
     for (const cycle of graph.findMinimalCycles()) {
       const vertices = extractVertices(cycle);
