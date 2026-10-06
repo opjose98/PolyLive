@@ -101,5 +101,15 @@ perpendicular por el lado dibujado con 1 m supuesto (`LengthAssumed` en el pset)
 **Corregido de paso:** en el DXF los contornos y rótulos de recinto salían espejados norte-sur respecto
 a los muros (no se pasaban a Y arriba).
 
+**También corregido:** los textos con caracteres fuera de ASCII ("·", "ñ", "ó", "m²") salían ilegibles
+en el DXF ("Â·"): R2000 no lee UTF-8. Ahora van como `\U+XXXX`.
+
 Tests: `test/drafting/draftExport.test.ts` (entidades, capas, DASHED, Y arriba, cotas 3D de vigas y
-correas, lint IFC4). Falta: probar la exportación desde el teléfono y abrir los archivos en AutoCAD/Revit.
+correas, lint IFC4).
+
+**Prueba en teléfono (2026-10-06, proyecto QA T0-M4):** DXF "4 muros, 1 hueco, 10 elementos de dibujo";
+IFC "1 nivel, 1 recinto, 2 vigas, 25 barras, georreferenciado". Validados fuera de la app:
+ezdxf lee el DXF R2000 sin errores (capas, DASHED, recinto del mismo lado que los muros, textos
+legibles); ifcopenshell: IFC4 sin problemas de esquema, 2 IfcBeam y 25 IfcMember (10 CHORD,
+14 STRUT, 1 PURLIN) con geometría válida; viga de planta a 2,40–2,80 m (tope del muro).
+Falta abrirlos en AutoCAD y Revit.
