@@ -306,7 +306,8 @@ const useStyles = themedStyles((colors) => ({
   fabs: { gap: spacing.md, alignItems: 'flex-start' },
   panel: {
     height: '62%',
-    minHeight: 280,
+    // 200 y no más: en un teléfono en horizontal el 62 % es poco y no debe desbordar.
+    minHeight: 200,
     width: sizes.rangePanelWidth,
     backgroundColor: colors.surface,
     borderRadius: radius.round,

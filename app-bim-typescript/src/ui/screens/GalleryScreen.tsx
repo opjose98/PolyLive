@@ -19,7 +19,8 @@
 // =============================================================================
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, FlatList, Image, TouchableOpacity, SafeAreaView, RefreshControl, Dimensions, Modal } from 'react-native';
+import { View, Text, FlatList, Image, TouchableOpacity, SafeAreaView, RefreshControl, Modal } from 'react-native';
+import { useLayout } from '../design/layout';
 import { themedStyles } from '../design/theme';
 import { ExpoFileSystem, type StoredPhoto } from '../../native/filesystem/ExpoFileSystem';
 import { ExpoPhotoCapture, type PhotoResult } from '../../native/camera/ExpoPhotoCapture';
@@ -52,10 +53,7 @@ function describeObject(obj: RevitObjectBase): string {
 // Constants
 // ---------------------------------------------------------------------------
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const COLUMN_COUNT = 3;
 const GAP = 4;
-const THUMB_SIZE = (SCREEN_WIDTH - GAP * (COLUMN_COUNT + 1)) / COLUMN_COUNT;
 
 // ---------------------------------------------------------------------------
 // Props
@@ -291,6 +289,9 @@ export function GalleryScreen({ services, roomId, objectId, photoId, operatorNam
   // Render item
   // -----------------------------------------------------------------------
 
+  const { width: screenW, galleryColumns: columns } = useLayout();
+  const thumbSize = (screenW - GAP * (columns + 1)) / columns;
+
   const renderPhoto = useCallback(
     ({ item }: { item: StoredPhoto }) => (
       <TouchableOpacity
@@ -302,15 +303,15 @@ export function GalleryScreen({ services, roomId, objectId, photoId, operatorNam
       >
         <Image
           source={{ uri: item.filepath }}
-          style={styles.thumbnail}
+          style={[styles.thumbnail, { width: thumbSize, height: thumbSize }]}
           resizeMode="cover"
         />
-        <Text style={styles.photoLabel} numberOfLines={1}>
+        <Text style={[styles.photoLabel, { width: thumbSize }]} numberOfLines={1}>
           {auditPhotos.get(item.filename)?.metadata.bimCode ?? item.filename}
         </Text>
       </TouchableOpacity>
     ),
-    [handleLongPress, auditPhotos],
+    [handleLongPress, auditPhotos, thumbSize],
   );
 
   // -----------------------------------------------------------------------
@@ -339,7 +340,9 @@ export function GalleryScreen({ services, roomId, objectId, photoId, operatorNam
           data={photos}
           renderItem={renderPhoto}
           keyExtractor={item => item.filename}
-          numColumns={COLUMN_COUNT}
+          // Columnas según el ancho (girar el equipo o tableta); FlatList exige otra key al cambiarlas.
+          key={`cols-${columns}`}
+          numColumns={columns}
           contentContainerStyle={styles.grid}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -463,8 +466,6 @@ const useStyles = themedStyles((colors) => ({
     margin: GAP / 2,
   },
   thumbnail: {
-    width: THUMB_SIZE,
-    height: THUMB_SIZE,
     borderRadius: 4,
     backgroundColor: colors.background,
   },
@@ -472,7 +473,6 @@ const useStyles = themedStyles((colors) => ({
     fontSize: 10,
     color: colors.textSecondary,
     marginTop: 2,
-    width: THUMB_SIZE,
   },
   emptyState: {
     flex: 1,

@@ -18,6 +18,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Text, TextInput, View } from 'react-native';
+import { useLayout } from '../design/layout';
 import Animated, { FadeIn, FadeOut, ZoomIn, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import {
@@ -64,6 +65,8 @@ const THUMB = 22;
 export const ConstraintSelector = React.memo(function ConstraintSelector(props: ConstraintSelectorProps) {
   const styles = useStyles();
   const colors = useTheme();
+  // En horizontal el alto no da para 300: el riel se acorta (lo mide onLayout).
+  const panelH = Math.min(300, Math.round(useLayout().height * 0.55));
   const { levels, edit, kind, canUnlink, caption, onChange } = props;
   const [trackH, setTrackH] = useState(0);
   // Estado vivo durante el arrastre: los gestos leen de aquí, no de props
@@ -92,7 +95,7 @@ export const ConstraintSelector = React.memo(function ConstraintSelector(props: 
 
   return (
     <>
-      <Animated.View entering={ZoomIn.springify().damping(18).stiffness(260)} exiting={FadeOut.duration(100)} style={styles.panel}>
+      <Animated.View entering={ZoomIn.springify().damping(18).stiffness(260)} exiting={FadeOut.duration(100)} style={[styles.panel, { height: panelH }]}>
         <Text style={styles.caption} numberOfLines={1}>
           {caption}
         </Text>
@@ -327,7 +330,6 @@ function NumberRow({ label, value, min, onCommit }: { label: string; value: numb
 
 const useStyles = themedStyles((colors) => ({
   panel: {
-    height: 300,
     width: WIDTH,
     backgroundColor: colors.surface,
     borderRadius: radius.round,

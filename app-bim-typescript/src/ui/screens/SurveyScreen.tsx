@@ -147,8 +147,13 @@ export function SurveyScreen({
   onExitProject,
   onNavigate,
 }: SurveyScreenProps) {
-  const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
-  const canvasHeight = Math.max(240, Math.round(screenHeight * 0.45));
+  // Tamaño INICIAL (solo para la primera cámara): al girar el equipo el lienzo se
+  // vuelve a medir con onLayout; si el editor dependiera del tamaño de la ventana,
+  // girar lo recrearía y se perderían la selección y el deshacer.
+  const [{ screenWidth, canvasHeight }] = useState(() => {
+    const win = Dimensions.get('window');
+    return { screenWidth: win.width, canvasHeight: Math.max(240, Math.round(win.height * 0.45)) };
+  });
 
   // --- Controlador del editor: uno por Recinto activo ---
   const editor = useMemo(
@@ -159,7 +164,8 @@ export function SurveyScreen({
         roomObjectId: revitObjectId(roomId as unknown as string),
         initialTransform: { scale: 100, offsetX: screenWidth / 2, offsetY: canvasHeight / 2 },
       }),
-    [services, roomId, screenWidth, canvasHeight],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- el tamaño inicial no recrea el editor
+    [services, roomId],
   );
 
   const [state, setState] = useState<EditorState>(() => editor.getState());
@@ -1184,9 +1190,12 @@ export function SurveyScreen({
         style={styles.stage}
         onLayout={(e) => {
           const { width, height } = e.nativeEvent.layout;
-          setCanvasSize((prev) =>
-            Math.abs(prev.w - width) < 1 && Math.abs(prev.h - height) < 1 ? prev : { w: width, h: height },
-          );
+          const prev = canvasSize;
+          if (Math.abs(prev.w - width) < 1 && Math.abs(prev.h - height) < 1) return;
+          // Al girar el equipo el centro del dibujo se queda en el centro del lienzo.
+          const t = editor.getState().transform;
+          editor.setTransform({ ...t, offsetX: t.offsetX + (width - prev.w) / 2, offsetY: t.offsetY + (height - prev.h) / 2 });
+          setCanvasSize({ w: width, h: height });
         }}
       >
         <PlanCanvas
