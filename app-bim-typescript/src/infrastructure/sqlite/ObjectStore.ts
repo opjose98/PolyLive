@@ -282,8 +282,8 @@ export class ObjectStore implements IObjectStore {
   async createMeasurement(m: Measurement): Promise<MeasurementId> {
     const now = new Date().toISOString();
     await this.db.run(
-      `INSERT INTO measurements (id, room_id, wall_id, capture_method, values_json, average, is_deleted, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+      `INSERT INTO measurements (id, room_id, wall_id, capture_method, values_json, average, reference, applied_length, is_deleted, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
       [
         m.id as string,
         m.roomId as string,
@@ -291,6 +291,8 @@ export class ObjectStore implements IObjectStore {
         m.capture_method,
         m.values_json,
         m.average as number,
+        m.reference,
+        m.appliedLength,
         now,
         now,
       ]
@@ -333,6 +335,11 @@ export class ObjectStore implements IObjectStore {
     return rows.map((row) => this.measurementRowToObject(row));
   }
 
+  /** Registra qué longitud de eje se aplicó al muro a partir de la medida (trazabilidad medida → geometría). */
+  async setMeasurementApplied(id: MeasurementId, appliedLength: number): Promise<void> {
+    await this.db.run(`UPDATE measurements SET applied_length = ?, updated_at = ? WHERE id = ?`, [appliedLength, new Date().toISOString(), id as string]);
+  }
+
   /** Soft-delete de una Measurement (una lectura errónea no se borra, se marca). */
   async deleteMeasurement(id: MeasurementId): Promise<void> {
     const now = new Date().toISOString();
@@ -347,6 +354,8 @@ export class ObjectStore implements IObjectStore {
       capture_method: row.capture_method as CaptureMethod,
       values_json: row.values_json,
       average: meters(row.average),
+      reference: row.reference === 'interior' || row.reference === 'exterior' || row.reference === 'diagonal' ? row.reference : 'axis',
+      appliedLength: row.applied_length ?? null,
       created_at: new Date(row.created_at),
       updated_at: new Date(row.updated_at),
       is_deleted: row.is_deleted === 1,

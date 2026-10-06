@@ -17,6 +17,7 @@ import { spacing } from '../design/tokens';
 import { type } from '../design/typography';
 import { zoneCode } from '../../domain/objects/zone';
 import type { DetectedRoom } from '../../application/editor/EditorController';
+import type { ClosureCheck } from '../../domain/topology/closure';
 
 /** Usos frecuentes en vivienda y oficina: un toque en vez de escribir. */
 export const ZONE_USES = ['Sala', 'Comedor', 'Cocina', 'Dormitorio', 'Baño', 'Estudio', 'Oficina', 'Circulación', 'Depósito', 'Patio'];
@@ -31,9 +32,12 @@ export interface ZoneSheetProps {
   onAddFloor: () => void;
   onRemoveFloor: () => void;
   onFloorThickness: (m: number) => void;
+  /** Control de cierre: diagonal del modelo y última diagonal medida. */
+  diagonal?: { model: number; check: ClosureCheck | null } | null;
+  onDiagonal?: (measured: number) => void;
 }
 
-export function ZoneSheet({ zone, levelName, editable, onEdit, floorThickness, onAddFloor, onRemoveFloor, onFloorThickness }: ZoneSheetProps) {
+export function ZoneSheet({ zone, levelName, editable, onEdit, floorThickness, onAddFloor, onRemoveFloor, onFloorThickness, diagonal, onDiagonal }: ZoneSheetProps) {
   const styles = useStyles();
   const m2 = (v?: number) => (v === undefined ? '—' : `${v.toFixed(2)} m²`);
   return (
@@ -72,6 +76,31 @@ export function ZoneSheet({ zone, levelName, editable, onEdit, floorThickness, o
       ) : (
         <ReadonlyRow label="Suelo" value="Sin suelo" />
       )}
+      {diagonal ? (
+        <>
+          <Text style={styles.section}>Control de cierre</Text>
+          <ReadonlyRow label="Diagonal del modelo (cara interior)" value={`${diagonal.model.toFixed(3)} m`} />
+          {editable && onDiagonal ? (
+            <NumberField
+              label="Diagonal medida en obra"
+              unit="m"
+              decimals={3}
+              min={0.1}
+              max={200}
+              value={diagonal.check?.measured ?? Number(diagonal.model.toFixed(3))}
+              onCommit={onDiagonal}
+            />
+          ) : null}
+          {diagonal.check ? (
+            <Text style={[styles.closure, diagonal.check.ok ? styles.ok : styles.bad]}>
+              {diagonal.check.ok ? 'Cierra' : 'No cierra: revisa las medidas'} · error {(diagonal.check.error * 100).toFixed(1)} cm ·
+              tolerancia ±{(diagonal.check.tolerance * 100).toFixed(1)} cm
+            </Text>
+          ) : (
+            <Text style={styles.hint}>Mide en obra la diagonal más larga (esquina a esquina interior) para verificar el cierre.</Text>
+          )}
+        </>
+      ) : null}
       <TextField label="Notas" value={zone.notes ?? ''} multiline disabled={!editable} commitOn="blur" onCommit={(n) => onEdit({ notes: n })} />
     </ScrollView>
   );
@@ -82,4 +111,8 @@ const useStyles = themedStyles((colors) => ({
   code: { ...type.title, color: colors.accentText },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   section: { ...type.label, color: colors.textSecondary, marginTop: spacing.sm },
+  closure: { ...type.body },
+  ok: { color: colors.success },
+  bad: { color: colors.error },
+  hint: { ...type.caption, color: colors.textSecondary },
 }));

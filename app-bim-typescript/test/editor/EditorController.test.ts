@@ -554,6 +554,64 @@ describe('EditorController', () => {
       expect(editor.walls.some((w) => Math.abs(w.startPoint.x - 5) < 1e-6 && Math.abs(w.endPoint.y - 3) < 1e-6)).toBe(true);
       expect(editor.getState().rooms).toHaveLength(1);
     });
+
+    // CRITERIO DE ACEPTACIÓN DE CAMPO (docs/24): un recinto dibujado a ojo y medido con láser de
+    // cara interior a cara interior debe cerrar: cada cara medida queda a < 1 cm de lo medido y el
+    // área neta del recinto a ±0,5 % del producto de las medidas.
+    it('criterio de campo: medir cara interior a cara interior cierra el recinto (< 1 cm, área ±0,5 %)', async () => {
+      await drawRectangle(); // 4 × 3 al eje, dibujado a ojo
+      const t = editor.walls[0].thickness as number;
+      const measureAt = async (x: number, y: number, value: number) => {
+        editor.setTool('measure');
+        await editor.handleTap(px(x), px(y), TOL_PX);
+        const avg = await editor.captureMeasurement('manual', meters(value), undefined, 'interior');
+        await editor.applyMeasurementToWall(avg!, 'interior');
+        return editor.measureFaces()!;
+      };
+      const top = await measureAt(2, 0, 3.7); // muro de arriba: 3,70 m entre caras interiores
+      expect(Math.abs(top.interior! - 3.7)).toBeLessThan(0.01);
+      expect(Math.abs(top.axis - (3.7 + t))).toBeLessThan(0.01); // eje = cara + 2 medios espesores
+      const right = await measureAt(editor.walls.find((w) => w.startPoint.x > 3)!.startPoint.x, 1.5, 2.6);
+      expect(Math.abs(right.interior! - 2.6)).toBeLessThan(0.01);
+      // La primera medida no se deshizo al aplicar la segunda.
+      editor.setTool('measure');
+      await editor.handleTap(px(2), px(0), TOL_PX);
+      expect(Math.abs(editor.measureFaces()!.interior! - 3.7)).toBeLessThan(0.01);
+      const room = editor.getState().rooms[0];
+      expect(Math.abs((room.netArea ?? 0) / (3.7 * 2.6) - 1)).toBeLessThan(0.005);
+      // Trazabilidad: cada medida guarda qué se midió y qué eje se aplicó.
+      const ms = await services.store.listMeasurements(ROOM_ID);
+      expect(ms).toHaveLength(2);
+      expect(ms.every((m) => m.reference === 'interior' && m.appliedLength !== null)).toBe(true);
+    });
+
+    it('diagonal de control: se registra, compara con el modelo y dice si el recinto cierra', async () => {
+      await drawRectangle();
+      const zone = editor.getState().rooms[0];
+      const info = (await editor.zoneDiagonal(zone.id!))!;
+      expect(info.check).toBeNull();
+      const ok = (await editor.recordZoneDiagonal(zone.id!, meters(info.model + 0.004)))!;
+      expect(ok.ok).toBe(true);
+      const bad = (await editor.recordZoneDiagonal(zone.id!, meters(info.model + 0.05)))!;
+      expect(bad.ok).toBe(false);
+      const again = (await editor.zoneDiagonal(zone.id!))!;
+      expect(again.check?.measured).toBeCloseTo(info.model + 0.05);
+      const stored = (await services.store.listMeasurements(ROOM_ID)).filter((m) => m.reference === 'diagonal');
+      expect(stored).toHaveLength(2);
+      expect(stored[0].appliedLength).toBeCloseTo(info.model);
+    });
+
+    it('medir la cara exterior y el eje también; sin recinto la cara cae al eje y lo avisa', async () => {
+      await drawRectangle();
+      const t = editor.walls[0].thickness as number;
+      editor.setTool('measure');
+      await editor.handleTap(px(2), px(0), TOL_PX);
+      await editor.applyMeasurementToWall(meters(4.5), 'exterior');
+      expect(Math.abs(editor.measureFaces()!.exterior! - 4.5)).toBeLessThan(0.01);
+      expect(Math.abs(editor.measureFaces()!.axis - (4.5 - t))).toBeLessThan(0.01);
+      await editor.applyMeasurementToWall(meters(4.2), 'axis');
+      expect(editor.measureFaces()!.axis).toBeCloseTo(4.2, 6);
+    });
   });
 
   describe('arrastre en vivo', () => {

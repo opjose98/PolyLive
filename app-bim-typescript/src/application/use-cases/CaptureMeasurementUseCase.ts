@@ -13,6 +13,7 @@ import {
   generateId,
 } from '../../domain/objects';
 import { IBLEManager } from './types';
+import type { MeasurementKind } from '../../domain/objects/measurement';
 
 export interface CaptureMeasurementInput {
   roomId: RoomId;
@@ -35,6 +36,8 @@ export interface CaptureMeasurementInput {
    * un manager de lectura simple.
    */
   samples?: readonly number[];
+  /** Qué se midió (cara interior / exterior / eje). Por defecto, eje. */
+  reference?: MeasurementKind;
 }
 
 export interface CaptureMeasurementOutput {
@@ -95,6 +98,7 @@ export class CaptureMeasurementUseCase {
       capture_method: input.method,
       values_json: JSON.stringify(samples),
       average,
+      reference: input.reference ?? 'axis',
     });
 
     await (this.store as any).createMeasurement(measurement);

@@ -68,7 +68,11 @@ import { CanvasPoint, canvasPoint, MIN_SCALE, MAX_SCALE } from '../canvas/types'
 import { SnapHandler } from '../canvas/SnapHandler';
 import { MiterHandler } from '../canvas/MiterHandler';
 import { SelectionService, Handle, touchToleranceMeters } from '../canvas/SelectionService';
-import { JointWall, WallEndsChange, endsAt, planEndMove, planWallTranslate } from '../../domain/topology/joints';
+import { JointWall, WallEndsChange, endsAt, planEndMove, planMeasureMove, planWallTranslate } from '../../domain/topology/joints';
+import { FaceWall, Side, axisLengthFor, faceLength, interiorSide } from '../../domain/topology/faceMeasure';
+import { ClosureCheck, checkClosure, controlDiagonal } from '../../domain/topology/closure';
+import type { MeasureReference } from '../../domain/objects/measurement';
+import type { MeasurementId } from '../../domain/objects/base';
 import type { AppServices } from '../AppServices';
 import type { AuditPhotoId } from '../../domain/objects/base';
 import type { PhotoFaceAnchor } from '../../domain/objects/audit-photo';
@@ -1836,6 +1840,7 @@ export class EditorController {
     method: 'ble' | 'manual',
     manualValue?: Meters,
     bleSamples?: readonly number[],
+    reference: MeasureReference = 'interior',
   ): Promise<Meters | null> {
     const target = this.state.measureTargetId;
     if (!target) {
@@ -1851,7 +1856,9 @@ export class EditorController {
         method,
         value: manualValue,
         samples: bleSamples,
+        reference,
       });
+      this.lastMeasurementId = result.measurementId;
       this.notify(
         'success',
         `Medición guardada: ${Number(result.average).toFixed(3)} m` +
@@ -1867,13 +1874,88 @@ export class EditorController {
     }
   }
 
+  /** Última medición guardada (para ligarla a la longitud que se aplica). */
+  private lastMeasurementId: MeasurementId | null = null;
+
   /**
-   * Aplica una distancia medida como longitud del muro destino: mueve su
-   * extremo final a lo largo de su propia dirección hasta que mida `distance`.
-   * Es la razón de medir con el láser en campo — sin esto la medición queda
-   * como un dato suelto que no corrige el dibujo.
+   * Longitudes de cara del muro elegido para medir (interior y exterior), para
+   * que la hoja de medida muestre qué se va a corregir. `null` sin muro.
    */
-  async applyMeasurementToWall(distance: Meters): Promise<void> {
+  measureFaces(): { axis: number; interior: number | null; exterior: number | null } | null {
+    const wall = this.measureTargetWall();
+    if (!wall) return null;
+    const ctx = this.faceContext(wall);
+    const axis = wall.length as number;
+    if (!ctx || ctx.inner === null) return { axis, interior: null, exterior: null };
+    return {
+      axis,
+      interior: faceLength(ctx.me, ctx.inner, ctx.walls),
+      exterior: faceLength(ctx.me, ctx.inner === 1 ? -1 : 1, ctx.walls),
+    };
+  }
+
+  /**
+   * Diagonal de control del recinto: la del modelo (a cara interior) y la
+   * última medida en obra, con su error de cierre.
+   */
+  async zoneDiagonal(zoneId: string): Promise<{ model: number; check: ClosureCheck | null } | null> {
+    const zone = this.state.rooms.find((r) => r.id === zoneId);
+    const d = zone ? controlDiagonal(zone.netPolygon && zone.netPolygon.length >= 4 ? zone.netPolygon : zone.polygon) : null;
+    if (!d) return null;
+    const last = (await this.services.store.listMeasurementsForWall(zoneId as unknown as WallId)).find((m) => m.reference === 'diagonal');
+    return { model: d.length, check: last ? checkClosure(d.length, last.average as number) : null };
+  }
+
+  /** Registra la diagonal medida en obra (queda en `measurements`, ligada al recinto). */
+  async recordZoneDiagonal(zoneId: string, measured: Meters): Promise<ClosureCheck | null> {
+    const info = await this.zoneDiagonal(zoneId);
+    if (!info) return null;
+    try {
+      const r = await this.services.useCases.captureMeasurement.execute({
+        roomId: this.roomId,
+        wallId: zoneId as unknown as WallId,
+        method: 'manual',
+        value: measured,
+        reference: 'diagonal',
+      });
+      await this.services.store.setMeasurementApplied(r.measurementId, info.model);
+      const check = checkClosure(info.model, measured as number);
+      this.notify(
+        check.ok ? 'success' : 'info',
+        check.ok
+          ? `El recinto cierra: error ${(check.error * 100).toFixed(1)} cm (tolerancia ${(check.tolerance * 100).toFixed(1)} cm).`
+          : `Revisa las medidas: la diagonal difiere ${(check.error * 100).toFixed(1)} cm (tolerancia ${(check.tolerance * 100).toFixed(1)} cm).`,
+      );
+      return check;
+    } catch (err) {
+      this.fail(err, 'No se pudo guardar la diagonal.');
+      return null;
+    }
+  }
+
+  private measureTargetWall(): Wall | null {
+    const target = this.state.measureTargetId;
+    return target ? (this.walls.find((w) => (w.id as string) === (target as unknown as string)) ?? null) : null;
+  }
+
+  /** Muros unidos (con espesor) y recintos del nivel, para medir de cara a cara. */
+  private faceContext(wall: Wall): { me: FaceWall; walls: FaceWall[]; rooms: Point2D[][]; inner: Side | null } | null {
+    const joints = this.jointWalls(wall);
+    if (!joints) return null;
+    const thickness = new Map(this.walls.map((w) => [w.id as string, w.thickness as number]));
+    const walls: FaceWall[] = joints.map((j) => ({ ...j, thickness: thickness.get(j.id) ?? 0.15 }));
+    const me = walls.find((w) => w.id === (wall.id as string))!;
+    const rooms = this.state.rooms.map((r) => [...(r.netPolygon && r.netPolygon.length >= 3 ? r.netPolygon : r.polygon)]);
+    return { me, walls, rooms, inner: interiorSide(me, rooms) };
+  }
+
+  /**
+   * Aplica una distancia medida al muro destino: mueve su extremo final a lo
+   * largo de su dirección (los muros unidos lo acompañan) hasta que la
+   * referencia medida (cara interior, cara exterior o eje) mida `distance`.
+   * La longitud de EJE resultante queda registrada en la medición.
+   */
+  async applyMeasurementToWall(distance: Meters, reference: MeasureReference = 'axis'): Promise<void> {
     const target = this.state.measureTargetId;
     const wall = target ? this.walls.find((w) => (w.id as string) === (target as unknown as string)) : null;
     if (!wall) {
@@ -1889,18 +1971,26 @@ export class EditorController {
       return;
     }
 
+    // Cara → eje con los espesores de los muros de cada extremo.
+    const ctx = reference === 'axis' ? null : this.faceContext(wall);
+    const solved = ctx ? axisLengthFor(distance as number, reference, ctx.me, ctx.walls, ctx.rooms) : { axis: distance as number, reference: 'axis' as const };
+    if (reference !== 'axis' && solved.reference === 'axis') {
+      this.notify('info', 'El muro no da a ningún recinto cerrado: la medida se aplicó al eje.');
+    }
+    const axisLength = solved.axis;
     const newEnd: Point2D = {
-      x: wall.startPoint.x + (dx / len) * (distance as number),
-      y: wall.startPoint.y + (dy / len) * (distance as number),
+      x: wall.startPoint.x + (dx / len) * axisLength,
+      y: wall.startPoint.y + (dy / len) * axisLength,
     };
 
     this.patch({ busy: true });
     try {
-      // El extremo final se mueve CON sus uniones: la esquina sigue cerrada.
+      // El extremo final se mueve CON sus uniones: en una esquina en L el vecino se traslada
+      // entero (el recinto conserva sus ángulos); en otros casos se arrastra su extremo.
       const joints = this.jointWalls(wall);
       if (joints) {
         await this.services.useCases.reshapeWalls.execute({
-          changes: planEndMove(joints, wall.id as string, 'end', newEnd),
+          changes: planMeasureMove(joints, wall.id as string, newEnd),
         });
       } else {
         await this.services.useCases.updateObjectProperty.execute({
@@ -1909,8 +1999,18 @@ export class EditorController {
           newValue: newEnd,
         });
       }
+      if (this.lastMeasurementId) {
+        await this.services.store.setMeasurementApplied(this.lastMeasurementId, axisLength).catch(() => undefined);
+        this.lastMeasurementId = null;
+      }
       await this.reload();
-      this.notify('success', `Muro ajustado a ${Number(distance).toFixed(3)} m.`);
+      const label = solved.reference === 'interior' ? 'cara interior' : solved.reference === 'exterior' ? 'cara exterior' : 'eje';
+      this.notify(
+        'success',
+        solved.reference === 'axis'
+          ? `Muro ajustado a ${Number(distance).toFixed(3)} m al eje.`
+          : `${label[0].toUpperCase()}${label.slice(1)} ${Number(distance).toFixed(3)} m → eje ${axisLength.toFixed(3)} m.`,
+      );
     } catch (err) {
       this.fail(err, 'No se pudo aplicar la medición al muro.');
     } finally {

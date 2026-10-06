@@ -18,7 +18,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { View, Text, Dimensions, Modal, BackHandler } from 'react-native';
 
 import { PlanCanvas } from '../canvas/PlanCanvas';
-import { BottomSheet, toast, alertDialog } from '../primitives';
+import { BottomSheet, toast, alertDialog, TagToggle } from '../primitives';
+import type { MeasureReference } from '../../domain/objects/measurement';
 import { sizes } from '../design/tokens';
 import { themedStyles, useCanvasPalette } from '../design/theme';
 import { haptic } from '../design/haptics';
@@ -190,6 +191,8 @@ export function SurveyScreen({
   const [zoneSheetOpen, setZoneSheetOpen] = useState(false);
   const [manualMeasureOpen, setManualMeasureOpen] = useState(false);
   const [manualValue, setManualValue] = useState(3);
+  // Qué se midió: por defecto de cara interior a cara interior (lo que mide un láser en un recinto).
+  const [measureRef, setMeasureRef] = useState<MeasureReference>('interior');
   const [measurements, setMeasurements] = useState<readonly Measurement[]>([]);
 
   // --- Cromo del espacio de trabajo (FABs, BPC, herramientas de esquina) ---
@@ -405,6 +408,16 @@ export function SurveyScreen({
     operatorName,
     touchTolerancePx: CANVAS_TOUCH_TOLERANCE_PX,
   });
+
+  // Control de cierre del recinto abierto en la hoja.
+  const [zoneDiagonal, setZoneDiagonal] = useState<Awaited<ReturnType<EditorController['zoneDiagonal']>>>(null);
+  useEffect(() => {
+    const id = zoneSheetOpen ? editor.selectedZone?.id : undefined;
+    if (!id) return setZoneDiagonal(null);
+    void editor.zoneDiagonal(id).then(setZoneDiagonal);
+  }, [zoneSheetOpen, editor, state.selectedZoneId, state.rooms]);
+
+  const measureFaces = useMemo(() => (manualMeasureOpen ? editor.measureFaces() : null), [manualMeasureOpen, editor, state.objects]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- Dibujo técnico (F6b): cotas, textos, etiquetas, coordenadas, líneas, polígonos, vigas… ---
   const coordText = useCallback(
@@ -1437,6 +1450,11 @@ export function SurveyScreen({
               return f ? ((f.thickness as number | undefined) ?? 0) : null;
             })()}
             onAddFloor={() => editor.selectedZone?.id && void editor.addFloorToZone(editor.selectedZone.id)}
+            diagonal={zoneDiagonal}
+            onDiagonal={(v) => {
+              const id = editor.selectedZone?.id;
+              if (id) void editor.recordZoneDiagonal(id, meters(v)).then(() => editor.zoneDiagonal(id).then(setZoneDiagonal));
+            }}
             onRemoveFloor={() => {
               const id = editor.selectedZone?.id;
               if (!id) return;
@@ -1505,11 +1523,28 @@ export function SurveyScreen({
       >
         <View style={styles.dialogScrim}>
           <View style={styles.dialog}>
-            <Text style={styles.dialogTitle}>Medida manual</Text>
+            <Text style={styles.dialogTitle}>Medida del muro</Text>
             <Text style={styles.dialogBody}>
-              Se guardará como medición del muro seleccionado. Útil cuando el láser no alcanza o no hay
-              batería.
+              Qué mediste: el muro se ajusta para que esa cara mida lo ingresado (los muros unidos lo
+              acompañan) y la medida queda registrada.
             </Text>
+            <View style={styles.dialogRefs}>
+              {(['interior', 'exterior', 'axis'] as const).map((r) => (
+                <TagToggle
+                  key={r}
+                  role="radio"
+                  label={r === 'interior' ? 'Cara interior' : r === 'exterior' ? 'Cara exterior' : 'Eje'}
+                  on={measureRef === r}
+                  onPress={() => setMeasureRef(r)}
+                />
+              ))}
+            </View>
+            {measureFaces ? (
+              <Text style={styles.dialogBody}>
+                Hoy: interior {measureFaces.interior != null ? `${measureFaces.interior.toFixed(3)} m` : '—'} · exterior{' '}
+                {measureFaces.exterior != null ? `${measureFaces.exterior.toFixed(3)} m` : '—'} · eje {measureFaces.axis.toFixed(3)} m
+              </Text>
+            ) : null}
             <NumberField
               label="Distancia"
               unit="m"
@@ -1529,8 +1564,8 @@ export function SurveyScreen({
                 label="Guardar"
                 onPress={async () => {
                   setManualMeasureOpen(false);
-                  const average = await editor.captureMeasurement('manual', meters(manualValue));
-                  if (average != null) await editor.applyMeasurementToWall(average);
+                  const average = await editor.captureMeasurement('manual', meters(manualValue), undefined, measureRef);
+                  if (average != null) await editor.applyMeasurementToWall(average, measureRef);
                 }}
               />
             </View>
@@ -1553,6 +1588,7 @@ const useStyles = themedStyles((colors) => ({
   dialogTitle: { ...type.title, color: colors.text },
   dialogBody: { ...type.body, color: colors.textSecondary },
   dialogActions: { flexDirection: 'row', gap: spacing.sm },
+  dialogRefs: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
 }));
 
 export default SurveyScreen;
