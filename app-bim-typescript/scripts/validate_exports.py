@@ -45,6 +45,11 @@ def check_ifc(path: str) -> list[str]:
     for s in log.statements:
         problems.append(f"IFC esquema: {s.get('message', s) if isinstance(s, dict) else s}")
     settings = ifcopenshell.geom.settings()
+    # Solo el cuerpo 3D (los muros también llevan su eje 2D como 'Axis').
+    try:
+        settings.set("context-identifiers", ["Body"])
+    except Exception:  # noqa: BLE001  (versiones sin esa opción)
+        pass
     built = 0
     for t in ["IfcWall", "IfcColumn", "IfcDoor", "IfcWindow", "IfcSlab", "IfcSpace", "IfcBeam", "IfcMember", "IfcOpeningElement"]:
         for el in f.by_type(t, include_subtypes=False):

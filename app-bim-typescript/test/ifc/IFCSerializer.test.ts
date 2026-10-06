@@ -272,10 +272,10 @@ describe('IFCSerializer', () => {
   // -----------------------------------------------------------------------
   // 7. Output contiene IfcWall
   // -----------------------------------------------------------------------
-  test('output contiene IfcWallStandardCase', async () => {
+  test('output contiene IfcWall (no el IfcWallStandardCase desaconsejado en IFC4)', async () => {
     const result = await serializer.serialize(makeSimpleInput());
-    expect(result.content).toContain('IFCWALLSTANDARDCASE');
-    const wallMatches = result.content.match(/IFCWALLSTANDARDCASE\(/g);
+    expect(result.content).not.toContain('IFCWALLSTANDARDCASE');
+    const wallMatches = result.content.match(/IFCWALL\(/g);
     expect(wallMatches).not.toBeNull();
     expect(wallMatches!.length).toBe(4); // 4 muros
   });
@@ -461,7 +461,7 @@ describe('IFCSerializer', () => {
     const result = await serializer.serialize(input);
 
     expect(result.validation.valid).toBe(true);
-    const wallMatches = result.content.match(/IFCWALLSTANDARDCASE\(/g);
+    const wallMatches = result.content.match(/IFCWALL\(/g);
     expect(wallMatches).not.toBeNull();
     expect(wallMatches!.length).toBe(20);
   });

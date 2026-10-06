@@ -208,7 +208,7 @@ describe('Flujo 4 — ExportIfc', () => {
     const output = await exportUseCase.execute({ roomId: exportRoomId });
 
     expect(output.ifcContent).toContain('ISO-10303-21');
-    expect(output.ifcContent).toContain('IFCWALLSTANDARDCASE');
+    expect(output.ifcContent).toContain('IFCWALL(');
 
     // Write file: el paso de escritura a disco no está en el UseCase (retorna el
     // string completo) — se simula aquí el paso que haría la capa de infraestructura.

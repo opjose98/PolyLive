@@ -84,6 +84,7 @@ export type IfcValue =
   | { readonly identifier: string }
   | { readonly length: number }
   | { readonly bool: boolean }
+  | { readonly area: number }
   | { readonly real: number };
 
 function ifcValue(v: IfcValue): string {
@@ -91,6 +92,7 @@ function ifcValue(v: IfcValue): string {
   if ('identifier' in v) return `IFCIDENTIFIER(${stepString(v.identifier)})`;
   if ('length' in v) return `IFCLENGTHMEASURE(${stepReal(v.length)})`;
   if ('bool' in v) return `IFCBOOLEAN(${bool(v.bool)})`;
+  if ('area' in v) return `IFCAREAMEASURE(${stepReal(v.area)})`;
   return `IFCREAL(${stepReal(v.real)})`;
 }
 

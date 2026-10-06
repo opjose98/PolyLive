@@ -215,6 +215,8 @@ export interface IfcZoneInput {
   readonly code: string;
   /** Nombre (Cocina, Baño…): el `LongName`. */
   readonly name: string;
+  /** Uso (Sala, Baño…): el `ObjectType` del IfcSpace. */
+  readonly use?: string;
   readonly levelId: string;
   readonly netPolygon: readonly { x: number; y: number }[];
   readonly netArea: number;

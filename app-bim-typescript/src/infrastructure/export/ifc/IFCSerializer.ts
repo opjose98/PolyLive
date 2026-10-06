@@ -164,13 +164,16 @@ export class IFCSerializer {
       const body = w.bodyShape([w.extrusion(w.polygonProfile(z.netPolygon.map(toLocal)), w.origin3Axis, height)]);
       const placement = w.placementAt(storey.placement, 0, 0, 0);
       const space = w.add(
-        `IFCSPACE('${stableGuid(`zone:${z.id}`)}',${oh},${stepString(z.code)},$,$,${ref(placement)},${ref(w.productShape([body]))},${stepString(z.name)},.ELEMENT.,.INTERNAL.,$)`,
+        `IFCSPACE('${stableGuid(`zone:${z.id}`)}',${oh},${stepString(z.code)},$,${z.use ? stepString(z.use) : '$'},${ref(placement)},${ref(w.productShape([body]))},${stepString(z.name)},.ELEMENT.,.INTERNAL.,$)`,
       );
       spacesByStorey.set(storey, [...(spacesByStorey.get(storey) ?? []), space]);
       w.propertySet(`zone:${z.id}`, 'Pset_SpaceCommon', space, [
         ['Reference', { identifier: z.code }],
-        ['PolyLiveId', { identifier: z.id }],
+        ['IsExternal', { bool: false }],
+        ['NetPlannedArea', { area: z.netArea }],
+        ['GrossPlannedArea', { area: z.grossArea }],
       ]);
+      w.propertySet(`zone-pl:${z.id}`, REVIT_CONSTRAINTS_PSET, space, [['PolyLiveId', { identifier: z.id }]]);
       w.quantities(`zone:${z.id}`, 'Qto_SpaceBaseQuantities', space, {
         lengths: [
           ['Height', height],
@@ -279,10 +282,11 @@ export class IFCSerializer {
         ]);
         body = w.bodyShape([w.extrusion(elev, w.wallPlaneAxis(0, thickness / 2, 0), thickness)]);
       }
-      const shape = w.productShape([w.axisShape(length), body]);
+      const shape = w.productShape([body, w.axisShape(length)]);
       const type = wall.isStructural ? '.STANDARD.' : '.PARTITIONING.';
       const entity = w.add(
-        `${rectangular ? 'IFCWALLSTANDARDCASE' : 'IFCWALL'}('${stableGuid(wall.id as string)}',${oh},${stepString(name)},$,$,${ref(placement)},${ref(shape)},$,${type})`,
+        // IfcWall siempre: IfcWallStandardCase está desaconsejado en IFC4 (los validadores lo marcan).
+        `IFCWALL('${stableGuid(wall.id as string)}',${oh},${stepString(name)},$,$,${ref(placement)},${ref(shape)},$,${type})`,
       );
       storey.elements.push(entity);
       products++;
@@ -360,6 +364,18 @@ export class IFCSerializer {
             );
       w.add(`IFCRELFILLSELEMENT('${stableGuid(`fills:${vano.id}`)}',${oh},$,$,${ref(opening)},${ref(fill)})`);
       host.storey.elements.push(fill);
+      // Propiedades y cantidades estándar (las que leen Revit y los cuadros de carpintería).
+      w.propertySet(`common:${vano.id}`, kind === 'door' ? 'Pset_DoorCommon' : 'Pset_WindowCommon', fill, [
+        ['Reference', { identifier: name }],
+        ['IsExternal', { bool: false }],
+      ]);
+      w.quantities(`qto:${vano.id}`, kind === 'door' ? 'Qto_DoorBaseQuantities' : 'Qto_WindowBaseQuantities', fill, {
+        lengths: [
+          ['Height', height],
+          ['Width', width],
+        ],
+        areas: [['Area', width * height]],
+      });
       w.propertySet(vano.id as string, REVIT_CONSTRAINTS_PSET, fill, [
         ['PolyLiveId', { identifier: vano.id as string }],
         ['HostWallId', { identifier: vano.parentWallId as unknown as string }],

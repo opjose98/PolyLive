@@ -17,6 +17,7 @@ export function ifcZones(zones: readonly Zone[]): IfcZoneInput[] {
     id: z.id,
     code: zoneCode(z),
     name: z.name,
+    ...(z.use ? { use: z.use } : {}),
     levelId: z.levelId,
     netPolygon: z.netPolygon,
     netArea: z.netArea,

@@ -200,7 +200,7 @@ describe('IFCSerializer — Revit', () => {
     const onN1 = uniformWall(extent({ baseLevelId: 'n1', topLevelId: 'n2', unconnectedHeight: 2.8 }));
     const r = await serialize({ walls: [wall('w1', [0, 0], [5, 0], onN1)] });
     const ents = parseStep(r.content);
-    const w = ofType(r.content, 'IFCWALLSTANDARDCASE')[0];
+    const w = ofType(r.content, 'IFCWALL')[0];
     const contain = ofType(r.content, 'IFCRELCONTAINEDINSPATIALSTRUCTURE').find((c) => refsIn(c.args[4]).includes(w.id))!;
     expect(ents.get(refsIn(contain.args[5])[0])!.args[2]).toBe("'Nivel 1'");
     // La extrusión es de 3 m (Nivel 1 → Nivel 2).
@@ -216,7 +216,7 @@ describe('IFCSerializer — Revit', () => {
   it('un muro con tope desconectado exporta su altura desconectada', async () => {
     const free = uniformWall(extent({ baseLevelId: 'n0', unconnectedHeight: 2.45 }));
     const r = await serialize({ walls: [wall('w1', [0, 0], [5, 0], free)] });
-    const w = ofType(r.content, 'IFCWALLSTANDARDCASE')[0];
+    const w = ofType(r.content, 'IFCWALL')[0];
     const c = constraintsOf(r.content, w.id);
     expect(c.TopConstraint).toBe("IFCLABEL('Unconnected')");
     expect(c.UnconnectedHeight).toBe('IFCLENGTHMEASURE(2.45)');
@@ -228,7 +228,7 @@ describe('IFCSerializer — Revit', () => {
       end: extent({ baseLevelId: 'n0', topLevelId: 'n2', unconnectedHeight: 3 }),
     };
     const r = await serialize({ walls: [wall('w1', [0, 0], [5, 0], v)] });
-    expect(ofType(r.content, 'IFCWALLSTANDARDCASE')).toHaveLength(0);
+    expect(ofType(r.content, 'IFCWALLSTANDARDCASE')).toHaveLength(0); // IFC4: siempre IfcWall
     const w = ofType(r.content, 'IFCWALL')[0];
     expect(w).toBeDefined();
 
@@ -265,7 +265,7 @@ describe('IFCSerializer — Revit', () => {
     const opening = ofType(r.content, 'IFCOPENINGELEMENT')[0];
     const placement = ents.get(refsIn(opening.args[5])[0])!;
     const relTo = ents.get(refsIn(placement.args[0])[0])!;
-    const wallEnt = ofType(r.content, 'IFCWALLSTANDARDCASE').find((w) => refsIn(w.args[5])[0] === relTo.id);
+    const wallEnt = ofType(r.content, 'IFCWALL').find((w) => refsIn(w.args[5])[0] === relTo.id);
     expect(wallEnt).toBeDefined();
     const axis = ents.get(refsIn(placement.args[1])[0])!;
     expect(ents.get(refsIn(axis.args[0])[0])!.args[0]).toBe('(1.5,0.,0.95)');
@@ -274,7 +274,7 @@ describe('IFCSerializer — Revit', () => {
   it('los GUIDs de los elementos son estables entre exportaciones', async () => {
     const a = await serialize();
     const b = await serialize();
-    const guids = (c: string) => ofType(c, 'IFCWALLSTANDARDCASE').map((w) => w.args[0]);
+    const guids = (c: string) => ofType(c, 'IFCWALL').map((w) => w.args[0]);
     expect(guids(a.content)).toEqual(guids(b.content));
     expect(ofType(a.content, 'IFCPROJECT')[0].args[0]).toBe(ofType(b.content, 'IFCPROJECT')[0].args[0]);
   });
@@ -284,7 +284,7 @@ describe('IFCSerializer — Revit', () => {
       walls: [wall('w1', [0, 0], [5, 0], undefined, { [PHASE_PROP]: 'f1' })],
       phaseNames: new Map([['f1', 'Demolición']]),
     });
-    const w = ofType(r.content, 'IFCWALLSTANDARDCASE')[0];
+    const w = ofType(r.content, 'IFCWALL')[0];
     expect(constraintsOf(r.content, w.id).Phase).toBe("IFCLABEL('Demolici\\X2\\00F3\\X0\\n')");
   });
 
