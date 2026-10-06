@@ -48,3 +48,25 @@ El atrás de Android cierra, en orden: diálogo de texto, hoja, último punto de
    `adb reverse tcp:8081 tcp:8081`, `npx expo start --dev-client`, recorrer cada herramienta en el proyecto *QA T0-M4*.
 2. Exportar el dibujo técnico a DXF/IFC (líneas, cotas y textos a DXF; vigas a `IfcBeam`).
 3. Interfaz del láser BLE.
+
+## Prueba en teléfono (2026-10-05, dev client, proyecto *QA T0-M4*)
+
+**Funcionó:** Cota (se pega a nodos y, con el snap activo, a vértices), Texto, Etiqueta, Coordenada
+(N/E reales), Línea, Polígono (cerrar, área), Viga (planta y alzado), Cercha y Correa (alzado), Vano en
+planta con deshacer/rehacer, selección + hoja + Borrar con deshacer, foto en alzado (cámara, marcador
+en la cara, en planta sobre el eje, visor), Acotado, Anotativa, capas Topografía y Coordinación,
+persistencia tras reiniciar. Avance: pincel (trazo redondo y círculo bajo el dedo, celdas finas),
+rectángulo, borrador, relleno y deshacer por modo. Revisión: flecha, hoja con hora local, borrar.
+Topografía: inverso Az 64°59'31" → rumbo N 65°00' E (sin 60').
+
+**Fallos encontrados y corregidos (commit `fcc0de3`):**
+1. Deshacer tras borrar un elemento de dibujo deshacía otra cosa (dos historias) → historia única.
+2. En alzado el trazo iba segundos atrás del dedo (cada punto regrababa el muro) → capa viva.
+3. En Avance, el toque de Relleno seleccionaba una línea del dibujo → solo selecciona sin herramienta.
+4. La capa Coordinación no mostraba nada fuera de Revisión → corregido.
+5. La etiqueta quedaba encima del objeto, sin línea de referencia → al lado, con punto y línea.
+6. Detalles: título de la BPC con el elemento, género en "borrado/a", ayuda de Correa, cara del alzado en el visor.
+
+**Pendientes menores:** rótulos que se salen por el borde de la pantalla (coordenadas cerca del borde);
+cotas del usuario superpuestas a las cotas automáticas de muro; rotación con dos dedos no probada
+(adb no hace multitoque; el conmutador sí).
