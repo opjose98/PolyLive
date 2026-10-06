@@ -75,3 +75,31 @@ devuelve), título de la BPC ("Línea · 1.55 m"), visor con la cara del alzado.
 **Pendientes menores:** rótulos que se salen por el borde de la pantalla (coordenadas cerca del borde);
 cotas del usuario superpuestas a las cotas automáticas de muro; rotación con dos dedos no probada
 (adb no hace multitoque; el conmutador sí).
+
+## Exportación del dibujo técnico (rama `feat/f6b-export-dibujo`)
+
+**DXF** (planta del nivel base, `exportPlanDxf`): cotas explotadas (líneas de referencia, línea de cota,
+trazos a 45° y valor), textos, etiquetas con línea al objeto, coordenadas (N/E si hay amarre, X/Y si no),
+líneas, polígonos con su área y vigas en trazos (`DASHED`) con su sección. Capas AIA/NCS:
+
+| Capa | Contenido |
+|---|---|
+| A-ANNO-DIMS | cotas |
+| A-ANNO-TEXT / A-ANNO-TAGS | textos / etiquetas |
+| V-ANNO-COOR | coordenadas |
+| A-DETL-GENF / A-AREA | líneas / polígonos |
+| S-BEAM / S-TRUS | vigas / cerchas (eje) |
+
+Los textos miden en el papel: alto (m) = mm × N / 1000 a escala 1:N (la de la esquina). Lo dibujado en
+alzado no va al plano de planta.
+
+**IFC**: viga → `IfcBeam`; cercha → `IfcMember` `.CHORD.` (cordones) y `.STRUT.` (alma, barras de
+10×10 cm); correa → `IfcMember` `.PURLIN.`. Planta: cara superior en el nivel de encima (o el tope de los
+muros si es el último). Alzado: a lo largo del muro y a la altura dibujada sobre su base; la correa sale
+perpendicular por el lado dibujado con 1 m supuesto (`LengthAssumed` en el pset).
+
+**Corregido de paso:** en el DXF los contornos y rótulos de recinto salían espejados norte-sur respecto
+a los muros (no se pasaban a Y arriba).
+
+Tests: `test/drafting/draftExport.test.ts` (entidades, capas, DASHED, Y arriba, cotas 3D de vigas y
+correas, lint IFC4). Falta: probar la exportación desde el teléfono y abrir los archivos en AutoCAD/Revit.
