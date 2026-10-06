@@ -79,11 +79,17 @@ export function useReview({ services, spaceId, editor, operatorName, touchTolera
   const [sheet, setSheet] = useState<null | 'item' | 'list'>(null);
   const [photoFor, setPhotoFor] = useState<string | null>(null);
 
+  // Capa Coordinación: fuera de Revisión se ven las observaciones abiertas (sin selección).
+  const coordination = useStore(workspaceStore, (s) => s.layers.coordinacion);
   const shapesFor = useCallback(
     (v: ReviewView): SketchShape[] =>
-      active ? ctl.itemsIn(v, show).flatMap((i) => markupShapes(i.markup, i.color, i.number, i.id === st.selectedId)) : [],
+      active
+        ? ctl.itemsIn(v, show).flatMap((i) => markupShapes(i.markup, i.color, i.number, i.id === st.selectedId))
+        : coordination
+          ? ctl.itemsIn(v, { open: true, resolved: false }).flatMap((i) => markupShapes(i.markup, i.color, i.number, false))
+          : [],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [ctl, active, show, st.items, st.selectedId],
+    [ctl, active, coordination, show, st.items, st.selectedId],
   );
   const planMarkups = useMemo(() => shapesFor({ kind: 'plan' }), [shapesFor]);
 

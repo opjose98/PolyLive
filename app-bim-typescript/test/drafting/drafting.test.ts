@@ -3,6 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { Database } from '../../src/infrastructure/sqlite/database';
 import { DraftStore } from '../../src/infrastructure/sqlite/DraftStore';
+import { CommandStack } from '../../src/application/state/CommandStack';
 import { DraftingController, distanceToItem } from '../../src/application/drafting/DraftingController';
 import { dimensionLine, itemLength, polygonMetrics, trussSegments, DraftView } from '../../src/domain/drafting/drafting';
 
@@ -146,5 +147,51 @@ describe('DraftingController', () => {
       points: [{ x: 0, y: 0 }, { x: 4, y: 0 }], text: '', props: { offset: 1 }, createdAt: '',
     };
     expect(distanceToItem(item, { x: 2, y: 1 })).toBeCloseTo(0);
+  });
+});
+
+describe('DraftingController con la historia del levantamiento', () => {
+  let dbPath: string;
+  let db: Database;
+
+  beforeEach(async () => {
+    dbPath = path.join(os.tmpdir(), `draft-h-${Date.now()}-${Math.random().toString(36).slice(2)}.db`);
+    db = new Database(dbPath);
+    await db.open();
+    await db.migrate();
+  });
+  afterEach(async () => {
+    await db.close().catch(() => undefined);
+    fs.rmSync(dbPath, { force: true });
+  });
+
+  it('deshacer sigue el orden real: lo último (aunque sea de otro editor) va primero', async () => {
+    const stack = new CommandStack({} as never);
+    const ctl = new DraftingController(new DraftStore(db), 'S1', 'L0', stack);
+    const events: string[] = [];
+    ctl.onHistory((k) => events.push(k));
+    await ctl.load();
+    ctl.setTool('line');
+    ctl.begin(plan, { x: 0, y: 0 });
+    const line = (await ctl.end({ x: 2, y: 0 }))!;
+    // Otra acción del levantamiento, posterior.
+    let wall = 0;
+    await stack.execute({ id: 'w' as never, type: 'Wall', timestamp: new Date(), canUndo: () => true, execute: async () => void wall++, undo: async () => void wall-- });
+    await ctl.remove(line.id);
+    expect(ctl.getState().items).toHaveLength(0);
+    expect(events).toEqual(['push', 'push']);
+
+    await ctl.undo(); // devuelve la línea borrada, no el muro
+    expect(ctl.getState().items.map((i) => i.id)).toEqual([line.id]);
+    expect(wall).toBe(1);
+    await ctl.undo(); // ahora el muro
+    expect(wall).toBe(0);
+    expect(ctl.getState().items).toHaveLength(1);
+    await ctl.undo(); // y la creación de la línea
+    expect(ctl.getState().items).toHaveLength(0);
+    expect(ctl.getState().canUndo).toBe(false);
+    await ctl.redo();
+    expect(ctl.getState().items).toHaveLength(1);
+    expect(events.slice(2)).toEqual(['undo', 'undo', 'undo', 'redo']);
   });
 });

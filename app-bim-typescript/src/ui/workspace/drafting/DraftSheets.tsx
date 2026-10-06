@@ -13,7 +13,7 @@ import { themedStyles } from '../../design/theme';
 import { haptic } from '../../design/haptics';
 import type { Drafting } from './useDrafting';
 
-const KIND_LABEL: Record<DraftItem['kind'], string> = {
+export const KIND_LABEL: Record<DraftItem['kind'], string> = {
   dimension: 'Cota',
   text: 'Texto',
   tag: 'Etiqueta',
@@ -98,7 +98,9 @@ function ItemBody({ drafting, item, onClose }: { drafting: Drafting; item: Draft
             haptic.destroy();
             onClose();
             void ctl.remove(item.id).then(() =>
-              toast(`${KIND_LABEL[item.kind]} borrada`, { action: { label: 'Deshacer', onPress: () => void ctl.undo() } }),
+              toast(`${KIND_LABEL[item.kind]} ${item.kind === 'text' || item.kind === 'polygon' ? 'borrado' : 'borrada'}`, {
+                action: { label: 'Deshacer', onPress: () => void ctl.undo() },
+              }),
             );
           }}
         />

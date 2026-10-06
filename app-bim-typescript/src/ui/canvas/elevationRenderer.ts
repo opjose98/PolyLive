@@ -68,7 +68,7 @@ export interface ElevationScene {
   readonly markups?: readonly SketchShape[];
   /** Dibujo técnico (F6b) de esta cara: cotas, textos, vigas… */
   readonly annotations?: readonly SketchShape[];
-  /** Trazo en curso (pincel o marca), en (u, v). */
+  /** Trazo en curso (pincel o marca), en (u, v). Mejor por `liveSketch` del lienzo: no regraba el muro. */
   readonly sketch?: readonly SketchShape[];
 }
 
@@ -85,13 +85,19 @@ interface Ctx {
 const ERROR = '#E53935';
 const WARNING = '#FB8C00';
 
-export function drawElevation(r: ICanvasRenderer, scene: ElevationScene): void {
-  const pal = scene.palette ?? CANVAS_PALETTES.claro;
+/** (u, v) de la cara → pantalla, con el espejo del lado B. */
+export function elevationToScreen(scene: Pick<ElevationScene, 'viewport' | 'wallLength' | 'mirrored'>): ToScreen {
   const { viewport, wallLength, mirrored } = scene;
-  const toScreen: ToScreen = (p) => ({
+  return (p) => ({
     x: (mirrored ? wallLength - p.x : p.x) * viewport.scale + viewport.offsetX,
     y: viewport.offsetY - p.y * viewport.scale,
   });
+}
+
+export function drawElevation(r: ICanvasRenderer, scene: ElevationScene): void {
+  const pal = scene.palette ?? CANVAS_PALETTES.claro;
+  const { viewport } = scene;
+  const toScreen = elevationToScreen(scene);
   const preview = scene.dragPreview;
   const openings = scene.elevation.openings
     .map((o) => (preview && o.id === preview.id ? preview : o))

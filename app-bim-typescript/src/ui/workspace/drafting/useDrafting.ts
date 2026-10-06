@@ -58,7 +58,12 @@ export function useDrafting(input: DraftingInput) {
   const denominator = useStore(workspaceStore, (s) => Number(s.scale.denominator) || 0);
   const editable = workMode === 'levantamiento';
 
-  const ctl = useMemo(() => new DraftingController(services.drafts, spaceId, levelId), [services, spaceId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Una sola historia con el levantamiento: deshacer sigue el orden real de las acciones.
+  const ctl = useMemo(() => new DraftingController(services.drafts, spaceId, levelId, services.commandStack), [services, spaceId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    ctl.onHistory((kind) => (kind === 'push' ? editor.refreshHistory() : void editor.reload()));
+    return () => ctl.onHistory(null);
+  }, [ctl, editor]);
   useEffect(() => ctl.setLevel(levelId), [ctl, levelId]);
   const [st, setSt] = useState<DraftingState>(() => ctl.getState());
   // El arrastre en curso va directo al lienzo; la pantalla solo se entera de lo estructural.
@@ -165,6 +170,8 @@ export function useDrafting(input: DraftingInput) {
       const s = ctl.getState();
       if (!s.tool) {
         // Sin herramienta: tocar un elemento lo selecciona (en cualquier modo; editar, solo en Levantamiento).
+        // Con otra herramienta activa (pincel, relleno, mojón…) el toque es de ella.
+        if (workspaceStore.getState().activeTool) return false;
         const hit = ctl.hitTest({ kind: 'plan' }, editor.screenToWorld(x, y), touchTolerancePx * mPerPxPlan());
         if (hit) {
           haptic.select();
@@ -180,7 +187,13 @@ export function useDrafting(input: DraftingInput) {
         toast('Toca un muro, columna, vano o recinto para etiquetarlo', { kind: 'info' });
         return true;
       }
-      const p = ONE_POINT_KINDS.includes(s.tool) || s.tool === 'polygon' ? snapped(x, y) : editor.screenToWorld(x, y);
+      // La etiqueta va al lado del objeto (no encima), unida a él por la línea de referencia.
+      const p =
+        s.tool === 'tag'
+          ? editor.screenToWorld(x + 36, y - 56)
+          : ONE_POINT_KINDS.includes(s.tool) || s.tool === 'polygon'
+            ? snapped(x, y)
+            : editor.screenToWorld(x, y);
       haptic.select();
       void ctl.tap({ kind: 'plan' }, p, touchTolerancePx * mPerPxPlan(), tag ?? undefined);
       return true;
@@ -206,6 +219,7 @@ export function useDrafting(input: DraftingInput) {
       tap: (x: number, y: number): boolean => {
         const s = ctl.getState();
         if (!s.tool) {
+          if (workspaceStore.getState().activeTool) return false;
           const hit = ctl.hitTest(v, toFace(x, y), touchTolerancePx * mPerPx());
           if (hit) ctl.select(hit.id);
           else if (s.selectedId) ctl.select(null);

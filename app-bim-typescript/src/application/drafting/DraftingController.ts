@@ -28,6 +28,8 @@ import {
   viewKeyOf,
 } from '../../domain/drafting/drafting';
 import type { DraftStore } from '../../infrastructure/sqlite/DraftStore';
+import type { IObjectStore } from '../../domain/objects';
+import { Command, ICommand } from '../commands/Command';
 
 export interface DraftingState {
   readonly loaded: boolean;
@@ -49,6 +51,40 @@ export interface DraftingState {
 type Op = { kind: 'create' | 'delete'; id: string } | { kind: 'edit'; before: DraftItem; after: DraftItem };
 type Listener = (s: DraftingState) => void;
 
+/**
+ * Historia compartida (la CommandStack del levantamiento): con ella, deshacer
+ * sigue el orden real de las acciones, sean muros o cotas.
+ */
+export interface SharedHistory {
+  execute(command: ICommand): Promise<void>;
+  undo(): Promise<void>;
+  redo(): Promise<void>;
+  canUndo(): boolean;
+  canRedo(): boolean;
+}
+
+/** Una operación del dibujo como comando de la historia compartida. Idempotente: re-aplicarla no cambia nada. */
+class DraftOpCommand extends Command {
+  readonly type = 'DraftOp';
+  constructor(
+    private readonly op: Op,
+    private readonly store: DraftStore,
+  ) {
+    super();
+  }
+  async execute(_store: IObjectStore): Promise<void> {
+    await applyOp(this.store, this.op, false);
+  }
+  async undo(_store: IObjectStore): Promise<void> {
+    await applyOp(this.store, this.op, true);
+  }
+}
+
+async function applyOp(store: DraftStore, op: Op, reverse: boolean): Promise<void> {
+  if (op.kind === 'edit') await store.update(reverse ? op.before : op.after);
+  else await store.setDeleted(op.id, op.kind === 'create' ? reverse : !reverse);
+}
+
 /** Largo mínimo de un elemento A→B (m): por debajo es un toque, no un trazo. */
 export const MIN_DRAFT_LENGTH = 0.05;
 
@@ -69,11 +105,23 @@ export class DraftingController {
   private undoStack: Op[] = [];
   private redoStack: Op[] = [];
 
+  /** Aviso a la pantalla: 'push' (nueva acción) o 'undo'/'redo' de la historia compartida (puede haber movido muros). */
+  private historyListener: ((kind: 'push' | 'undo' | 'redo') => void) | null = null;
+
   constructor(
     private readonly store: DraftStore,
     private readonly spaceId: string,
     private levelId = '',
+    private readonly history: SharedHistory | null = null,
   ) {}
+
+  onHistory(l: ((kind: 'push' | 'undo' | 'redo') => void) | null): void {
+    this.historyListener = l;
+  }
+
+  private syncHistory(): void {
+    if (this.history) this.patch({ canUndo: this.history.canUndo(), canRedo: this.history.canRedo() });
+  }
 
   getState(): DraftingState {
     return this.state;
@@ -219,7 +267,7 @@ export class DraftingController {
       createdAt: new Date().toISOString(),
     };
     await this.store.add(item);
-    this.push({ kind: 'create', id: item.id });
+    await this.push({ kind: 'create', id: item.id });
     this.patch({ items: [...this.state.items, item], selectedId: ONE_POINT_KINDS.includes(kind) || kind === 'polygon' ? null : item.id });
     return item;
   }
@@ -238,23 +286,41 @@ export class DraftingController {
       props: { ...before.props, ...change.props },
     };
     await this.store.update(after);
-    this.push({ kind: 'edit', before, after });
+    await this.push({ kind: 'edit', before, after });
     this.patch({ items: this.state.items.map((i) => (i.id === id ? after : i)) });
   }
 
   async remove(id: string): Promise<void> {
     await this.store.setDeleted(id, true);
-    this.push({ kind: 'delete', id });
+    await this.push({ kind: 'delete', id });
     this.patch({ items: this.state.items.filter((i) => i.id !== id), selectedId: this.state.selectedId === id ? null : this.state.selectedId });
   }
 
-  private push(op: Op): void {
+  private async push(op: Op): Promise<void> {
+    if (this.history) {
+      await this.history.execute(new DraftOpCommand(op, this.store));
+      this.syncHistory();
+      this.historyListener?.('push');
+      return;
+    }
     this.undoStack.push(op);
     this.redoStack = [];
     this.patch({ canUndo: true, canRedo: false });
   }
 
+  /** Tras deshacer/rehacer desde otra parte de la historia compartida: relee el dibujo. */
+  async refresh(): Promise<void> {
+    await this.load();
+    this.syncHistory();
+  }
+
   async undo(): Promise<void> {
+    if (this.history) {
+      await this.history.undo();
+      await this.refresh();
+      this.historyListener?.('undo');
+      return;
+    }
     const op = this.undoStack.pop();
     if (!op) return;
     await this.apply(op, true);
@@ -264,6 +330,12 @@ export class DraftingController {
   }
 
   async redo(): Promise<void> {
+    if (this.history) {
+      await this.history.redo();
+      await this.refresh();
+      this.historyListener?.('redo');
+      return;
+    }
     const op = this.redoStack.pop();
     if (!op) return;
     await this.apply(op, false);
@@ -273,8 +345,7 @@ export class DraftingController {
   }
 
   private async apply(op: Op, reverse: boolean): Promise<void> {
-    if (op.kind === 'edit') await this.store.update(reverse ? op.before : op.after);
-    else await this.store.setDeleted(op.id, op.kind === 'create' ? reverse : !reverse);
+    await applyOp(this.store, op, reverse);
   }
 
   // -------------------------------------------------------------------------

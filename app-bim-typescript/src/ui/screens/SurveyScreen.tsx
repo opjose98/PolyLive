@@ -63,9 +63,17 @@ import { ProgressSheets } from '../workspace/progress/ProgressSheets';
 import { planSvg, faceSvg } from '../../application/report/planSvg';
 import { useReview } from '../workspace/review/useReview';
 import { useDrafting } from '../workspace/drafting/useDrafting';
-import { DraftSheets } from '../workspace/drafting/DraftSheets';
+import { DraftSheets, KIND_LABEL } from '../workspace/drafting/DraftSheets';
 import { mergeSketches } from '../canvas/sketch';
-import type { DraftKind } from '../../domain/drafting/drafting';
+import { DraftItem, DraftKind, itemLength, polygonMetrics } from '../../domain/drafting/drafting';
+
+/** Lo que dice la BPC de un elemento de dibujo seleccionado. */
+function draftDetail(i: DraftItem): string {
+  if (i.kind === 'polygon') return `${polygonMetrics(i.points).area.toFixed(2)} m²`;
+  if (i.kind === 'text' || i.kind === 'tag') return i.text.split(/\n/)[0];
+  if (i.kind === 'coordinate') return 'Punto rotulado';
+  return `${itemLength(i).toFixed(2)} m`;
+}
 import type { PhotoFaceAnchor } from '../../domain/objects/audit-photo';
 
 /** Qué hacer con cada herramienta de dibujo técnico (texto de la BPC). */
@@ -78,7 +86,7 @@ const DRAFT_HINT: Record<DraftKind, string> = {
   polygon: 'Toca los vértices · toca el primero o "Cerrar polígono"',
   beam: 'Arrastra el eje de la viga',
   truss: 'Arrastra de apoyo a apoyo',
-  purlin: 'Arrastra el eje de la correa',
+  purlin: 'Toca donde va la correa (en sección)',
 };
 import { gridLabel, isGeoreferenced as isGeoref, localLabel } from '../../application/geo/coordinateText';
 import { modelToGrid } from '../../domain/geo/georeference';
@@ -419,6 +427,8 @@ export function SurveyScreen({
     [editor],
   );
   const targetCenter = useCallback((id: string) => editor.objectCenter(id), [editor]);
+  // Estable: si cambiara en cada render, el dibujo (y la planta entera) se regrabaría cada vez.
+  const draftColors = useMemo(() => ({ ink: canvasPalette.label, accent: canvasPalette.selection }), [canvasPalette.label, canvasPalette.selection]);
   const drafting = useDrafting({
     services,
     spaceId: roomId as unknown as string,
@@ -428,7 +438,7 @@ export function SurveyScreen({
     coordText,
     tagAt,
     targetCenter,
-    colors: { ink: canvasPalette.label, accent: canvasPalette.selection },
+    colors: draftColors,
   });
   const [draftSheetOpen, setDraftSheetOpen] = useState(false);
 
@@ -946,6 +956,7 @@ export function SurveyScreen({
     activeCut ? `Corte ${activeCut.label || activeCut.date}` : 'Sin corte: créalo en "Actividad y corte"',
     activeActivity ? activeActivity.name : 'Sin actividad',
   ];
+  const draftSel = drafting.state.selectedId && !drafting.tool ? drafting.ctl.selected : null;
   const bpcContext = resolveBpcContext({
     tool: activeTool,
     selection: selectionSummary,
@@ -955,6 +966,7 @@ export function SurveyScreen({
     ...(topo.active && { canvasTitle: 'Topografía', canvasItems: amarreSummary(topo.geo) }),
     ...(progress.active && { canvasTitle: 'Avance', canvasItems: progressItems }),
     ...(review.active && { canvasTitle: 'Revisión', canvasItems: reviewItems }),
+    ...(draftSel && { canvasTitle: KIND_LABEL[draftSel.kind], canvasItems: [draftDetail(draftSel)] }),
   });
 
   const commitSelectionProp = useCallback(
@@ -1043,16 +1055,16 @@ export function SurveyScreen({
     ? { canUndo: review.state.canUndo, canRedo: review.state.canRedo, undo: () => review.ctl.undo(), redo: () => review.ctl.redo() }
     : progress.active
       ? { canUndo: progress.state.canUndo, canRedo: progress.state.canRedo, undo: () => progress.ctl.undo(), redo: () => progress.ctl.redo() }
-      : drafting.tool || drafting.state.selectedId
-        ? { canUndo: drafting.state.canUndo, canRedo: drafting.state.canRedo, undo: () => drafting.ctl.undo(), redo: () => drafting.ctl.redo() }
-        : null;
+      : null;
   const handleUndo = useCallback(
-    () => void (modeHistory ? modeHistory.undo() : editor.undo().then(() => elevEditor?.load(false))),
-    [editor, elevEditor, modeHistory],
+    () =>
+      void (modeHistory ? modeHistory.undo() : editor.undo().then(() => Promise.all([elevEditor?.load(false), drafting.ctl.refresh()]))),
+    [editor, elevEditor, modeHistory, drafting.ctl],
   );
   const handleRedo = useCallback(
-    () => void (modeHistory ? modeHistory.redo() : editor.redo().then(() => elevEditor?.load(false))),
-    [editor, elevEditor, modeHistory],
+    () =>
+      void (modeHistory ? modeHistory.redo() : editor.redo().then(() => Promise.all([elevEditor?.load(false), drafting.ctl.refresh()]))),
+    [editor, elevEditor, modeHistory, drafting.ctl],
   );
   const historyCanUndo = modeHistory ? modeHistory.canUndo : state.canUndo && !state.busy;
   const historyCanRedo = modeHistory ? modeHistory.canRedo : state.canRedo && !state.busy;

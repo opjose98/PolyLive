@@ -21,6 +21,7 @@ import Animated, { FadeIn, FadeOut, ZoomIn } from 'react-native-reanimated';
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 import { ElevationCanvas } from '../canvas/ElevationCanvas';
+import type { SketchShape, SketchSource } from '../canvas/sketch';
 import { ElevationEditor, ElevationEditorState } from '../../application/elevation/ElevationEditor';
 import { workspaceStore } from '../../state/workspaceStore';
 import { PropKey, ZoomAction, categoriesFor, findTool, workModeDef } from '../../application/workspace/catalog';
@@ -41,7 +42,6 @@ import { elevation as shadow, sizes, spacing } from '../design/tokens';
 import { haptic } from '../design/haptics';
 import { themedStyles, useCanvasPalette, useTheme } from '../design/theme';
 import type { Progress } from '../workspace/progress/useProgress';
-import type { ProgressDraft } from '../../application/progress/ProgressController';
 import type { Review } from '../workspace/review/useReview';
 import type { Drafting } from '../workspace/drafting/useDrafting';
 import type { PhotoMarkerView } from '../../application/editor/EditorController';
@@ -119,8 +119,6 @@ export function ElevationView(props: ElevationViewProps) {
         : null,
     [review, faceView, editor],
   );
-  const [reviewDraftKey, setReviewDraftKey] = useState<unknown>(null);
-  useEffect(() => (review ? review.ctl.subscribe((s) => setReviewDraftKey(s.draft)) : undefined), [review]);
 
   // --- Dibujo técnico: la cara visible es la vista ---
   const drafting = props.drafting;
@@ -131,18 +129,10 @@ export function ElevationView(props: ElevationViewProps) {
         : null,
     [drafting, faceView, editor],
   );
-  const [draftKey, setDraftKey] = useState<unknown[]>([]);
-  useEffect(
-    () => (drafting ? drafting.ctl.subscribe((s) => setDraftKey((k) => (k[0] === s.draft && k[1] === s.polygon ? k : [s.draft, s.polygon]))) : undefined),
-    [drafting],
-  );
-  const draftFaceSketch = useMemo(
-    () => (drafting && faceView ? drafting.previewFor(faceView, 1 / st.viewport.scale, 1) : []),
-    [drafting, faceView, draftKey, st.viewport.scale], // eslint-disable-line react-hooks/exhaustive-deps
-  );
+  const faceShapesOf = drafting?.faceShapes;
   const draftAnnotations = useMemo(
-    () => (drafting && faceView ? drafting.faceShapes(faceView, 1 / st.viewport.scale) : undefined),
-    [drafting, faceView, st.viewport.scale],
+    () => (faceShapesOf && faceView ? faceShapesOf(faceView, 1 / st.viewport.scale) : undefined),
+    [faceShapesOf, faceView, st.viewport.scale],
   );
   const drafting2pt = !!drafting?.drawEnabled;
 
@@ -165,20 +155,41 @@ export function ElevationView(props: ElevationViewProps) {
     return b?.kind === 'facePhoto';
   }, [ws.activeTool, ws.workMode]);
 
-  // El trazo en curso se dibuja en el alzado (que se regraba entero: un muro es barato).
-  const [draft, setDraft] = useState<ProgressDraft | null>(null);
-  useEffect(() => (progress ? progress.ctl.subscribe((s) => setDraft(s.draft)) : undefined), [progress]);
-  const reviewFaceSketch = useMemo(() => {
-    const d = review?.ctl.getState().draft;
-    return d && d.view.kind === 'wallFace' && d.view.wallId === wallDbId && d.view.side === st.side ? review!.draftShapes() : undefined;
-  }, [review, reviewDraftKey, wallDbId, st.side]); // eslint-disable-line react-hooks/exhaustive-deps
-  const faceSketch = useMemo(
-    () =>
-      draft && draft.target.kind === 'wallFace' && draft.target.wallId === wallDbId && draft.target.side === st.side && progress
-        ? progress.draftShapes()
-        : undefined,
-    [draft, wallDbId, st.side, progress],
-  );
+  // El trazo en curso (cota, pincel, marca) va a la capa viva del lienzo: cambia
+  // con cada movimiento del dedo sin re-renderizar esta pantalla ni regrabar el muro.
+  const reviewCtl = review?.ctl;
+  const reviewDraftShapes = review?.draftShapes;
+  const progressCtl = progress?.ctl;
+  const progressDraftShapes = progress?.draftShapes;
+  const draftingCtl = drafting?.ctl;
+  const draftPreviewFor = drafting?.previewFor;
+  const liveSketch = useMemo((): SketchSource => {
+    let key: unknown[] = [];
+    let cached: SketchShape[] = [];
+    const onFace = (v: { kind: string; wallId?: string; side?: string } | undefined) =>
+      !!v && v.kind === 'wallFace' && v.wallId === wallDbId && v.side === st.side;
+    return {
+      subscribe: (cb) => {
+        const subs = [reviewCtl?.subscribe(() => cb()), progressCtl?.subscribe(() => cb()), draftingCtl?.subscribe(() => cb())];
+        return () => subs.forEach((u) => u?.());
+      },
+      get: () => {
+        const r = reviewCtl?.getState().draft;
+        const p = progressCtl?.getState().draft;
+        const d = draftingCtl?.getState();
+        const scale = editor.getState().viewport.scale;
+        const k = [r, p, d?.draft, d?.polygon, d?.props, scale];
+        if (k.length === key.length && k.every((x, i) => x === key[i])) return cached;
+        key = k;
+        const out: SketchShape[] = [];
+        if (r && onFace(r.view) && reviewDraftShapes) out.push(...reviewDraftShapes());
+        if (p && onFace(p.target) && progressDraftShapes) out.push(...progressDraftShapes());
+        if (draftPreviewFor && faceView) out.push(...draftPreviewFor(faceView, 1 / scale, 1));
+        cached = out;
+        return cached;
+      },
+    };
+  }, [reviewCtl, reviewDraftShapes, progressCtl, progressDraftShapes, draftingCtl, draftPreviewFor, faceView, wallDbId, st.side, editor]);
   useEffect(() => editor.setSize(width, height), [editor, width, height]);
   useEffect(() => editor.setSide(ws.side), [editor, ws.side]);
 
@@ -247,10 +258,9 @@ export function ElevationView(props: ElevationViewProps) {
             progressLayers: painting && wallDbId && progress ? progress.faceLayers(wallDbId, st.side) : undefined,
             markups: (reviewing || ws.coordination) && review && faceView ? review.shapesFor(faceView) : undefined,
             annotations: photoPins.length ? [...(draftAnnotations ?? []), ...photoPins] : draftAnnotations,
-            sketch: reviewing && review && faceView ? reviewFaceSketch : draftFaceSketch.length ? draftFaceSketch : faceSketch,
           }
         : null,
-    [st, editor, width, height, severity, ws.grid, ws.filters.cotas, palette, visibleTypes, painting, ws.coordination, wallDbId, progress, faceSketch, reviewing, review, faceView, reviewFaceSketch, draftAnnotations, draftFaceSketch, photoPins],
+    [st, editor, width, height, severity, ws.grid, ws.filters.cotas, palette, visibleTypes, painting, ws.coordination, wallDbId, progress, reviewing, review, faceView, draftAnnotations, photoPins],
   );
 
   // Solo Levantamiento edita vanos; Avance y Revisión miran el alzado.
@@ -403,6 +413,7 @@ export function ElevationView(props: ElevationViewProps) {
       <Animated.View entering={ZoomIn.duration(180)} style={StyleSheet.absoluteFill}>
         {scene ? (
           <ElevationCanvas
+            liveSketch={liveSketch}
             scene={scene}
             onTap={onTap}
             onDoubleTap={() => editor.zoomToFit()}

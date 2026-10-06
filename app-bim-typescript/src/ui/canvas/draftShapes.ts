@@ -80,7 +80,11 @@ export function draftShapes(items: readonly DraftItem[], ctx: DraftRenderContext
         break;
       case 'tag': {
         const from = i.targetId ? ctx.targetCenter?.(i.targetId) : null;
-        if (from) out.push({ kind: 'segs', segments: [[from, a]], color, widthPx: 0.9 });
+        if (from) {
+          // Línea de referencia con un punto en el objeto.
+          out.push({ kind: 'segs', segments: [[from, a]], color, widthPx: 0.9 });
+          out.push({ kind: 'ring', at: from, radius: 2.5 * ctx.mPerPx, color });
+        }
         out.push({ kind: 'label', at: a, lines: i.text.split('\n'), color, size: 11 });
         break;
       }
