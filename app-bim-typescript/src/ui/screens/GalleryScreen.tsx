@@ -26,12 +26,11 @@ import { ExpoPhotoCapture, type PhotoResult } from '../../native/camera/ExpoPhot
 import { CameraCaptureView } from '../components/CameraCaptureView';
 import { AppServices } from '../../application/AppServices';
 import { RoomId, RevitObjectBase, Wall, Door, Window, Column } from '../../domain/objects';
-import { base64ToUint8Array } from '../../shared/encoding/base64';
 import { AppError, AppErrorCode } from '../../shared/errors/AppError';
 import { PhotoViewer } from '../components/PhotoViewer';
-import { AuditPhoto, PHOTO_BIM_CODE_PREFIX } from '../../domain/objects/audit-photo';
-import { generateBimCode } from '../../domain/objects/project';
+import { AuditPhoto } from '../../domain/objects/audit-photo';
 import { alertDialog } from '../primitives';
+import { saveFieldPhoto } from '../workspace/fieldPhotos';
 
 // ---------------------------------------------------------------------------
 // Object label helper — descriptor legible para el selector de vinculación
@@ -161,31 +160,8 @@ export function GalleryScreen({ services, roomId, objectId, photoId, operatorNam
       setCameraOpen(false);
       try {
         // 1. Guardar como archivo — es lo que esta grilla lista/muestra.
-        const saved = await fileSystem.savePhoto(photo.base64);
-
-        // 2. Registrar como AuditPhoto en SQLite — rastro de auditoría ligado
-        //    al Recinto activo. Se pasa el MISMO filename que acaba de usar
-        //    ExpoFileSystem (antes CapturePhotoUseCase inventaba el suyo
-        //    propio, desconectado de este — ver el comentario en
-        //    CapturePhotoUseCase.ts) para poder correlacionar este item de
-        //    la grilla con su AuditPhoto al vincularlo a un objeto BIM.
-        const photoBytes = base64ToUint8Array(photo.base64);
-
-        // Código BIM corto de la foto dentro del Recinto (FOT001, FOT002...).
-        // Se asigna al capturar y no después: es el identificador con el que el
-        // operador se refiere a la foto en sus notas de obra.
-        const existing = await services.store.listAuditPhotos(roomId);
-        const bimCode = generateBimCode(
-          PHOTO_BIM_CODE_PREFIX,
-          existing.map((p) => p.metadata.bimCode).filter((c): c is string => !!c),
-        );
-
-        await services.useCases.capturePhoto.execute({
-          roomId,
-          photoData: photoBytes,
-          filename: saved.filename,
-          metadata: { bimCode, operator: operatorName || undefined },
-        });
+        // Archivo (lo que lista esta grilla) + AuditPhoto con su código, autor y sello.
+        await saveFieldPhoto({ services, fs: fileSystem, roomId, base64: photo.base64, operator: operatorName });
 
         await loadPhotos();
       } catch (error) {
@@ -193,7 +169,7 @@ export function GalleryScreen({ services, roomId, objectId, photoId, operatorNam
         alertDialog('Error', message);
       }
     },
-    [fileSystem, services, roomId, loadPhotos],
+    [fileSystem, services, roomId, loadPhotos, operatorName],
   );
 
   const handleDelete = useCallback(

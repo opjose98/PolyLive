@@ -10,7 +10,7 @@
 
 import React from 'react';
 import { Text, View } from 'react-native';
-import { Tappable , ActionButton } from '../primitives';
+import { Tappable, ActionButton } from '../primitives';
 import { NumberField, TextField, SegmentedField, ToggleRow, ReadonlyRow } from '../components/fields';
 
 import { ElevationEditor, ElevationEditorState } from '../../application/elevation/ElevationEditor';

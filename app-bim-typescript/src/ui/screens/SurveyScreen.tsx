@@ -15,12 +15,11 @@
 // =============================================================================
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Dimensions, Modal, BackHandler } from 'react-native';
+import { View, Dimensions, Modal, BackHandler } from 'react-native';
 
 import { PlanCanvas } from '../canvas/PlanCanvas';
-import { BottomSheet, toast, alertDialog, TagToggle , ActionButton } from '../primitives';
-import type { MeasureReference } from '../../domain/objects/measurement';
-import { sizes , sizes as chromeSizes, spacing as chromeSpacing , radius, spacing } from '../design/tokens';
+import { BottomSheet, toast, alertDialog } from '../primitives';
+import { radius, sizes, sizes as chromeSizes, spacing, spacing as chromeSpacing } from '../design/tokens';
 import { themedStyles, useCanvasPalette } from '../design/theme';
 import { haptic } from '../design/haptics';
 import { workspaceStore } from '../../state/workspaceStore';
@@ -39,9 +38,9 @@ import { FabView } from '../workspace/FabView';
 import { CornerTools } from '../workspace/CornerTools';
 import { LevelChip } from '../workspace/LevelChip';
 import { ConfigDrawer } from '../workspace/ConfigDrawer';
-import { MainMenu, MainMenuItem } from '../workspace/MainMenu';
+import { MainMenu } from '../workspace/MainMenu';
 import { RangeSelectors } from '../workspace/RangeSelector';
-import { DEFAULT_EDITOR_DEFAULTS , EditorController, EditorState } from '../../application/editor/EditorController';
+import { DEFAULT_EDITOR_DEFAULTS, EditorController, EditorState } from '../../application/editor/EditorController';
 import { ConstraintSelector } from '../workspace/ConstraintSelector';
 import {
   ConstraintEdit,
@@ -51,7 +50,6 @@ import {
   sortLevels,
 } from '../../application/workspace/constraintModel';
 import { isUniformWall, sameExtent } from '../../domain/objects/vertical';
-import { exportRevitIfc } from '../workspace/exportActions';
 import { useProjectLevels } from '../workspace/useProjectLevels';
 import { createLiveSource, draggedIds, isDragging, sameStructure } from '../canvas/liveOverlay';
 import { uniqueVertices, useTopography } from '../workspace/topo/useTopography';
@@ -62,20 +60,19 @@ import { StakeoutSheet } from '../workspace/topo/StakeoutSheet';
 import { useProgress } from '../workspace/progress/useProgress';
 import { ProgressSheets } from '../workspace/progress/ProgressSheets';
 import { planSvg, faceSvg } from '../../application/report/planSvg';
-import { areaRowsOf, exportAreaCsv, exportPhotoRegister, exportPlanSheet } from '../workspace/deliverableActions';
-import { exportProjectPackage } from '../workspace/projectPackageActions';
+import { MeasureDialog } from '../workspace/MeasureDialog';
+import { useSurveyMenu } from '../workspace/useSurveyMenu';
+import { saveFieldPhoto } from '../workspace/fieldPhotos';
 import { useReview } from '../workspace/review/useReview';
-import { useDrafting } from '../workspace/drafting/useDrafting';
+import { DRAFT_HINT, draftDetail, useEditorDrafting } from '../workspace/drafting/useEditorDrafting';
 import { DraftSheets, KIND_LABEL } from '../workspace/drafting/DraftSheets';
 import { mergeSketches } from '../canvas/sketch';
-import { DraftItem, DraftKind, itemLength, polygonMetrics } from '../../domain/drafting/drafting';
 import type { PhotoFaceAnchor } from '../../domain/objects/audit-photo';
-import { gridLabel, isGeoreferenced as isGeoref, localLabel , amarreSummary, coordinateInline } from '../../application/geo/coordinateText';
-import { modelToGrid } from '../../domain/geo/georeference';
+import { amarreSummary, coordinateInline } from '../../application/geo/coordinateText';
 import { ReviewSheets } from '../workspace/review/ReviewSheets';
 import { reviewSvgMarks } from '../../application/review/reviewReport';
 import { countByStatus, ReviewItem, ReviewView } from '../../domain/review/review';
-import { zoneCode as zoneCodeOf , zoneCode } from '../../domain/objects/zone';
+import { zoneCode, zoneCode as zoneCodeOf } from '../../domain/objects/zone';
 
 import { ElevationEditor } from '../../application/elevation/ElevationEditor';
 import { ElevationView } from './ElevationView';
@@ -86,14 +83,11 @@ import { CameraCaptureView } from '../components/CameraCaptureView';
 import { ExpoPhotoCapture } from '../../native/camera/ExpoPhotoCapture';
 import { ExpoFileSystem } from '../../native/filesystem/ExpoFileSystem';
 import { ExpoGpsProvider } from '../../native/location/ExpoGpsProvider';
-import { base64ToUint8Array, uint8ArrayToBase64 } from '../../shared/encoding/base64';
-import { PHOTO_BIM_CODE_PREFIX } from '../../domain/objects/audit-photo';
-import { generateBimCode } from '../../domain/objects/project';
+import { uint8ArrayToBase64 } from '../../shared/encoding/base64';
 
 import { PropertiesPanel } from '../components/PropertiesPanel';
 import { ZoneSheet } from '../workspace/ZoneSheet';
 
-import { NumberField } from '../components/fields';
 import { AppServices } from '../../application/AppServices';
 
 import { Wall } from '../../domain/objects/wall';
@@ -105,27 +99,6 @@ import { AppError } from '../../shared/errors/AppError';
 import { meters } from '../../domain/geometry/types';
 
 import { type } from '../design/typography';
-
-/** Lo que dice la BPC de un elemento de dibujo seleccionado. */
-function draftDetail(i: DraftItem): string {
-  if (i.kind === 'polygon') return `${polygonMetrics(i.points).area.toFixed(2)} m²`;
-  if (i.kind === 'text' || i.kind === 'tag') return i.text.split(/\n/)[0];
-  if (i.kind === 'coordinate') return 'Punto rotulado';
-  return `${itemLength(i).toFixed(2)} m`;
-}
-
-/** Qué hacer con cada herramienta de dibujo técnico (texto de la BPC). */
-const DRAFT_HINT: Record<DraftKind, string> = {
-  dimension: 'Arrastra de un punto a otro · se pega a los nodos',
-  text: 'Toca donde va el texto',
-  tag: 'Toca un muro, columna, vano o recinto',
-  coordinate: 'Toca el punto a rotular',
-  line: 'Arrastra de un punto a otro',
-  polygon: 'Toca los vértices · toca el primero o "Cerrar polígono"',
-  beam: 'Arrastra el eje de la viga',
-  truss: 'Arrastra de apoyo a apoyo',
-  purlin: 'Toca donde va la correa (en sección)',
-};
 
 const CANVAS_TOUCH_TOLERANCE_PX = sizes.canvasTouchTolerance;
 
@@ -154,7 +127,8 @@ export interface SurveyScreenProps {
 }
 
 /** Pantallas que se abren desde el menú ☰, por encima del levantamiento. */
-export type MenuScreen = 'gallery' | 'export' | 'settings' | 'profile';
+export type { MenuScreen } from '../workspace/useSurveyMenu';
+import type { MenuScreen } from '../workspace/useSurveyMenu';
 
 // ---------------------------------------------------------------------------
 // Componente
@@ -192,9 +166,6 @@ export function SurveyScreen({
   const [panelOpen, setPanelOpen] = useState(false);
   const [zoneSheetOpen, setZoneSheetOpen] = useState(false);
   const [manualMeasureOpen, setManualMeasureOpen] = useState(false);
-  const [manualValue, setManualValue] = useState(3);
-  // Qué se midió: por defecto de cara interior a cara interior (lo que mide un láser en un recinto).
-  const [measureRef, setMeasureRef] = useState<MeasureReference>('interior');
   const [measurements, setMeasurements] = useState<readonly Measurement[]>([]);
 
   // --- Cromo del espacio de trabajo (FABs, BPC, herramientas de esquina) ---
@@ -422,38 +393,14 @@ export function SurveyScreen({
   const measureFaces = useMemo(() => (manualMeasureOpen ? editor.measureFaces() : null), [manualMeasureOpen, editor, state.objects]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- Dibujo técnico (F6b): cotas, textos, etiquetas, coordenadas, líneas, polígonos, vigas… ---
-  const coordText = useCallback(
-    (p: { x: number; y: number }) => (isGeoref(topo.geo) ? gridLabel(modelToGrid(topo.geo, roomId as unknown as string, p)) : localLabel(p)),
-    [topo.geo, roomId],
-  );
-  const tagAt = useCallback(
-    (x: number, y: number) => {
-      const o = editor.objectAt(x, y, CANVAS_TOUCH_TOLERANCE_PX);
-      if (o instanceof Wall) {
-        return { targetId: o.id as string, text: `Muro · ${Math.round(Number(o.thickness) * 100)} cm · ${Number(o.length).toFixed(2)} m${o.material ? ` · ${o.material}` : ''}` };
-      }
-      if (o instanceof Column) return { targetId: o.id as string, text: `Columna ${Math.round(Number(o.dimensionX) * 100)}${o.isCircular ? ' Ø' : `×${Math.round(Number(o.dimensionY ?? o.dimensionX) * 100)}`} cm` };
-      if (o instanceof Door) return { targetId: o.id as string, text: `Puerta ${Number(o.width).toFixed(2)} × ${Number(o.height).toFixed(2)}` };
-      if (o instanceof Window) return { targetId: o.id as string, text: `Ventana ${Number(o.width).toFixed(2)} × ${Number(o.height).toFixed(2)}` };
-      const z = editor.zoneAt(x, y);
-      if (z?.id) return { targetId: z.id, text: `${z.name ?? 'Recinto'}\n${(z.netArea ?? z.area).toFixed(2)} m²` };
-      return null;
-    },
-    [editor],
-  );
-  const targetCenter = useCallback((id: string) => editor.objectCenter(id), [editor]);
-  // Estable: si cambiara en cada render, el dibujo (y la planta entera) se regrabaría cada vez.
-  const draftColors = useMemo(() => ({ ink: canvasPalette.label, accent: canvasPalette.selection }), [canvasPalette.label, canvasPalette.selection]);
-  const drafting = useDrafting({
+  const drafting = useEditorDrafting({
     services,
-    spaceId: roomId as unknown as string,
     editor,
+    spaceId: roomId as unknown as string,
     levelId: levelInfo.active.id,
+    geo: topo.geo,
+    palette: canvasPalette,
     touchTolerancePx: CANVAS_TOUCH_TOLERANCE_PX,
-    coordText,
-    tagAt,
-    targetCenter,
-    colors: draftColors,
   });
   const [draftSheetOpen, setDraftSheetOpen] = useState(false);
 
@@ -621,32 +568,7 @@ export function SurveyScreen({
   const handlePhotoCaptured = useCallback(
     async (photo: { base64: string }) => {
       try {
-        const saved = await photoFs.savePhoto(photo.base64);
-
-        let geo: { latitude: number; longitude: number; accuracyMeters: number } | undefined;
-        try {
-          const fix = await gps.getCurrentPosition();
-          geo = {
-            latitude: fix.latitude,
-            longitude: fix.longitude,
-            accuracyMeters: Number(fix.accuracy),
-          };
-        } catch {
-          geo = undefined;
-        }
-
-        const existing = await services.store.listAuditPhotos(roomId);
-        const bimCode = generateBimCode(
-          PHOTO_BIM_CODE_PREFIX,
-          existing.map((p) => p.metadata.bimCode).filter((c): c is string => !!c),
-        );
-
-        const result = await services.useCases.capturePhoto.execute({
-          roomId,
-          photoData: base64ToUint8Array(photo.base64),
-          filename: saved.filename,
-          metadata: { bimCode, geo, operator: operatorName || undefined },
-        });
+        const result = await saveFieldPhoto({ services, fs: photoFs, roomId, base64: photo.base64, operator: operatorName, gps });
 
         if (pendingFacePhoto) {
           setPendingFacePhoto(null);
@@ -660,7 +582,7 @@ export function SurveyScreen({
         closeCamera();
       }
     },
-    [photoFs, gps, services, roomId, editor, pendingFacePhoto, closeCamera],
+    [photoFs, gps, services, roomId, editor, pendingFacePhoto, closeCamera, operatorName],
   );
 
   // Tocar solo selecciona (o dibuja); las propiedades se abren con long-press,
@@ -1103,80 +1025,24 @@ export function SurveyScreen({
     }),
     [projectName, projectCode, roomName, operatorName, wallCount, state.objects.length, areaLabel],
   );
-  // --- Exportar a IFC (Revit): niveles, fases y antepechos del proyecto ---
-  const handleExportIfc = useCallback(
-    () =>
-      exportRevitIfc(services, {
-        roomId,
-        projectId,
-        projectName,
-        spaceName: roomName ?? 'Espacio',
-        author: operatorName,
-      }),
-    [services, projectId, roomId, projectName, operatorName, roomName],
-  );
-
-  // --- Entregables: plano PDF con cuadro de áreas, CSV de áreas, registro fotográfico, paquete ---
-  const sheetMeta = useCallback(
-    () => ({
-      project: projectName,
-      projectCode,
-      space: roomName ?? 'Espacio',
-      level: projectId ? levelInfo.active.name : undefined,
-      operator: operatorName,
-      generatedAt: new Date(),
-    }),
-    [projectName, projectCode, roomName, projectId, levelInfo.active.name, operatorName],
-  );
-  const areaRows = useCallback(() => areaRowsOf(state.rooms, projectId ? levelInfo.active.name : ''), [state.rooms, projectId, levelInfo.active.name]);
-  const handlePlanSheet = useCallback(
-    () =>
-      exportPlanSheet(
-        sheetMeta(),
-        planSvg({
-          walls: editor.walls.map((w) => ({ start: w.startPoint, end: w.endPoint, thickness: w.thickness as number })),
-          zones: state.rooms
-            .filter((r) => (r.netPolygon?.length ?? 0) >= 3)
-            .map((r) => ({
-              polygon: r.netPolygon!,
-              label: `${r.number !== undefined ? zoneCodeOf({ number: r.number }) + ' ' : ''}${r.name ?? 'Recinto'}`,
-              sublabel: `${(r.netArea ?? r.area).toFixed(2)} m²`,
-              at: r.centroid,
-            })),
-          scaleBar: true,
-        }),
-        areaRows(),
-      ),
-    [sheetMeta, areaRows, editor, state.rooms],
-  );
-  const wallNameOf = useCallback(
-    (id: string) => {
-      const i = editor.walls.findIndex((w) => (w.id as string) === id);
-      const w = editor.walls[i];
-      return w ? ((w.properties.name as string | undefined) ?? `Muro ${i + 1}`) : 'Muro';
-    },
-    [editor],
-  );
-
-  const menuItems = useMemo((): MainMenuItem[] => {
-    const go = (s: MenuScreen) => () => onNavigate?.(s);
-    return [
-      { section: 'Espacio', icon: 'fit-to-screen-outline', label: 'Encuadrar todo', onPress: () => handleZoom('zoomFit') },
-      { icon: 'image-multiple-outline', label: 'Galería de fotos', onPress: go('gallery') },
-      ...(onExit ? [{ icon: 'view-grid-outline', label: 'Otros espacios del proyecto', onPress: onExit }] : []),
-      { section: 'Exportar', icon: 'file-export-outline', label: 'IFC para Revit', detail: 'Pisos por nivel y restricciones', onPress: () => void handleExportIfc() },
-      { icon: 'file-cad', label: 'IFC y DXF del recinto', onPress: go('export') },
-      { icon: 'file-pdf-box', label: 'Plano PDF', detail: 'Rótulo, escala gráfica y cuadro de áreas', onPress: () => void handlePlanSheet() },
-      { icon: 'table', label: 'Cuadro de áreas (CSV)', onPress: () => void exportAreaCsv(sheetMeta(), areaRows()) },
-      { icon: 'camera-burst', label: 'Registro fotográfico (PDF)', detail: 'Fotos con fecha, autor y ubicación', onPress: () => void exportPhotoRegister(services, roomId, sheetMeta(), wallNameOf) },
-      ...(projectId
-        ? [{ icon: 'package-variant-closed', label: 'Respaldar proyecto (.polylive)', detail: 'Proyecto completo con fotos, a Drive u otra carpeta', onPress: () => void exportProjectPackage(services, projectId, operatorName) }]
-        : []),
-      ...(onExitProject ? [{ section: 'Proyecto', icon: 'folder-outline', label: 'Cambiar de proyecto', onPress: onExitProject }] : []),
-      { section: 'App', icon: 'account-circle-outline', label: 'Operador', detail: operatorName || undefined, onPress: go('profile') },
-      { icon: 'cog-outline', label: 'Ajustes y respaldos', onPress: go('settings') },
-    ];
-  }, [onExit, onExitProject, onNavigate, handleZoom, handleExportIfc, operatorName, handlePlanSheet, sheetMeta, areaRows, services, roomId, wallNameOf, projectId]);
+  const handleZoomFit = useCallback(() => handleZoom('zoomFit'), [handleZoom]);
+  // --- Menú ☰ y entregables (IFC, plano PDF, cuadro de áreas, registro fotográfico, paquete) ---
+  const menuItems = useSurveyMenu({
+    services,
+    editor,
+    rooms: state.rooms,
+    roomId,
+    projectId,
+    projectName,
+    projectCode,
+    spaceName: roomName ?? 'Espacio',
+    levelName: projectId ? levelInfo.active.name : undefined,
+    operatorName,
+    onNavigate,
+    onExit,
+    onExitProject,
+    onZoomFit: handleZoomFit,
+  });
 
   const topoVertices = useMemo(() => uniqueVertices(editor.walls), [editor, state.objects, levelInfo]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1266,25 +1132,15 @@ export function SurveyScreen({
       review.clearPhotoRequest();
       if (!itemId) return;
       try {
-        const saved = await photoFs.savePhoto(photo.base64);
-        const existing = await services.store.listAuditPhotos(roomId);
-        const bimCode = generateBimCode(
-          PHOTO_BIM_CODE_PREFIX,
-          existing.map((p) => p.metadata.bimCode).filter((c): c is string => !!c),
-        );
-        const result = await services.useCases.capturePhoto.execute({
-          roomId,
-          photoData: base64ToUint8Array(photo.base64),
-          filename: saved.filename,
-          metadata: { bimCode, notes: 'Revisión', operator: operatorName || undefined },
-        });
+        const { photoId, bimCode } = await saveFieldPhoto({ services, fs: photoFs, roomId, base64: photo.base64, operator: operatorName, notes: 'Revisión' });
+        const result = { photoId };
         await review.ctl.attachPhoto(itemId, result.photoId as unknown as string);
         toast(`Foto ${bimCode} adjunta`, { kind: 'success' });
       } catch (err: unknown) {
         alertDialog('Error', err instanceof AppError ? err.userMessage : 'No se pudo guardar la foto.');
       }
     },
-    [review, photoFs, services, roomId],
+    [review, photoFs, services, roomId, operatorName],
   );
 
   // Un solo dueño del trazo de un dedo en la planta, según la herramienta activa.
@@ -1564,64 +1420,16 @@ export function SurveyScreen({
         />
       </Modal>
 
-      {/* --- Medición manual --- */}
-      <Modal
-        visible={manualMeasureOpen}
-        animationType="fade"
-        transparent
-        onRequestClose={() => setManualMeasureOpen(false)}
-      >
-        <View style={styles.dialogScrim}>
-          <View style={styles.dialog}>
-            <Text style={styles.dialogTitle}>Medida del muro</Text>
-            <Text style={styles.dialogBody}>
-              Qué mediste: el muro se ajusta para que esa cara mida lo ingresado (los muros unidos lo
-              acompañan) y la medida queda registrada.
-            </Text>
-            <View style={styles.dialogRefs}>
-              {(['interior', 'exterior', 'axis'] as const).map((r) => (
-                <TagToggle
-                  key={r}
-                  role="radio"
-                  label={r === 'interior' ? 'Cara interior' : r === 'exterior' ? 'Cara exterior' : 'Eje'}
-                  on={measureRef === r}
-                  onPress={() => setMeasureRef(r)}
-                />
-              ))}
-            </View>
-            {measureFaces ? (
-              <Text style={styles.dialogBody}>
-                Hoy: interior {measureFaces.interior != null ? `${measureFaces.interior.toFixed(3)} m` : '—'} · exterior{' '}
-                {measureFaces.exterior != null ? `${measureFaces.exterior.toFixed(3)} m` : '—'} · eje {measureFaces.axis.toFixed(3)} m
-              </Text>
-            ) : null}
-            <NumberField
-              label="Distancia"
-              unit="m"
-              decimals={3}
-              min={0.01}
-              max={200}
-              value={manualValue}
-              onCommit={setManualValue}
-            />
-            <View style={styles.dialogActions}>
-              <ActionButton
-                label="Cancelar"
-                variant="secondary"
-                onPress={() => setManualMeasureOpen(false)}
-              />
-              <ActionButton
-                label="Guardar"
-                onPress={async () => {
-                  setManualMeasureOpen(false);
-                  const average = await editor.captureMeasurement('manual', meters(manualValue), undefined, measureRef);
-                  if (average != null) await editor.applyMeasurementToWall(average, measureRef);
-                }}
-              />
-            </View>
-          </View>
-        </View>
-      </Modal>
+      {/* --- Medida del muro (cara interior / exterior / eje) --- */}
+      <MeasureDialog
+        open={manualMeasureOpen}
+        faces={measureFaces}
+        onClose={() => setManualMeasureOpen(false)}
+        onApply={async (value, reference) => {
+          const average = await editor.captureMeasurement('manual', meters(value), undefined, reference);
+          if (average != null) await editor.applyMeasurementToWall(average, reference);
+        }}
+      />
     </View>
   );
 }
@@ -1638,7 +1446,6 @@ const useStyles = themedStyles((colors) => ({
   dialogTitle: { ...type.title, color: colors.text },
   dialogBody: { ...type.body, color: colors.textSecondary },
   dialogActions: { flexDirection: 'row', gap: spacing.sm },
-  dialogRefs: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
 }));
 
 export default SurveyScreen;

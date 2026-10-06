@@ -3,7 +3,7 @@
 // =============================================================================
 
 import { Command } from './Command';
-import { IObjectStore, RevitObjectId , Window } from '../../domain/objects';
+import { IObjectStore, RevitObjectId, Window } from '../../domain/objects';
 
 
 export class CreateWindowCommand extends Command {

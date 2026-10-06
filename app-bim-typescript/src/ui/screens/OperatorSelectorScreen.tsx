@@ -17,7 +17,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, SafeAreaView, TouchableOpacity, FlatList, TextInput } from 'react-native';
 import { themedStyles } from '../design/theme';
 import { ObjectStore } from '../../infrastructure/sqlite/ObjectStore';
-import { Operator , operatorId } from '../../domain/objects/operator';
+import { Operator, operatorId } from '../../domain/objects/operator';
 
 import { generateId } from '../../domain/objects';
 import { alertDialog } from '../primitives';
