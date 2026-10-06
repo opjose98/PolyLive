@@ -35,6 +35,8 @@ export interface ExportRoomDxfInput {
   elevations?: readonly WallElevation[];
   /** Recintos con identidad: contorno y rótulo por recinto. */
   zones?: DXFExportData['zones'];
+  /** Dibujo técnico de la planta (F6b), en coordenadas del modelo. */
+  drafting?: DXFExportData['drafting'];
 }
 
 export interface ExportRoomDxfOutput {
@@ -76,6 +78,7 @@ export class ExportRoomDxfUseCase {
       elevations: input.elevations,
       precision: input.precision,
       zones: input.zones,
+      drafting: input.drafting,
     };
 
     const dxfContent = new DXFSerializer().serialize(data);

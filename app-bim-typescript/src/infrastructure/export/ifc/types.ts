@@ -168,7 +168,30 @@ export interface SerializeInput {
   readonly zoneFloors?: readonly Floor[];
   /** Georreferencia del proyecto (M2b): IfcProjectedCRS + IfcMapConversion. */
   readonly mapConversion?: IfcMapConversionInput;
+  /** Estructura dibujada (F6b): vigas, cerchas y correas, en la vista donde se dibujaron. */
+  readonly members?: readonly IfcMemberInput[];
 }
+
+/** Una barra estructural dibujada, en coordenadas de su vista. */
+export interface IfcMemberInput {
+  /** Id estable (GUID): el del elemento, con sufijo por barra en las cerchas. */
+  readonly id: string;
+  readonly name: string;
+  /** beam = IfcBeam; chord/web/purlin = IfcMember con ese tipo predefinido. */
+  readonly role: 'beam' | 'chord' | 'web' | 'purlin';
+  readonly view: { readonly kind: 'plan' } | { readonly kind: 'wallFace'; readonly wallId: string; readonly side: 'A' | 'B' };
+  /** Nivel (planta). */
+  readonly levelId: string;
+  readonly a: { readonly x: number; readonly y: number };
+  /** Fin de la barra. En una correa (sección en alzado) es igual a `a`. */
+  readonly b: { readonly x: number; readonly y: number };
+  /** Sección: base (horizontal) × peralte (vertical), m. */
+  readonly width: number;
+  readonly depth: number;
+  /** El eje dibujado es la cara SUPERIOR (vigas) o el eje (cerchas, correas). */
+  readonly topAligned: boolean;
+}
+
 
 export interface IfcMapConversionInput {
   readonly crsName: string;

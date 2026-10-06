@@ -409,6 +409,97 @@ export class IFCSerializer {
     });
 
     // ------------------------------------------------------------------
+    // 4e. Estructura dibujada (F6b): vigas, cerchas y correas
+    // ------------------------------------------------------------------
+    // Planta: eje en planta; la cara superior de la viga queda en el nivel de
+    // encima (o, si no hay, en el tope más alto de los muros del nivel).
+    // Alzado: (u, v) de la cara del muro → a lo largo del muro y altura sobre
+    // su base más baja (v = 0 en el alzado), centrado en el espesor.
+    const wallsById = new Map(walls.map((wl) => [wl.id as string, wl] as [string, typeof wl]));
+    const topOfLevel = (levelId: string): number => {
+      const lv = storeyOf(levelId).level;
+      const above = levels.find((l) => l.elevation > lv.elevation + 1e-6);
+      if (above) return above.elevation;
+      let top = lv.elevation + 2.4;
+      for (const h of hosts.values()) if (h.storey.level.id === lv.id) top = Math.max(top, profileTop(h.profile));
+      return top;
+    };
+    const PURLIN_LENGTH = 1; // una correa en sección no trae su largo: se supone 1 m (ver pset)
+    for (const m of input.members ?? []) {
+      let storey: Storey;
+      let p: { x: number; y: number; z: number };
+      let q: { x: number; y: number; z: number };
+      let across = { x: 1, y: 0 }; // horizontal de respaldo para barras verticales
+      if (m.view.kind === 'plan') {
+        storey = storeyOf(m.levelId);
+        const z = topOfLevel(m.levelId);
+        const a = toLocal(m.a);
+        const b = toLocal(m.b);
+        p = { x: a.x, y: a.y, z };
+        q = { x: b.x, y: b.y, z };
+      } else {
+        const wall = wallsById.get(m.view.wallId);
+        const host = hosts.get(m.view.wallId);
+        if (!wall || !host) continue; // el muro ya no existe
+        storey = host.storey;
+        const ux = (wall.endPoint.x - wall.startPoint.x) / host.length;
+        const uy = (wall.endPoint.y - wall.startPoint.y) / host.length;
+        across = { x: ux, y: uy };
+        const z0 = profileBottom(host.profile);
+        const at = (pt: { x: number; y: number }) => ({ x: wall.startPoint.x + ux * pt.x, y: wall.startPoint.y + uy * pt.x, z: z0 + pt.y });
+        p = at(m.a);
+        q = at(m.b);
+        if (m.role === 'purlin') {
+          // Sección en la cara: la correa sale perpendicular al muro, por el lado dibujado.
+          // Lado A = normal (−uy, ux) del MODELO (Y abajo); con Y arriba esa normal es −(−uy, ux).
+          const s = m.view.side === 'A' ? -1 : 1;
+          const nx = -uy * s;
+          const ny = ux * s;
+          p = { x: p.x + nx * (host.thickness / 2), y: p.y + ny * (host.thickness / 2), z: p.z };
+          q = { x: p.x + nx * PURLIN_LENGTH, y: p.y + ny * PURLIN_LENGTH, z: p.z };
+        }
+      }
+      const dx = q.x - p.x;
+      const dy = q.y - p.y;
+      const dz = q.z - p.z;
+      const len = Math.hypot(dx, dy, dz);
+      if (len < 1e-4) continue;
+      const d = { x: dx / len, y: dy / len, z: dz / len };
+      // X local horizontal y perpendicular a la barra (arriba × d); Y local queda hacia arriba.
+      let hx = -d.y;
+      let hy = d.x;
+      const hl = Math.hypot(hx, hy);
+      if (hl < 1e-6) {
+        hx = across.x;
+        hy = across.y;
+      } else {
+        hx /= hl;
+        hy /= hl;
+      }
+      const axis = w.axis3(w.point3(p.x, p.y, p.z - storey.level.elevation), w.direction3(d.x, d.y, d.z), w.direction3(hx, hy, 0));
+      const placement = w.localPlacement(storey.placement, axis);
+      const section = w.rectangleProfile(0, m.topAligned ? -m.depth / 2 : 0, m.width, m.depth);
+      const body = w.bodyShape([w.extrusion(section, w.origin3Axis, len)]);
+      const shape = w.productShape([body]);
+      const guid = stableGuid(`member:${m.id}`);
+      const entity =
+        m.role === 'beam'
+          ? w.add(`IFCBEAM('${guid}',${oh},${stepString(m.name)},$,$,${ref(placement)},${ref(shape)},$,.BEAM.)`)
+          : w.add(
+              `IFCMEMBER('${guid}',${oh},${stepString(m.name)},$,$,${ref(placement)},${ref(shape)},$,${m.role === 'chord' ? '.CHORD.' : m.role === 'web' ? '.STRUT.' : '.PURLIN.'})`,
+            );
+      storey.elements.push(entity);
+      products++;
+      w.propertySet(`member:${m.id}`, REVIT_CONSTRAINTS_PSET, entity, [
+        ['PolyLiveId', { identifier: m.id }],
+        ['Section', { label: `${Math.round(m.width * 100)}x${Math.round(m.depth * 100)} cm` }],
+        ['Length', { length: len }],
+        ['DrawnIn', { label: m.view.kind === 'plan' ? 'Planta' : `Alzado ${m.view.side}` }],
+        ...(m.role === 'purlin' ? ([['LengthAssumed', { bool: true }]] as [string, IfcValue][]) : []),
+      ]);
+    }
+
+    // ------------------------------------------------------------------
     // 5. Contención por piso
     // ------------------------------------------------------------------
     for (const s of storeys.values()) {

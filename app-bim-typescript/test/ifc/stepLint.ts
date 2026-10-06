@@ -59,6 +59,8 @@ export const IFC4_ATTRIBUTE_COUNT: Readonly<Record<string, number>> = {
   IFCWINDOW: 13,
   IFCRELFILLSELEMENT: 6,
   IFCCOLUMN: 9,
+  IFCBEAM: 9,
+  IFCMEMBER: 9,
   IFCRELCONTAINEDINSPATIALSTRUCTURE: 6,
   IFCPROJECTEDCRS: 7,
   IFCMAPCONVERSION: 8,
@@ -69,7 +71,7 @@ const ROOTED = new Set([
   'IFCPROJECT', 'IFCSITE', 'IFCBUILDING', 'IFCBUILDINGSTOREY', 'IFCRELAGGREGATES', 'IFCSPACE', 'IFCSLAB',
   'IFCWALLSTANDARDCASE', 'IFCWALL', 'IFCRELASSOCIATESMATERIAL', 'IFCPROPERTYSET', 'IFCRELDEFINESBYPROPERTIES',
   'IFCELEMENTQUANTITY', 'IFCOPENINGELEMENT', 'IFCRELVOIDSELEMENT', 'IFCDOOR', 'IFCWINDOW', 'IFCRELFILLSELEMENT',
-  'IFCCOLUMN', 'IFCRELCONTAINEDINSPATIALSTRUCTURE',
+  'IFCCOLUMN', 'IFCBEAM', 'IFCMEMBER', 'IFCRELCONTAINEDINSPATIALSTRUCTURE',
 ]);
 
 /** Tipo exigido por atributo que es referencia (índice → tipos aceptados). */
@@ -215,7 +217,7 @@ export function lintIfc(content: string): string[] {
     }
   }
   for (const e of entities.values()) {
-    if (['IFCWALL', 'IFCWALLSTANDARDCASE', 'IFCCOLUMN', 'IFCDOOR', 'IFCWINDOW', 'IFCSLAB'].includes(e.type) && !containedIn.has(e.id)) {
+    if (['IFCWALL', 'IFCWALLSTANDARDCASE', 'IFCCOLUMN', 'IFCBEAM', 'IFCMEMBER', 'IFCDOOR', 'IFCWINDOW', 'IFCSLAB'].includes(e.type) && !containedIn.has(e.id)) {
       problems.push(`#${e.id} ${e.type}: no está contenido en ningún piso`);
     }
   }

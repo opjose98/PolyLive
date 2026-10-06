@@ -322,7 +322,8 @@ describe('DXFSerializer — recinto', () => {
     const dxf = new DXFSerializer().serialize(data({ room }));
 
     expect(entityTypes(dxf)).toContain('TEXT');
-    expect(valuesOf(dxf, '1').join(' ')).toContain('Salón');
+    // R2000: lo no ASCII va como \U+XXXX (ó = U+00F3).
+    expect(valuesOf(dxf, '1').join(' ')).toContain('Sal\\U+00F3n');
     expect(valuesOf(dxf, '1').join(' ')).toContain('12.00 m2');
   });
 
@@ -461,8 +462,14 @@ describe('Saneado', () => {
   it('sanitizeDxfText elimina los saltos de línea', () => {
     // Un \n dentro de un texto desplazaría todos los pares siguientes y
     // rompería el archivo entero.
-    expect(sanitizeDxfText('Salón\nprincipal')).toBe('Salón principal');
+    expect(sanitizeDxfText('Salon\nprincipal')).toBe('Salon principal');
     expect(sanitizeDxfText('a\r\nb')).toBe('a b');
+  });
+
+  it('sanitizeDxfText escribe lo que no es ASCII como \\U+XXXX (R2000 no lee UTF-8)', () => {
+    expect(sanitizeDxfText('Salón')).toBe('Sal\\U+00F3n');
+    expect(sanitizeDxfText('Muro · 15 cm')).toBe('Muro \\U+00B7 15 cm');
+    expect(sanitizeDxfText('Baño m²')).toBe('Ba\\U+00F1o m\\U+00B2');
   });
 
   it('sanitizeDxfFilename sustituye los caracteres prohibidos', () => {

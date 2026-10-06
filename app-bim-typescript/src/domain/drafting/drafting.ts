@@ -82,6 +82,12 @@ export function dimensionLine(a: Point2D, b: Point2D, offset: number): { a: Poin
  * aguas con la cumbrera a `depth`, y diagonales en Warren. Devuelve segmentos.
  */
 export function trussSegments(a: Point2D, b: Point2D, depth: number, panels = 4): [Point2D, Point2D][] {
+  const p = trussParts(a, b, depth, panels);
+  return [...p.chords, ...p.webs];
+}
+
+/** Cercha separada en cordones (inferior y superior) y alma (montantes y diagonales), para el IFC. */
+export function trussParts(a: Point2D, b: Point2D, depth: number, panels = 4): { chords: [Point2D, Point2D][]; webs: [Point2D, Point2D][] } {
   const n = Math.max(2, panels % 2 === 0 ? panels : panels + 1);
   const at = (t: number) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
   const top = (t: number) => {
@@ -90,16 +96,17 @@ export function trussSegments(a: Point2D, b: Point2D, depth: number, panels = 4)
     const h = depth * (1 - Math.abs(2 * t - 1));
     return { x: p.x, y: p.y + h };
   };
-  const segs: [Point2D, Point2D][] = [[a, b]];
+  const chords: [Point2D, Point2D][] = [[a, b]];
+  const webs: [Point2D, Point2D][] = [];
   for (let i = 0; i < n; i++) {
     const t0 = i / n;
     const t1 = (i + 1) / n;
-    segs.push([top(t0), top(t1)]);
+    chords.push([top(t0), top(t1)]);
     // Montante y diagonal de cada paño.
-    if (i > 0) segs.push([at(t0), top(t0)]);
-    segs.push(i < n / 2 ? [at(t0), top(t1)] : [top(t0), at(t1)]);
+    if (i > 0) webs.push([at(t0), top(t0)]);
+    webs.push(i < n / 2 ? [at(t0), top(t1)] : [top(t0), at(t1)]);
   }
-  return segs;
+  return { chords, webs };
 }
 
 /** Defaults por herramienta (el catálogo los muestra como píldoras). */

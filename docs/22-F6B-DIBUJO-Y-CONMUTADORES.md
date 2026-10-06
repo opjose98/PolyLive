@@ -75,3 +75,41 @@ devuelve), título de la BPC ("Línea · 1.55 m"), visor con la cara del alzado.
 **Pendientes menores:** rótulos que se salen por el borde de la pantalla (coordenadas cerca del borde);
 cotas del usuario superpuestas a las cotas automáticas de muro; rotación con dos dedos no probada
 (adb no hace multitoque; el conmutador sí).
+
+## Exportación del dibujo técnico (rama `feat/f6b-export-dibujo`)
+
+**DXF** (planta del nivel base, `exportPlanDxf`): cotas explotadas (líneas de referencia, línea de cota,
+trazos a 45° y valor), textos, etiquetas con línea al objeto, coordenadas (N/E si hay amarre, X/Y si no),
+líneas, polígonos con su área y vigas en trazos (`DASHED`) con su sección. Capas AIA/NCS:
+
+| Capa | Contenido |
+|---|---|
+| A-ANNO-DIMS | cotas |
+| A-ANNO-TEXT / A-ANNO-TAGS | textos / etiquetas |
+| V-ANNO-COOR | coordenadas |
+| A-DETL-GENF / A-AREA | líneas / polígonos |
+| S-BEAM / S-TRUS | vigas / cerchas (eje) |
+
+Los textos miden en el papel: alto (m) = mm × N / 1000 a escala 1:N (la de la esquina). Lo dibujado en
+alzado no va al plano de planta.
+
+**IFC**: viga → `IfcBeam`; cercha → `IfcMember` `.CHORD.` (cordones) y `.STRUT.` (alma, barras de
+10×10 cm); correa → `IfcMember` `.PURLIN.`. Planta: cara superior en el nivel de encima (o el tope de los
+muros si es el último). Alzado: a lo largo del muro y a la altura dibujada sobre su base; la correa sale
+perpendicular por el lado dibujado con 1 m supuesto (`LengthAssumed` en el pset).
+
+**Corregido de paso:** en el DXF los contornos y rótulos de recinto salían espejados norte-sur respecto
+a los muros (no se pasaban a Y arriba).
+
+**También corregido:** los textos con caracteres fuera de ASCII ("·", "ñ", "ó", "m²") salían ilegibles
+en el DXF ("Â·"): R2000 no lee UTF-8. Ahora van como `\U+XXXX`.
+
+Tests: `test/drafting/draftExport.test.ts` (entidades, capas, DASHED, Y arriba, cotas 3D de vigas y
+correas, lint IFC4).
+
+**Prueba en teléfono (2026-10-06, proyecto QA T0-M4):** DXF "4 muros, 1 hueco, 10 elementos de dibujo";
+IFC "1 nivel, 1 recinto, 2 vigas, 25 barras, georreferenciado". Validados fuera de la app:
+ezdxf lee el DXF R2000 sin errores (capas, DASHED, recinto del mismo lado que los muros, textos
+legibles); ifcopenshell: IFC4 sin problemas de esquema, 2 IfcBeam y 25 IfcMember (10 CHORD,
+14 STRUT, 1 PURLIN) con geometría válida; viga de planta a 2,40–2,80 m (tope del muro).
+Falta abrirlos en AutoCAD y Revit.
