@@ -67,6 +67,11 @@ Topografía: inverso Az 64°59'31" → rumbo N 65°00' E (sin 60').
 5. La etiqueta quedaba encima del objeto, sin línea de referencia → al lado, con punto y línea.
 6. Detalles: título de la BPC con el elemento, género en "borrado/a", ayuda de Correa, cara del alzado en el visor.
 
+**Verificación en teléfono de los arreglos (2026-10-06):** deshacer unificado (borrar línea → deshacer la
+devuelve), título de la BPC ("Línea · 1.55 m"), visor con la cara del alzado. Se hallaron y corrigieron dos más:
+7. Al abrir el espacio el dibujo no aparecía hasta otro redibujado (el nivel llegaba tarde al controlador).
+8. Tocar una foto que tenía una cota cerca seleccionaba la cota → las fotos tienen prioridad sin herramienta.
+
 **Pendientes menores:** rótulos que se salen por el borde de la pantalla (coordenadas cerca del borde);
 cotas del usuario superpuestas a las cotas automáticas de muro; rotación con dos dedos no probada
 (adb no hace multitoque; el conmutador sí).

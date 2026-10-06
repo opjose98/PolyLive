@@ -64,7 +64,9 @@ export function useDrafting(input: DraftingInput) {
     ctl.onHistory((kind) => (kind === 'push' ? editor.refreshHistory() : void editor.reload()));
     return () => ctl.onHistory(null);
   }, [ctl, editor]);
-  useEffect(() => ctl.setLevel(levelId), [ctl, levelId]);
+  // En el render, no en un efecto: las formas de la planta se calculan en este mismo render con el nivel
+  // nuevo (con un efecto se calculaban con el anterior y el dibujo no salía al abrir el espacio).
+  ctl.setLevel(levelId);
   const [st, setSt] = useState<DraftingState>(() => ctl.getState());
   // El arrastre en curso va directo al lienzo; la pantalla solo se entera de lo estructural.
   useEffect(

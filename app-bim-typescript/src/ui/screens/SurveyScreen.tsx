@@ -660,7 +660,8 @@ export function SurveyScreen({
         return;
       }
       if (review.plan.tap(x, y)) return;
-      if (drafting.planTap(x, y)) return;
+      // Con herramienta de dibujo, el toque es suyo; sin ella, seleccionar dibujo va después de las fotos.
+      if (drafting.tool && drafting.planTap(x, y)) return;
       if (progress.handleTap(x, y)) return;
       if (topoTools.handleTap(x, y)) return;
       if (topo.handleTap(x, y)) return;
@@ -673,13 +674,14 @@ export function SurveyScreen({
           return;
         }
       }
+      if (drafting.planTap(x, y)) return;
       const before = editor.getState().selectedId;
       void editor.handleTap(x, y, CANVAS_TOUCH_TOLERANCE_PX).then(() => {
         const after = editor.getState().selectedId;
         if (editor.getState().tool === 'select' && after && after !== before) haptic.select();
       });
     },
-    [editor, topo.handleTap, topoTools.handleTap, progress.handleTap, review.plan, drafting.planTap, onOpenPhoto],
+    [editor, topo.handleTap, topoTools.handleTap, progress.handleTap, review.plan, drafting.planTap, drafting.tool, onOpenPhoto],
   );
 
   // Propiedades (con edición y borrado) solo donde se edita el modelo: en los
