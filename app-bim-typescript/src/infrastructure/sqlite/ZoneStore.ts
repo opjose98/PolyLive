@@ -8,6 +8,7 @@
 // =============================================================================
 
 import { IDatabase } from './database';
+import { diagnostics } from '../../shared/diagnostics';
 import type { Point2D } from '../../domain/geometry/types';
 import type { Zone } from '../../domain/objects/zone';
 
@@ -34,9 +35,10 @@ function points(json: string): Point2D[] {
   try {
     const v = JSON.parse(json);
     return Array.isArray(v) ? v.filter((p) => Number.isFinite(p?.x) && Number.isFinite(p?.y)) : [];
-  } catch {
+  } catch (err) {
     // Un contorno ilegible no debe impedir abrir el espacio: el recinto se
     // re-liga en la próxima recarga con el contorno que detecten los muros.
+    diagnostics.warn('zones', 'Contorno de recinto ilegible; se recalcula', err);
     return [];
   }
 }

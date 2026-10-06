@@ -9,6 +9,7 @@
 // =============================================================================
 
 import { IDatabase } from './database';
+import { diagnostics } from '../../shared/diagnostics';
 import { generateId } from '../../domain/objects/base';
 import { Georeference } from '../../domain/geo/georeference';
 import { Benchmark, BenchmarkSource, ProjectBenchmark } from '../../domain/geo/benchmark';
@@ -81,7 +82,8 @@ export class GeoStore {
     try {
       const g = JSON.parse(row.data_json) as Georeference;
       return { ...g, placements: g.placements ?? {} };
-    } catch {
+    } catch (err) {
+      diagnostics.error('project_georeference', `Georreferencia ilegible del proyecto ${projectId}`, err);
       return null;
     }
   }

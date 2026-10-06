@@ -22,7 +22,7 @@
 // =============================================================================
 
 import * as SQLite from 'expo-sqlite';
-import { ALL_DDL } from '../../infrastructure/sqlite/schema';
+import { runMigrations } from '../../infrastructure/sqlite/migrations';
 import { IDatabase } from '../../infrastructure/sqlite/database';
 
 export class ExpoSQLiteDatabase implements IDatabase {
@@ -47,10 +47,9 @@ export class ExpoSQLiteDatabase implements IDatabase {
     this.db = null;
   }
 
+  /** Lleva el esquema a la última versión (ver infrastructure/sqlite/migrations.ts). */
   async migrate(): Promise<void> {
-    for (const ddl of ALL_DDL) {
-      await this.exec(ddl);
-    }
+    await runMigrations(this);
   }
 
   async exec(sql: string): Promise<void> {

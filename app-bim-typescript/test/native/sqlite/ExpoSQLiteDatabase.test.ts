@@ -11,6 +11,7 @@
 
 import { ExpoSQLiteDatabase } from '../../../src/native/sqlite/ExpoSQLiteDatabase';
 import { ALL_DDL } from '../../../src/infrastructure/sqlite/schema';
+import { LATEST_SCHEMA_VERSION } from '../../../src/infrastructure/sqlite/migrations';
 // Importado por ruta relativa (no 'expo-sqlite') porque `mockDb` es un
 // export propio del mock para inspección en tests — no existe en el
 // paquete real, así que el nombre 'expo-sqlite' (resuelto por moduleNameMapper
@@ -113,7 +114,7 @@ describe('ExpoSQLiteDatabase', () => {
     await expect(callback()).rejects.toThrow('constraint violation');
   });
 
-  it('migrate() ejecuta todas las sentencias DDL del schema', async () => {
+  it('migrate() ejecuta todas las sentencias DDL del schema y marca la última versión', async () => {
     const db = new ExpoSQLiteDatabase();
     await db.open();
     jest.clearAllMocks();
@@ -123,7 +124,8 @@ describe('ExpoSQLiteDatabase', () => {
     // Se comprueba contra ALL_DDL en vez de contra un número escrito a mano:
     // la versión anterior fijaba "8" y cada tabla nueva del schema rompía este
     // test sin que hubiera nada roto en el código.
-    expect(mockDb.execAsync).toHaveBeenCalledTimes(ALL_DDL.length);
+    for (const ddl of ALL_DDL) expect(mockDb.execAsync).toHaveBeenCalledWith(ddl);
+    expect(mockDb.execAsync).toHaveBeenCalledWith(`PRAGMA user_version = ${LATEST_SCHEMA_VERSION}`);
   });
 
   it('close() cierra la conexión y un get() posterior falla con mensaje claro', async () => {

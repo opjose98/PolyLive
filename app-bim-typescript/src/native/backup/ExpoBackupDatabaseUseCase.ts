@@ -56,11 +56,21 @@ export interface ExpoBackupDatabaseInput {
   backupDir?: string;
   /** Máximo de backups a conservar (por defecto 5, igual que la variante Node). */
   maxBackups?: number;
+  /** Si el respaldo más reciente es más nuevo que esto (ms), no se hace otro. */
+  minIntervalMs?: number;
 }
 
 export interface ExpoBackupDatabaseOutput {
   backupPath: string;
   prunedPaths: string[];
+  /** true si no se respaldó porque había uno reciente (`backupPath` es ese). */
+  skipped?: boolean;
+}
+
+/** Fecha de un respaldo por su nombre (`polylive-backup-2026-10-06T16-40-00-000Z-xxxx.db`). */
+export function backupTime(filename: string): number | null {
+  const m = /^polylive-backup-(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z/.exec(filename);
+  return m ? Date.parse(`${m[1]}T${m[2]}:${m[3]}:${m[4]}.${m[5]}Z`) : null;
 }
 
 export class ExpoBackupDatabaseUseCase {
@@ -71,6 +81,16 @@ export class ExpoBackupDatabaseUseCase {
     try {
       // 1. Asegurar que el directorio de backups existe.
       await this.ensureDir(backupDir);
+
+      if (input.minIntervalMs) {
+        const newest = (await FileSystem.readDirectoryAsync(backupDir))
+          .filter((f) => f.startsWith(BACKUP_PREFIX) && f.endsWith(BACKUP_EXT))
+          .sort((a, b) => b.localeCompare(a))[0];
+        const t = newest ? backupTime(newest) : null;
+        if (newest && t !== null && Date.now() - t < input.minIntervalMs) {
+          return { backupPath: `${backupDir}${newest}`, prunedPaths: [], skipped: true };
+        }
+      }
 
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const uniqueSuffix = Math.random().toString(36).slice(2, 8);

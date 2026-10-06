@@ -3,7 +3,7 @@
 // =============================================================================
 
 import sqlite3 from 'sqlite3';
-import { ALL_DDL } from './schema';
+import { runMigrations } from './migrations';
 
 /**
  * Contrato mínimo que necesita ObjectStore (y los UseCases que operan sobre
@@ -77,11 +77,9 @@ export class Database implements IDatabase {
     });
   }
 
-  /** Crea todas las tablas si no existen. */
+  /** Lleva el esquema a la última versión (ver migrations.ts). */
   async migrate(): Promise<void> {
-    for (const ddl of ALL_DDL) {
-      await this.exec(ddl);
-    }
+    await runMigrations(this);
   }
 
   // -------------------------------------------------------------------------

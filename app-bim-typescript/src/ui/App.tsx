@@ -31,6 +31,8 @@ import { SettingsScreen } from './screens/SettingsScreen';
 import { PermissionsManager } from '../native/permissions/PermissionsManager';
 import { ExpoSQLiteDatabase } from '../native/sqlite/ExpoSQLiteDatabase';
 import { ExpoBackupDatabaseUseCase } from '../native/backup/ExpoBackupDatabaseUseCase';
+import { diagnostics } from '../shared/diagnostics';
+import { MigrationError } from '../infrastructure/sqlite/migrations';
 import { createAppServices, AppServices } from '../application/AppServices';
 import { RoomId } from '../domain/objects';
 import { Operator } from '../domain/objects/operator';
@@ -140,22 +142,26 @@ export default function App() {
         } catch (err) {
           // La adopción es una comodidad, no un requisito para arrancar: si
           // falla, la app abre igual y los Recintos siguen adoptables después.
-          // eslint-disable-next-line no-console
-          console.warn('[PolyLive] Adopción de Recintos huérfanos falló (no bloqueante):', err);
+          diagnostics.warn('boot', 'Adopción de recintos huérfanos falló (no bloqueante)', err);
         }
 
         if (cancelled) return;
         setBoot({ phase: 'ready', services });
 
-        // Backup rotacional al arrancar — no bloquea ni tumba la app si falla.
-        new ExpoBackupDatabaseUseCase().execute({ db }).catch((err) => {
-          const message = err instanceof AppError ? err.toLogObject() : err;
-          // eslint-disable-next-line no-console
-          console.warn('[PolyLive] Backup automático falló (no bloqueante):', message);
-        });
+        // Respaldo rotacional al arrancar, como mucho cada 12 h (con fotos dentro de la
+        // base, copiarla en cada arranque costaba tiempo y batería). No bloquea.
+        new ExpoBackupDatabaseUseCase()
+          .execute({ db, minIntervalMs: 12 * 3600 * 1000 })
+          .then((r) => r.skipped || diagnostics.info('backup', `Respaldo local: ${r.backupPath}`))
+          .catch((err) => diagnostics.error('backup', 'El respaldo automático falló (no bloqueante)', err instanceof AppError ? err.toLogObject() : err));
       } catch (err) {
+        diagnostics.error('boot', 'No se pudo abrir la base de datos', err);
         const message =
-          err instanceof AppError ? err.userMessage : 'No se pudo abrir la base de datos local.';
+          err instanceof AppError
+            ? err.userMessage
+            : err instanceof MigrationError
+              ? `No se pudo actualizar la base de datos (${err.message}). Tus datos no se modificaron; restaura un respaldo o reinstala la versión anterior.`
+              : 'No se pudo abrir la base de datos local.';
         if (!cancelled) setBoot({ phase: 'error', message });
       }
     }

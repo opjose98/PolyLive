@@ -6,6 +6,7 @@
 // =============================================================================
 
 import { IDatabase } from './database';
+import { mapTolerant, parseJsonOr, parseRowJson } from '../../shared/safeJson';
 import { RevitObjectRow, MeasurementRow, AuditPhotoRow, OperatorRow } from './types';
 import {
   RevitObjectBase,
@@ -42,6 +43,10 @@ import { Operator, operatorId, OperatorId } from '../../domain/objects/operator'
  *   - Door/Window: parentWallId debe existir y no estar borrado
  * - Cascade: si un Wall se borra, sus Doors y Windows también (soft-delete)
  */
+
+/** Columnas de una foto sin la imagen (listados y metadatos). */
+const PHOTO_COLUMNS_WITHOUT_IMAGE = 'id, room_id, metadata_json, linked_object_id, is_deleted, created_at, updated_at';
+
 export class ObjectStore implements IObjectStore {
   constructor(private readonly db: IDatabase) {}
 
@@ -123,7 +128,8 @@ export class ObjectStore implements IObjectStore {
       }
 
       // Mergear propiedades existentes con updates
-      const currentProps = JSON.parse(existing.properties_json);
+      // Una fila ilegible no se sobrescribe a ciegas: se informa (perderíamos lo que quede de ella).
+      const currentProps = parseRowJson<Record<string, unknown>>(existing.properties_json, 'revit_objects', id as string);
       const updatedProps = { ...currentProps };
 
       // Aplicar updates de propiedades específicas del tipo
@@ -265,7 +271,8 @@ export class ObjectStore implements IObjectStore {
       `SELECT * FROM revit_objects WHERE room_id = ? AND is_deleted = 0 ORDER BY created_at`,
       [roomId as string]
     );
-    return rows.map((row) => this.rowToObject(row));
+    // Una fila ilegible se salta (y queda en el diagnóstico): el espacio se sigue abriendo.
+    return mapTolerant(rows, (row) => this.rowToObject(row), 'revit_objects', (row) => row.id);
   }
 
   // -------------------------------------------------------------------------
@@ -383,10 +390,15 @@ export class ObjectStore implements IObjectStore {
     return this.auditPhotoRowToObject(row);
   }
 
-  /** Lista las AuditPhotos de un Recinto (excluye soft-deleted), más recientes primero. */
+  /**
+   * Lista las AuditPhotos de un Recinto (excluye soft-deleted), más recientes
+   * primero, SIN la imagen (`foto` = null): el listado se usa en cada recarga
+   * del lienzo y leer todos los JPEG cada vez agotaba la memoria con decenas de
+   * fotos. La imagen se lee con `readAuditPhoto` cuando de verdad se necesita.
+   */
   async listAuditPhotos(room: RoomId): Promise<AuditPhoto[]> {
     const rows = await this.db.all<AuditPhotoRow>(
-      `SELECT * FROM audit_photos WHERE room_id = ? AND is_deleted = 0 ORDER BY created_at DESC`,
+      `SELECT ${PHOTO_COLUMNS_WITHOUT_IMAGE} FROM audit_photos WHERE room_id = ? AND is_deleted = 0 ORDER BY created_at DESC`,
       [room as string],
     );
     return rows.map((row) => this.auditPhotoRowToObject(row));
@@ -406,7 +418,7 @@ export class ObjectStore implements IObjectStore {
     updates: { metadata_json?: string; linkedObjectId?: RevitObjectId | null },
   ): Promise<void> {
     const existing = await this.db.get<AuditPhotoRow>(
-      `SELECT * FROM audit_photos WHERE id = ? AND is_deleted = 0`,
+      `SELECT ${PHOTO_COLUMNS_WITHOUT_IMAGE} FROM audit_photos WHERE id = ? AND is_deleted = 0`,
       [id as string],
     );
     if (!existing) {
@@ -448,7 +460,7 @@ export class ObjectStore implements IObjectStore {
     return new AuditPhoto({
       id: auditPhotoId(row.id),
       roomId: toRoomId(row.room_id),
-      foto: row.foto,
+      foto: row.foto ?? null,
       metadata_json: row.metadata_json,
       linkedObjectId: row.linked_object_id ? revitObjectId(row.linked_object_id) : undefined,
       created_at: new Date(row.created_at),
@@ -533,7 +545,7 @@ export class ObjectStore implements IObjectStore {
     const rows = await this.db.all<RevitObjectRow>(
       `SELECT * FROM revit_objects WHERE object_type = 'Room' AND is_deleted = 0 ORDER BY created_at DESC`,
     );
-    return rows.map((row) => this.rowToObject(row) as Room);
+    return mapTolerant(rows, (row) => this.rowToObject(row) as Room, 'revit_objects', (row) => row.id);
   }
 
   // =========================================================================
@@ -572,7 +584,7 @@ export class ObjectStore implements IObjectStore {
     );
 
     for (const vano of vanos) {
-      const props = JSON.parse(vano.properties_json);
+      const props = parseJsonOr<{ parentWallId?: string }>(vano.properties_json, {}, `revit_objects ${vano.id}`);
       if (props.parentWallId === (wallId as string)) {
         await this.db.run(
           `UPDATE revit_objects SET is_deleted = 1, updated_at = ? WHERE id = ?`,
@@ -623,7 +635,8 @@ export class ObjectStore implements IObjectStore {
    * Convierte una fila SQL a un objeto BIM del tipo correcto.
    */
   private rowToObject(row: RevitObjectRow): RevitObjectBase {
-    const props = JSON.parse(row.properties_json);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const props = parseRowJson<any>(row.properties_json, 'revit_objects', row.id);
     const id = revitObjectId(row.id);
     const rId = toRoomId(row.room_id);
     const createdAt = new Date(row.created_at);

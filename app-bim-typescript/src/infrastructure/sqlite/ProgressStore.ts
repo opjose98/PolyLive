@@ -8,6 +8,7 @@
 // =============================================================================
 
 import { IDatabase } from './database';
+import { diagnostics } from '../../shared/diagnostics';
 import { generateId } from '../../domain/objects/base';
 import {
   Activity,
@@ -70,8 +71,9 @@ function toMark(r: MarkRow): ProgressMark | null {
       operator: r.operator,
       createdAt: r.created_at,
     };
-  } catch {
+  } catch (err) {
     // Una marca ilegible se omite: no debe impedir ver el resto del avance.
+    diagnostics.error('progress_marks', `Se omitió una fila ilegible (${r.id})`, err);
     return null;
   }
 }
