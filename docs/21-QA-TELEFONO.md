@@ -51,3 +51,40 @@ Tests de regresión: `test/qa/qaRegressions.test.ts` y, en el editor, los encuen
 - Replanteo con GPS al aire libre.
 - Abrir los IFC en Revit (varios recintos y georreferenciado).
 - CSV de una estación total real.
+
+---
+
+## QA en tableta — 2026-10-07 (APK `preview`, Expo 57, Lenovo TB370FU 1840×2944)
+
+Instalación limpia (sin datos previos), proyecto `QA-Tablet`, operador `QA`. Solo horizontal (la
+tablet estaba girada; no se cambió ningún ajuste del sistema).
+
+| Prueba | Resultado |
+|---|---|
+| Arranque, migraciones v1–v3, crear operador / proyecto / espacio | ✅ |
+| Lienzo Skia 2 + gestos: rectángulo 4 × 5 m, recinto detectado, área neta 18,66 m² | ✅ |
+| Hoja de propiedades centrada y limitada de ancho (tableta) | ✅ |
+| Medida cara a cara: interior 3,850 / exterior 4,150 / eje 4,000; con interior 3,00 el eje da 3,15, los muros unidos acompañan, área 14,54 | ✅ (la cifra aplicada era la vieja: ver F1) |
+| Deshacer la medida: una sola acción restaura todo | ✅ |
+| IFC del proyecto (SAF): 4 muros + recinto, validado con ifcopenshell | ✅ |
+| Plano PDF (1 página, carta), cuadro de áreas CSV (neta 18,66 · perímetro 17,40 · eje 19,99) | ✅ |
+| Paquete `.polylive` (esquema 3, 5 objetos, 7 actividades de avance) | ✅ |
+| Ajustes: copia automática, restaurar, esquema v3, "Enviar diagnóstico" | ✅ visible; sin probar el envío |
+| Registro fotográfico, cámara, importar `.polylive`, vertical | ⏳ pendiente |
+
+Hallazgos (corregidos en `5cc602e`, entran en la próxima compilación):
+
+- **F1 — "Guardar" de la medida aplicaba el valor anterior** si el teclado se cerraba con Atrás
+  (`NumberField` solo confirmaba al salir del campo). Añadido `onDraft` y `MeasureDialog` usa lo tecleado.
+- **F2 — Reabrir un espacio duplicaba el recinto** ("Recinto 2", nivel vacío, `bound = 0`): el editor
+  detectaba antes de cargar los niveles y no reconocía el recinto guardado. `syncZones` espera al nivel;
+  test `reabrir el espacio antes de cargar los niveles no duplica el recinto`. Los duplicados ya
+  creados quedan sin ligar (no se ven ni salen en los exportes).
+- **F3 — Menú ☰ dibujado abierto tras el selector de carpetas**: la animación de cierre se cortaba al pasar
+  la app a segundo plano; mientras tanto los toques caían sobre el lienzo. `SideDrawer` y `BottomSheet`
+  fijan su estado al volver a primer plano.
+
+Observaciones menores (sin corregir): en tableta los diálogos y listas se estiran a todo el ancho; el
+teclado tapa el campo "Nuevo operador" (el campo está al borde inferior); el encabezado
+"ARQUITECTÓNICO" del FAB se parte en dos líneas; el selector de carpetas de Android (app Archivos de la
+tablet) se colgó dos veces al listar la raíz (es del sistema).
