@@ -767,6 +767,34 @@ describe('EditorController', () => {
       expect(stored.map((z) => z.id)).toEqual([r.id]);
     });
 
+    it('reabrir el espacio antes de cargar los niveles no duplica el recinto', async () => {
+      const lv = {
+        active: 'L0',
+        base: 'L0',
+        all: new Set(['L0']),
+        underlay: new Set<string>(),
+        elevations: new Map([['L0', 0]]),
+      };
+      editor.setScope(lv, null);
+      await drawRectangle();
+      const id = editor.getState().rooms[0].id!;
+
+      // Reabrir: el editor lee los muros ANTES de que lleguen los niveles (alcance nulo).
+      const reopened = new EditorController({
+        services,
+        roomId: ROOM_ID,
+        roomObjectId: ROOM_OBJECT_ID,
+        initialTransform: { scale: 100, offsetX: 0, offsetY: 0 },
+      });
+      await reopened.init();
+      reopened.setScope(lv, null);
+      await reopened.reload();
+
+      const stored = await services.zones.list(ROOM_ID as unknown as string);
+      expect(stored.map((z) => z.id)).toEqual([id]);
+      expect(reopened.getState().rooms.map((r) => r.id)).toEqual([id]);
+    });
+
     it('el recinto conserva id y nombre al mover un muro, y al dividirlo nace otro', async () => {
       await drawRectangle();
       const id = editor.getState().rooms[0].id!;

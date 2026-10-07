@@ -703,6 +703,10 @@ export abstract class EditorCore {
       const lv = this.levelScope;
       const level = lv?.active ?? '';
       const all = await zones.list(space);
+      // Al reabrir un espacio, los muros se leen antes de que lleguen los niveles. Con el
+      // nivel desconocido los recintos ya guardados (de un nivel) no se reconocen y se
+      // crearían de nuevo, duplicados. Se espera: setScope() vuelve a leer al llegar.
+      if (!lv && all.some((z) => z.levelId !== '')) return [...contours];
       // Lo creado antes de cargar los niveles (nivel '') es de la base.
       const mine = all.filter((z) => z.levelId === level || (z.levelId === '' && (!lv || level === lv.base)));
       const thick = walls.map((w) => ({ start: w.startPoint, end: w.endPoint, thickness: w.thickness as number }));

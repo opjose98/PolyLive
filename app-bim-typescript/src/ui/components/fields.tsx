@@ -38,6 +38,12 @@ export interface NumberFieldProps {
   disabled?: boolean;
   /** Se invoca solo al CONFIRMAR (blur o submit), nunca en cada pulsación. */
   onCommit: (value: number) => void;
+  /**
+   * Lo que va tecleado AHORA (número válido, o `null` si no lo es), en cada pulsación.
+   * Para un botón "Guardar" aparte: cerrar el teclado con Atrás no confirma el campo
+   * y el botón aplicaría el valor anterior. No cambia `value`, así que no pisa lo escrito.
+   */
+  onDraft?: (value: number | null) => void;
   /** Texto de ayuda o de error bajo el campo. */
   hint?: string;
 }
@@ -51,6 +57,7 @@ export function NumberField({
   max,
   disabled,
   onCommit,
+  onDraft,
   hint,
 }: NumberFieldProps) {
   const styles = useStyles();
@@ -97,7 +104,13 @@ export function NumberField({
         <TextInput
           style={[styles.fieldInput, disabled && styles.fieldInputDisabled, !!error && styles.fieldInputError]}
           value={text}
-          onChangeText={setText}
+          onChangeText={(t) => {
+            setText(t);
+            if (onDraft) {
+              const n = Number(t.replace(',', '.'));
+              onDraft(t.trim() !== '' && Number.isFinite(n) ? n : null);
+            }
+          }}
           onBlur={commit}
           onSubmitEditing={commit}
           keyboardType="decimal-pad"

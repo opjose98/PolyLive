@@ -7,7 +7,7 @@
 // queda registrada con su referencia.
 // =============================================================================
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Modal, Text, View } from 'react-native';
 import { ActionButton, TagToggle } from '../primitives';
 import { NumberField } from '../components/fields';
@@ -30,6 +30,8 @@ const m = (v: number | null) => (v != null ? `${v.toFixed(3)} m` : '—');
 export function MeasureDialog({ open, faces, onClose, onApply }: MeasureDialogProps) {
   const styles = useStyles();
   const [value, setValue] = useState(3);
+  // Lo tecleado y aún sin confirmar (cerrar el teclado con Atrás no confirma el campo).
+  const draft = useRef<number | null>(null);
   // Por defecto, de cara interior a cara interior: lo que mide un láser dentro de un recinto.
   const [reference, setReference] = useState<MeasureReference>('interior');
   return (
@@ -51,14 +53,31 @@ export function MeasureDialog({ open, faces, onClose, onApply }: MeasureDialogPr
               Hoy: interior {m(faces.interior)} · exterior {m(faces.exterior)} · eje {m(faces.axis)}
             </Text>
           ) : null}
-          <NumberField label="Distancia" unit="m" decimals={3} min={0.01} max={200} value={value} onCommit={setValue} />
+          <NumberField
+            label="Distancia"
+            unit="m"
+            decimals={3}
+            min={0.01}
+            max={200}
+            value={value}
+            onCommit={(v) => {
+              draft.current = null;
+              setValue(v);
+            }}
+            onDraft={(v) => (draft.current = v)}
+          />
           <View style={styles.actions}>
             <ActionButton label="Cancelar" variant="secondary" onPress={onClose} />
             <ActionButton
               label="Guardar"
               onPress={() => {
+                // El valor tecleado manda sobre el último confirmado (si es válido y está en rango).
+                const typed = draft.current;
+                const final = typed !== null && typed >= 0.01 && typed <= 200 ? typed : value;
+                draft.current = null;
+                setValue(final);
                 onClose();
-                onApply(value, reference);
+                onApply(final, reference);
               }}
             />
           </View>

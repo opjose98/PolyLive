@@ -7,7 +7,7 @@
 // =============================================================================
 
 import React, { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
+import { AppState, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import { useLayout } from '../design/layout';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -47,6 +47,17 @@ export function BottomSheet({ open, onClose, heightRatio = 0.62, children }: Bot
         if (finished) runOnJS(setMounted)(false);
       });
     }
+  }, [open, sheetH, offset, scrim]);
+
+  // Igual que el cajón lateral: si se abre otra actividad a mitad de la animación,
+  // al volver la hoja se fija en su estado real.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s !== 'active') return;
+      offset.value = open ? 0 : sheetH;
+      scrim.value = open ? 1 : 0;
+    });
+    return () => sub.remove();
   }, [open, sheetH, offset, scrim]);
 
   const drag = Gesture.Pan()
