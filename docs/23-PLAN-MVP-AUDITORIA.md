@@ -130,3 +130,25 @@ Producción y las comerciales no llegan y no pueden llegar solo con código (Pla
 láser y usuarios reales). Pendiente para cerrar: la prueba completa en teléfono con el dev build
 de Expo 57 (checklist de docs/21 + horizontal), y el merge del PR del MVP.
 
+
+## 5. Ronda final de calidad (2026-10-08)
+
+Después de la prueba en tableta (docs/25) y antes de fusionar a `main`:
+
+- **Código muerto** (knip con la entrada real de Expo): ~190 exportaciones internas, 28 declaraciones
+  muertas y 2 dependencias nativas (`expo-status-bar`, `react-native-screens`) eliminadas. `knip.json`
+  queda en el repo para repetirlo.
+- **Campos que no guardaban** (H-02): `CommitTextInput` confirma al ocultar el teclado con Atrás y al
+  cerrar la hoja; lo usan todos los campos numéricos y las ventanas de niveles/fases/restricciones.
+- **Deshacer** revierte también el nombre (claves de `properties` fusionadas) — H-23, con test.
+- **BIM en el IFC**: área lateral neta del muro (descuenta sus vanos), volúmenes, `Reference` en los
+  Pset comunes, cantidades y material de columnas, Pset/Qto de vigas y barras; aviso de espacios sin
+  ubicar en el IFC del proyecto. Validado con ifcopenshell; test `IFCQuantities`.
+- **Skia 2**: sin API obsoleta de `SkPath` (PathBuilder); fuera `SafeAreaView` obsoleto.
+- **UI**: pantallas del menú por encima del cromo y dueñas de Atrás, área neta en tarjetas y en
+  Exportar, carpeta de exportación recordada, fechas locales, alto contraste legible, selección BIM
+  sobre cotas, arrastre de columnas por su cuerpo, cada espacio abre en Levantamiento.
+
+Estado: 974 tests, `tsc` y ESLint sin errores, knip limpio, IFC/DXF validados. Pendiente: la prueba en
+la tableta con la build de desarrollo con rotación (los hallazgos «Verificar en equipo» de docs/25) y
+dos decisiones de producto (H-15 encadenar muros, H-18 cota alineada u ortogonal).

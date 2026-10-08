@@ -6,7 +6,7 @@
 // ni `onBlur` ni `onEndEditing` se disparan; y si después se cierra la hoja o
 // la ventana, el campo se desmonta sin avisar. El resultado era que lo
 // tecleado se perdía en silencio (la cota de un nivel quedaba en el valor
-// anterior). Este campo confirma en cuatro casos:
+// anterior). Este campo confirma en tres casos:
 //
 //   1. al perder el foco (blur) o pulsar "hecho";
 //   2. al ocultarse el teclado mientras el campo tiene el foco;
