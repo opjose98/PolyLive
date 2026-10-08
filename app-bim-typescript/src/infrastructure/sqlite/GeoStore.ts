@@ -9,6 +9,7 @@
 // =============================================================================
 
 import { IDatabase } from './database';
+import { diagnostics } from '../../shared/diagnostics';
 import { generateId } from '../../domain/objects/base';
 import { Georeference } from '../../domain/geo/georeference';
 import { Benchmark, BenchmarkSource, ProjectBenchmark } from '../../domain/geo/benchmark';
@@ -56,7 +57,7 @@ const toProjectBenchmark = (r: LinkRow): ProjectBenchmark => ({
   localZ: r.local_z !== null ? Number(r.local_z) : null,
 });
 
-export interface NewBenchmark {
+interface NewBenchmark {
   name: string;
   description?: string;
   latLon: LatLon | null;
@@ -81,7 +82,8 @@ export class GeoStore {
     try {
       const g = JSON.parse(row.data_json) as Georeference;
       return { ...g, placements: g.placements ?? {} };
-    } catch {
+    } catch (err) {
+      diagnostics.error('project_georeference', `Georreferencia ilegible del proyecto ${projectId}`, err);
       return null;
     }
   }
@@ -124,7 +126,7 @@ export class GeoStore {
 
   /** Crea el mojón en la biblioteca y lo enlaza al proyecto. */
   async createBenchmark(projectId: string, input: NewBenchmark): Promise<ProjectBenchmark> {
-    const id = generateId() as unknown as string;
+    const id = generateId() as string;
     const createdAt = new Date().toISOString();
     await this.db.run(
       `INSERT INTO benchmarks (id, name, description, lat, lon, h, source, accuracy, created_by, created_at)

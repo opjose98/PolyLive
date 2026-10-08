@@ -7,7 +7,7 @@ import { Command } from './Command';
 import { IObjectStore, RevitObjectId } from '../../domain/objects';
 
 /** Un campo cambiado, con su valor anterior para deshacer. */
-export interface PropertyChange {
+interface PropertyChange {
   readonly property: string;
   readonly oldValue: unknown;
   readonly newValue: unknown;
@@ -60,7 +60,18 @@ export class UpdateObjectPropertyCommand extends Command {
     const obj = await store.readObject(this.objectId);
     if (!obj) return;
     const updates: Record<string, unknown> = {};
-    for (const c of this.changes) updates[c.property] = c[which];
+    for (const c of this.changes) {
+      const value = c[which];
+      const other = c[which === 'oldValue' ? 'newValue' : 'oldValue'];
+      // `properties` se FUSIONA al guardar (ObjectStore.updateObject): una clave que el
+      // otro lado tiene y este no (p. ej. el nombre recién puesto) hay que anularla
+      // explícitamente, o deshacer el nombre de un muro no hacía nada.
+      updates[c.property] = c.property === 'properties' && isRecord(value) && isRecord(other)
+        ? { ...Object.fromEntries(Object.keys(other).map((k) => [k, undefined])), ...value }
+        : value;
+    }
     await store.updateObject(this.objectId, updates as any);
   }
 }
+
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);

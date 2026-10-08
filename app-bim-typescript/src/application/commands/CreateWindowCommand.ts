@@ -3,8 +3,8 @@
 // =============================================================================
 
 import { Command } from './Command';
-import { IObjectStore, RevitObjectId } from '../../domain/objects';
-import { Window } from '../../domain/objects';
+import { IObjectStore, RevitObjectId, Window } from '../../domain/objects';
+
 
 export class CreateWindowCommand extends Command {
   readonly type = 'CreateWindow' as const;

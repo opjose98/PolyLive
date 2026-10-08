@@ -11,9 +11,9 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { StyleProp, TextStyle } from 'react-native';
 import { useTheme } from '../design/theme';
 
-export type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
+type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
 
-export interface IconProps {
+interface IconProps {
   /** Nombre de MaterialCommunityIcons. Los catálogos lo guardan como string; un test verifica que exista. */
   name: IconName | string;
   size?: number;

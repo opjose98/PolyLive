@@ -42,7 +42,7 @@ export class MarkerStore {
   async add(projectId: string, kind: MarkerKind, label: string): Promise<ProjectMarker> {
     const current = await this.list(projectId, kind);
     const value = Math.max(...current.map((m) => m.value)) + 1;
-    const id = generateId() as unknown as string;
+    const id = generateId() as string;
     const name = `${label} ${value}`;
     await this.db.run(
       `INSERT INTO project_markers (id, project_id, kind, name, value, is_base) VALUES (?, ?, ?, ?, ?, 0)`,

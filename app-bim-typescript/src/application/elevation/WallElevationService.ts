@@ -28,41 +28,14 @@ import { ObjectStore } from '../../infrastructure/sqlite/ObjectStore';
 import { Wall } from '../../domain/objects/wall';
 import { Door } from '../../domain/objects/door';
 import { Window } from '../../domain/objects/window';
-import {
-  RevitObjectId,
-  RoomId,
-  revitObjectId,
-  wallId as toWallId,
-  generateId,
-} from '../../domain/objects/base';
+import { RevitObjectId, RoomId, revitObjectId, wallId as toWallId, generateId } from '../../domain/objects/base';
 import { meters, squareMeters } from '../../domain/geometry/types';
-import {
-  WallElevation,
-  WallOpening,
-  WallOpeningId,
-  OpeningType,
-  VerticalLevels,
-  wallOpeningId,
-  defaultElevation,
-  openingEnd,
-  openingTop,
-  openingCenterX,
-  heightAt,
-  hasHeightProfile,
-  effectiveLeftHeight,
-  effectiveRightHeight,
-  computeQuantification,
-  WallQuantification,
-  OPENING_DEFAULTS,
-  openingTypeLabel,
-  serializeLevels,
-  serializeOpenings,
-  deserializeLevels,
-  deserializeOpenings,
-} from '../../domain/objects/wall-elevation';
+import { WallElevation, WallOpening, WallOpeningId, OpeningType, VerticalLevels, wallOpeningId, defaultElevation, openingEnd, openingTop, openingCenterX, heightAt, effectiveLeftHeight, effectiveRightHeight, computeQuantification, WallQuantification, OPENING_DEFAULTS, openingTypeLabel, serializeLevels, serializeOpenings, deserializeLevels, deserializeOpenings } from '../../domain/objects/wall-elevation';
 import { AppError, AppErrorCode } from '../../shared/errors/AppError';
 
 const EPSILON = 1e-6;
+/** Altura mínima con la que un hueco por defecto se ajusta al muro (más bajo no tiene sentido). */
+const MIN_FITTED_HEIGHT = 0.3;
 
 // ---------------------------------------------------------------------------
 // Validación
@@ -70,7 +43,7 @@ const EPSILON = 1e-6;
 
 export type ElevationSeverity = 'ok' | 'warning' | 'error';
 
-export interface ElevationValidation {
+interface ElevationValidation {
   readonly severity: ElevationSeverity;
   readonly message?: string;
   /** Hueco al que apunta el problema, si es de uno concreto. */
@@ -251,7 +224,7 @@ export class WallElevationService {
     const objects = await this.store.listObjects(wall.roomId);
     const vanos = objects.filter(
       (o): o is Door | Window =>
-        (o instanceof Door || o instanceof Window) && (o.parentWallId as unknown as string) === (wall.id as string),
+        (o instanceof Door || o instanceof Window) && (o.parentWallId as string) === (wall.id as string),
     );
     const byId = new Map(vanos.map((v) => [v.id as string, v]));
     const used = new Set<string>();
@@ -441,13 +414,15 @@ export class WallElevationService {
     },
   ): Promise<{ elevation: WallElevation; opening: WallOpening; validation: ElevationValidation }> {
     const defaults = OPENING_DEFAULTS[params.type];
+    const sillHeight = params.sillHeight ?? defaults.sillHeight;
+    const width = params.width ?? defaults.width;
     const opening: WallOpening = {
-      id: wallOpeningId(generateId() as unknown as string),
+      id: wallOpeningId(generateId() as string),
       type: params.type,
       xOffset: params.xOffset,
-      width: params.width ?? defaults.width,
-      height: params.height ?? defaults.height,
-      sillHeight: params.sillHeight ?? defaults.sillHeight,
+      width,
+      height: params.height ?? fittedDefaultHeight(defaults.height, sillHeight, elevation, params.xOffset + width / 2, wall.length as number),
+      sillHeight,
       isFlipped: false,
       notes: params.notes,
     };
@@ -713,17 +688,13 @@ export class WallElevationService {
   }
 }
 
-// Reexports para que la UI no tenga que importar del dominio y del servicio.
-export {
-  hasHeightProfile,
-  effectiveLeftHeight,
-  effectiveRightHeight,
-  heightAt,
-  openingEnd,
-  openingTop,
-  openingCenterX,
-  openingTypeLabel,
-  computeQuantification,
-  OPENING_DEFAULTS,
-};
-export type { WallElevation, WallOpening, WallOpeningId, OpeningType, VerticalLevels, WallQuantification };
+/**
+ * Altura por defecto (no dada por el operador) ajustada al muro en el centro del
+ * hueco: antes nacía una puerta de 2,10 m en un muro de 2,00 m. Si no queda al
+ * menos MIN_FITTED_HEIGHT, se deja la de fábrica y la validación lo avisa.
+ */
+function fittedDefaultHeight(height: number, sill: number, elevation: WallElevation, centerX: number, wallLength: number): number {
+  const room = heightAt(elevation.levels, centerX, wallLength) - sill;
+  return height > room + EPSILON && room >= MIN_FITTED_HEIGHT ? Number(room.toFixed(3)) : height;
+}
+

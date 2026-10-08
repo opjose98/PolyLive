@@ -19,19 +19,19 @@
 // =============================================================================
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, FlatList, Image, TouchableOpacity, SafeAreaView, RefreshControl, Dimensions, Modal } from 'react-native';
+import { View, Text, FlatList, Image, TouchableOpacity, RefreshControl, Modal } from 'react-native';
+import { useLayout } from '../design/layout';
 import { themedStyles } from '../design/theme';
 import { ExpoFileSystem, type StoredPhoto } from '../../native/filesystem/ExpoFileSystem';
 import { ExpoPhotoCapture, type PhotoResult } from '../../native/camera/ExpoPhotoCapture';
 import { CameraCaptureView } from '../components/CameraCaptureView';
 import { AppServices } from '../../application/AppServices';
 import { RoomId, RevitObjectBase, Wall, Door, Window, Column } from '../../domain/objects';
-import { base64ToUint8Array } from '../../shared/encoding/base64';
 import { AppError, AppErrorCode } from '../../shared/errors/AppError';
 import { PhotoViewer } from '../components/PhotoViewer';
-import { AuditPhoto, PHOTO_BIM_CODE_PREFIX } from '../../domain/objects/audit-photo';
-import { generateBimCode } from '../../domain/objects/project';
+import { AuditPhoto } from '../../domain/objects/audit-photo';
 import { alertDialog } from '../primitives';
+import { saveFieldPhoto } from '../workspace/fieldPhotos';
 
 // ---------------------------------------------------------------------------
 // Object label helper — descriptor legible para el selector de vinculación
@@ -53,29 +53,28 @@ function describeObject(obj: RevitObjectBase): string {
 // Constants
 // ---------------------------------------------------------------------------
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const COLUMN_COUNT = 3;
 const GAP = 4;
-const THUMB_SIZE = (SCREEN_WIDTH - GAP * (COLUMN_COUNT + 1)) / COLUMN_COUNT;
 
 // ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
 
-export interface GalleryScreenProps {
+interface GalleryScreenProps {
   services: AppServices;
   roomId: RoomId;
   /** Solo las fotos vinculadas a este objeto BIM (desde sus propiedades). */
   objectId?: string;
   /** Abre el visor en esta foto (al tocar su marcador en la planta). */
   photoId?: string;
+  /** Quién toma las fotos (va en su sello de evidencia). */
+  operatorName?: string;
 }
 
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-export function GalleryScreen({ services, roomId, objectId, photoId }: GalleryScreenProps) {
+export function GalleryScreen({ services, roomId, objectId, photoId, operatorName }: GalleryScreenProps) {
   const styles = useStyles();
   const [photos, setPhotos] = useState<StoredPhoto[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -159,31 +158,8 @@ export function GalleryScreen({ services, roomId, objectId, photoId }: GallerySc
       setCameraOpen(false);
       try {
         // 1. Guardar como archivo — es lo que esta grilla lista/muestra.
-        const saved = await fileSystem.savePhoto(photo.base64);
-
-        // 2. Registrar como AuditPhoto en SQLite — rastro de auditoría ligado
-        //    al Recinto activo. Se pasa el MISMO filename que acaba de usar
-        //    ExpoFileSystem (antes CapturePhotoUseCase inventaba el suyo
-        //    propio, desconectado de este — ver el comentario en
-        //    CapturePhotoUseCase.ts) para poder correlacionar este item de
-        //    la grilla con su AuditPhoto al vincularlo a un objeto BIM.
-        const photoBytes = base64ToUint8Array(photo.base64);
-
-        // Código BIM corto de la foto dentro del Recinto (FOT001, FOT002...).
-        // Se asigna al capturar y no después: es el identificador con el que el
-        // operador se refiere a la foto en sus notas de obra.
-        const existing = await services.store.listAuditPhotos(roomId);
-        const bimCode = generateBimCode(
-          PHOTO_BIM_CODE_PREFIX,
-          existing.map((p) => p.metadata.bimCode).filter((c): c is string => !!c),
-        );
-
-        await services.useCases.capturePhoto.execute({
-          roomId,
-          photoData: photoBytes,
-          filename: saved.filename,
-          metadata: { bimCode },
-        });
+        // Archivo (lo que lista esta grilla) + AuditPhoto con su código, autor y sello.
+        await saveFieldPhoto({ services, fs: fileSystem, roomId, base64: photo.base64, operator: operatorName });
 
         await loadPhotos();
       } catch (error) {
@@ -191,7 +167,7 @@ export function GalleryScreen({ services, roomId, objectId, photoId }: GallerySc
         alertDialog('Error', message);
       }
     },
-    [fileSystem, services, roomId, loadPhotos],
+    [fileSystem, services, roomId, loadPhotos, operatorName],
   );
 
   const handleDelete = useCallback(
@@ -313,6 +289,9 @@ export function GalleryScreen({ services, roomId, objectId, photoId }: GallerySc
   // Render item
   // -----------------------------------------------------------------------
 
+  const { width: screenW, galleryColumns: columns } = useLayout();
+  const thumbSize = (screenW - GAP * (columns + 1)) / columns;
+
   const renderPhoto = useCallback(
     ({ item }: { item: StoredPhoto }) => (
       <TouchableOpacity
@@ -324,15 +303,16 @@ export function GalleryScreen({ services, roomId, objectId, photoId }: GallerySc
       >
         <Image
           source={{ uri: item.filepath }}
-          style={styles.thumbnail}
+          style={[styles.thumbnail, { width: thumbSize, height: thumbSize }]}
           resizeMode="cover"
         />
-        <Text style={styles.photoLabel} numberOfLines={1}>
+        <Text style={[styles.photoLabel, { width: thumbSize }]} numberOfLines={1}>
           {auditPhotos.get(item.filename)?.metadata.bimCode ?? item.filename}
         </Text>
       </TouchableOpacity>
     ),
-    [handleLongPress, auditPhotos],
+    // `styles` cambia con el tema: sin él, las miniaturas conservaban los colores del tema anterior.
+    [handleLongPress, auditPhotos, thumbSize, styles],
   );
 
   // -----------------------------------------------------------------------
@@ -340,7 +320,7 @@ export function GalleryScreen({ services, roomId, objectId, photoId }: GallerySc
   // -----------------------------------------------------------------------
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.count}>{photos.length} fotos</Text>
@@ -361,7 +341,9 @@ export function GalleryScreen({ services, roomId, objectId, photoId }: GallerySc
           data={photos}
           renderItem={renderPhoto}
           keyExtractor={item => item.filename}
-          numColumns={COLUMN_COUNT}
+          // Columnas según el ancho (girar el equipo o tableta); FlatList exige otra key al cambiarlas.
+          key={`cols-${columns}`}
+          numColumns={columns}
           contentContainerStyle={styles.grid}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -447,7 +429,7 @@ export function GalleryScreen({ services, roomId, objectId, photoId }: GallerySc
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -485,8 +467,6 @@ const useStyles = themedStyles((colors) => ({
     margin: GAP / 2,
   },
   thumbnail: {
-    width: THUMB_SIZE,
-    height: THUMB_SIZE,
     borderRadius: 4,
     backgroundColor: colors.background,
   },
@@ -494,7 +474,6 @@ const useStyles = themedStyles((colors) => ({
     fontSize: 10,
     color: colors.textSecondary,
     marginTop: 2,
-    width: THUMB_SIZE,
   },
   emptyState: {
     flex: 1,
@@ -579,4 +558,3 @@ const useStyles = themedStyles((colors) => ({
   },
 }));
 
-export default GalleryScreen;

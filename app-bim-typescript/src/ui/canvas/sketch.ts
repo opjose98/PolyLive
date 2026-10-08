@@ -158,7 +158,7 @@ export function drawSketch(r: ICanvasRenderer, shapes: readonly SketchShape[], t
         const w = Math.max(...s.lines.map((l) => l.length)) * size * 0.56 + 8;
         const h = s.lines.length * (size + 3) + 4;
         const x0 = s.align === 'left' ? p.x : p.x - w / 2;
-        r.setFillStyle('rgba(255, 255, 255, 0.85)');
+        r.setFillStyle(labelBackdrop(s.color));
         r.fillRect(x0, p.y - h / 2, w, h);
         r.setFillStyle(s.color);
         s.lines.forEach((line, i) => {
@@ -195,3 +195,16 @@ export function drawSketch(r: ICanvasRenderer, shapes: readonly SketchShape[], t
     }
   }
 }
+
+/**
+ * Fondo de un rótulo: contrasta con el color del texto. Antes era siempre blanco, y en el tema
+ * oscuro (texto claro) los rótulos del dibujo técnico salían como cajas blancas sin texto legible.
+ */
+export function labelBackdrop(textColor: string): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(textColor.trim());
+  if (!m) return 'rgba(255, 255, 255, 0.85)';
+  const n = parseInt(m[1], 16);
+  const lum = (0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255;
+  return lum > 0.5 ? 'rgba(18, 18, 18, 0.85)' : 'rgba(255, 255, 255, 0.85)';
+}
+

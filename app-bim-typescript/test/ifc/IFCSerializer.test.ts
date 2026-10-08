@@ -26,7 +26,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { IFCSerializer, SerializeResult } from '../../src/infrastructure/export/ifc/IFCSerializer';
+import { IFCSerializer } from '../../src/infrastructure/export/ifc/IFCSerializer';
 import { generateGuid, isValidIfcGuid } from '../../src/infrastructure/export/ifc/guid-generator';
 import { validate8Criteria } from '../../src/infrastructure/export/ifc/compatibility-gate';
 import { SerializeInput } from '../../src/infrastructure/export/ifc/types';
@@ -50,7 +50,7 @@ import { meters, squareMeters } from '../../src/domain/geometry/types';
 
 function makeRoom(overrides?: Partial<{
   id: string;
-  geometry: Array<{ x: number; y: number }>;
+  geometry: { x: number; y: number }[];
   isOpen: boolean;
   isClosed: boolean;
   area: number | null;
@@ -272,10 +272,10 @@ describe('IFCSerializer', () => {
   // -----------------------------------------------------------------------
   // 7. Output contiene IfcWall
   // -----------------------------------------------------------------------
-  test('output contiene IfcWallStandardCase', async () => {
+  test('output contiene IfcWall (no el IfcWallStandardCase desaconsejado en IFC4)', async () => {
     const result = await serializer.serialize(makeSimpleInput());
-    expect(result.content).toContain('IFCWALLSTANDARDCASE');
-    const wallMatches = result.content.match(/IFCWALLSTANDARDCASE\(/g);
+    expect(result.content).not.toContain('IFCWALLSTANDARDCASE');
+    const wallMatches = result.content.match(/IFCWALL\(/g);
     expect(wallMatches).not.toBeNull();
     expect(wallMatches!.length).toBe(4); // 4 muros
   });
@@ -432,7 +432,7 @@ describe('IFCSerializer', () => {
     // Generar polígono regular de 20 lados
     const n = 20;
     const radius = 10;
-    const geometry: Array<{ x: number; y: number }> = [];
+    const geometry: { x: number; y: number }[] = [];
     const walls: Wall[] = [];
 
     for (let i = 0; i < n; i++) {
@@ -461,7 +461,7 @@ describe('IFCSerializer', () => {
     const result = await serializer.serialize(input);
 
     expect(result.validation.valid).toBe(true);
-    const wallMatches = result.content.match(/IFCWALLSTANDARDCASE\(/g);
+    const wallMatches = result.content.match(/IFCWALL\(/g);
     expect(wallMatches).not.toBeNull();
     expect(wallMatches!.length).toBe(20);
   });

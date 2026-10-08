@@ -11,7 +11,7 @@ import { generateId, IObjectStore } from '../../domain/objects';
 
 export type CommandId = string & { readonly __brand: 'CommandId' };
 
-export function commandId(value: string): CommandId {
+function commandId(value: string): CommandId {
   return value as CommandId;
 }
 
@@ -47,7 +47,7 @@ export abstract class Command implements ICommand {
   abstract readonly type: string;
 
   constructor() {
-    this.id = generateId() as unknown as CommandId;
+    this.id = commandId(generateId());
     this.timestamp = new Date();
   }
 

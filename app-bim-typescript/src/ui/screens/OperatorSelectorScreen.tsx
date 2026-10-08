@@ -14,15 +14,15 @@
 // =============================================================================
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, SafeAreaView, TouchableOpacity, FlatList, TextInput } from 'react-native';
+import { View, KeyboardAvoidingView, Text, TouchableOpacity, FlatList, TextInput } from 'react-native';
 import { themedStyles } from '../design/theme';
 import { ObjectStore } from '../../infrastructure/sqlite/ObjectStore';
-import { Operator } from '../../domain/objects/operator';
-import { operatorId } from '../../domain/objects/operator';
+import { Operator, operatorId } from '../../domain/objects/operator';
+
 import { generateId } from '../../domain/objects';
 import { alertDialog } from '../primitives';
 
-export interface OperatorSelectorScreenProps {
+interface OperatorSelectorScreenProps {
   store: ObjectStore;
   onSelect: (operator: Operator) => void;
 }
@@ -55,7 +55,7 @@ export function OperatorSelectorScreen({ store, onSelect }: OperatorSelectorScre
     }
     setCreating(true);
     try {
-      const operator = new Operator({ id: operatorId(generateId() as unknown as string), name: trimmed });
+      const operator = new Operator({ id: operatorId(generateId() as string), name: trimmed });
       await store.createOperator(operator);
       setNewName('');
       await loadOperators();
@@ -68,7 +68,8 @@ export function OperatorSelectorScreen({ store, onSelect }: OperatorSelectorScre
   }, [newName, store, loadOperators, onSelect]);
 
   return (
-    <SafeAreaView style={styles.container}>
+    // El campo de nuevo operador va abajo: sin esto, el teclado lo tapaba junto con «Crear».
+    <KeyboardAvoidingView style={styles.container} behavior="padding">
       <Text style={styles.title}>¿Quién está haciendo el levantamiento?</Text>
 
       {!loading && operators.length > 0 && (
@@ -103,7 +104,7 @@ export function OperatorSelectorScreen({ store, onSelect }: OperatorSelectorScre
           <Text style={styles.createButtonText}>{creating ? '...' : 'Crear'}</Text>
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -178,4 +179,3 @@ const useStyles = themedStyles((colors) => ({
   },
 }));
 
-export default OperatorSelectorScreen;

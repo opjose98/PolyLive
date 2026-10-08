@@ -14,7 +14,7 @@ import { CommandStack } from '../state/CommandStack';
 import { CreateFloorCommand } from '../commands/CreateFloorCommand';
 import { AppError, AppErrorCode } from '../../shared/errors/AppError';
 
-export interface CreateFloorInput {
+interface CreateFloorInput {
   readonly roomId: RoomId;
   readonly zoneId: string;
   readonly thickness: Meters;

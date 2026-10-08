@@ -31,6 +31,12 @@ import { SettingsScreen } from './screens/SettingsScreen';
 import { PermissionsManager } from '../native/permissions/PermissionsManager';
 import { ExpoSQLiteDatabase } from '../native/sqlite/ExpoSQLiteDatabase';
 import { ExpoBackupDatabaseUseCase } from '../native/backup/ExpoBackupDatabaseUseCase';
+import { diagnostics, record } from '../shared/diagnostics';
+import { startDiagnosticsLog } from '../native/diagnostics/diagnosticsLog';
+import { bindWorkspacePrefs } from '../state/workspacePrefs';
+import { workspaceStore } from '../state/workspaceStore';
+import { AppPrefs, loadAppPrefs, workspacePrefsFile } from '../native/prefs/prefsFile';
+import { MigrationError } from '../infrastructure/sqlite/migrations';
 import { createAppServices, AppServices } from '../application/AppServices';
 import { RoomId } from '../domain/objects';
 import { Operator } from '../domain/objects/operator';
@@ -86,12 +92,16 @@ export default function App() {
         // arranca igual en vez de quedarse congelada para siempre en "Iniciando
         // PolyLive" — el permiso pendiente se vuelve a pedir más tarde, cuando
         // la función que lo necesita (cámara, BLE, GPS) se use.
+        // Ya no se piden todos los permisos al arrancar: cámara, ubicación y
+        // Bluetooth se piden cuando la función que los usa se abre (lo que exige
+        // Google Play y lo que entiende el usuario). Aquí solo se lee el estado.
         await Promise.race([
-          permManager.requestAll(),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('permissions timeout')), 8000)),
+          permManager.checkAll(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('permissions timeout')), 3000)),
         ]);
-      } catch {
+      } catch (err) {
         // Los permisos se piden individualmente cuando hagan falta.
+        record('warn', 'permissions', 'No se pudo leer el estado de los permisos al arrancar', err);
       }
       if (!settled) {
         settled = true;
@@ -116,6 +126,11 @@ export default function App() {
       try {
         // ExpoSQLiteDatabase y no `Database` (paquete npm sqlite3): ese último
         // es un addon nativo de Node, incompatible con Hermes/React Native.
+        // Registro de diagnóstico persistente y preferencias del lienzo (tema, snaps…).
+        await startDiagnosticsLog().catch(() => undefined);
+        void bindWorkspacePrefs(workspaceStore, workspacePrefsFile);
+        const appPrefs = await loadAppPrefs().catch(() => ({}) as AppPrefs);
+
         const db = new ExpoSQLiteDatabase(DB_NAME);
         await db.open();
         await db.migrate();
@@ -140,22 +155,26 @@ export default function App() {
         } catch (err) {
           // La adopción es una comodidad, no un requisito para arrancar: si
           // falla, la app abre igual y los Recintos siguen adoptables después.
-          // eslint-disable-next-line no-console
-          console.warn('[PolyLive] Adopción de Recintos huérfanos falló (no bloqueante):', err);
+          diagnostics.warn('boot', 'Adopción de recintos huérfanos falló (no bloqueante)', err);
         }
 
         if (cancelled) return;
         setBoot({ phase: 'ready', services });
 
-        // Backup rotacional al arrancar — no bloquea ni tumba la app si falla.
-        new ExpoBackupDatabaseUseCase().execute({ db }).catch((err) => {
-          const message = err instanceof AppError ? err.toLogObject() : err;
-          // eslint-disable-next-line no-console
-          console.warn('[PolyLive] Backup automático falló (no bloqueante):', message);
-        });
+        // Respaldo rotacional al arrancar, como mucho cada 12 h (con fotos dentro de la
+        // base, copiarla en cada arranque costaba tiempo y batería). No bloquea.
+        if (appPrefs.autoBackup !== false) new ExpoBackupDatabaseUseCase()
+          .execute({ db, minIntervalMs: 12 * 3600 * 1000 })
+          .then((r) => r.skipped || diagnostics.info('backup', `Respaldo local: ${r.backupPath}`))
+          .catch((err) => diagnostics.error('backup', 'El respaldo automático falló (no bloqueante)', err instanceof AppError ? err.toLogObject() : err));
       } catch (err) {
+        diagnostics.error('boot', 'No se pudo abrir la base de datos', err);
         const message =
-          err instanceof AppError ? err.userMessage : 'No se pudo abrir la base de datos local.';
+          err instanceof AppError
+            ? err.userMessage
+            : err instanceof MigrationError
+              ? `No se pudo actualizar la base de datos (${err.message}). Tus datos no se modificaron; restaura un respaldo o reinstala la versión anterior.`
+              : 'No se pudo abrir la base de datos local.';
         if (!cancelled) setBoot({ phase: 'error', message });
       }
     }
@@ -277,6 +296,7 @@ export default function App() {
               roomId={activeRoomId}
               objectId={galleryFocus?.objectId}
               photoId={galleryFocus?.photoId}
+              operatorName={operator.name}
             />
           </ScreenShell>
         ) : null;
@@ -286,7 +306,7 @@ export default function App() {
             <ExportScreen
               services={services}
               roomId={activeRoomId}
-              projectId={project?.id as unknown as string | undefined}
+              projectId={project?.id as string | undefined}
               projectName={project?.name}
               operatorName={operator.name}
             />
@@ -332,16 +352,21 @@ export default function App() {
       <SurveyScreen
         services={services}
         roomId={activeRoomId}
-        projectId={project.id as unknown as string}
+        projectId={project.id as string}
         projectName={project.name}
         projectCode={project.bimCode}
         operatorName={operator.name}
-        onExit={() => setActiveRoomId(null)}
+        onExit={() => {
+          closeScreen();
+          setActiveRoomId(null);
+        }}
         onExitProject={() => {
+          closeScreen();
           setActiveRoomId(null);
           setProject(null);
         }}
         onNavigate={setScreen}
+        covered={screen != null}
         onOpenPhotos={(objectId) => openGallery({ objectId })}
         onOpenPhoto={(photoId) => openGallery({ photoId })}
       />

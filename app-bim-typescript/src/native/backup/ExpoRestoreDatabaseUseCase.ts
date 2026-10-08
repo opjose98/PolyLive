@@ -28,7 +28,7 @@
 // restaurar desde el dispositivo — es decir, en la práctica, sin copias.
 // =============================================================================
 
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { AppError, AppErrorCode } from '../../shared/errors/AppError';
 
 const BACKUP_PREFIX = 'polylive-backup-';
@@ -44,7 +44,7 @@ export function databaseFilePath(dbName: string): string {
   return `${sqliteDirectory()}${dbName}`;
 }
 
-export interface ExpoRestoreDatabaseInput {
+interface ExpoRestoreDatabaseInput {
   /** Nombre lógico de la base, el mismo que se pasa a ExpoSQLiteDatabase. */
   dbName: string;
   /** Carpeta de backups — por defecto la misma que usa ExpoBackupDatabaseUseCase. */
@@ -53,7 +53,7 @@ export interface ExpoRestoreDatabaseInput {
   backupPath?: string;
 }
 
-export interface ExpoRestoreDatabaseOutput {
+interface ExpoRestoreDatabaseOutput {
   restoredFrom: string;
   /** Sidecars WAL/SHM que se eliminaron como parte de la restauración. */
   removedSidecars: string[];

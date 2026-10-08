@@ -16,17 +16,8 @@
 // =============================================================================
 
 import { Point2D, Degrees, degrees } from '../../domain/geometry/types';
-import { snapToNearestAngle, SNAP_ANGLES } from '../../domain/geometry/snap';
+import { snapToNearestAngle } from '../../domain/geometry/snap';
 import { degreesToRadians } from '../../domain/geometry/coordinates';
-
-export { SNAP_ANGLES };
-
-export const PREDEFINED_ANGLES: readonly Degrees[] = [
-  degrees(0), degrees(30), degrees(45), degrees(60),
-  degrees(90), degrees(120), degrees(135), degrees(150),
-  degrees(180), degrees(210), degrees(225), degrees(240),
-  degrees(270), degrees(300), degrees(315), degrees(330),
-];
 
 export class SnapHandler {
   private enabled: boolean;

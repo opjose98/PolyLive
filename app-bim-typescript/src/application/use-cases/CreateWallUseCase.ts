@@ -4,13 +4,7 @@
 // =============================================================================
 
 import { Point2D, Meters, ValidationWarning } from '../../domain/geometry/types';
-import {
-  IObjectStore,
-  Wall,
-  RoomId,
-  generateId,
-  ObjectProperties,
-} from '../../domain/objects';
+import { IObjectStore, Wall, RoomId, generateId, ObjectProperties } from '../../domain/objects';
 import type { WallVertical } from '../../domain/objects/vertical';
 import { CommandStack } from '../state/CommandStack';
 import { CreateWallCommand } from '../commands/CreateWallCommand';
@@ -34,7 +28,7 @@ export interface CreateWallInput {
   properties?: ObjectProperties;
 }
 
-export interface CreateWallOutput {
+interface CreateWallOutput {
   wall: Wall;
   warnings: ValidationWarning[];
   commandId: CommandId;

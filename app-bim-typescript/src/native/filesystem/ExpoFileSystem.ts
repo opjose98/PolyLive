@@ -12,7 +12,7 @@
 // - Directorio creado automáticamente si no existe
 // =============================================================================
 
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -25,7 +25,7 @@ export interface StoredPhoto {
   readonly createdAt: number;     // timestamp
 }
 
-export interface FileSystemInfo {
+interface FileSystemInfo {
   readonly totalSpace: number;    // bytes
   readonly freeSpace: number;     // bytes
   readonly photoCount: number;

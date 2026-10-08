@@ -15,7 +15,7 @@ import { Tappable, HapticKind } from './Tappable';
 import { Icon } from './Icon';
 import { useTheme } from '../design/theme';
 
-export interface IconButtonProps {
+interface IconButtonProps {
   icon: string;
   label: string;
   onPress?: () => void;

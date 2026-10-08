@@ -17,23 +17,7 @@
 
 import type { Point2D } from '../../domain/geometry/types';
 import { generateId } from '../../domain/objects/base';
-import {
-  Activity,
-  ACTIVITY_COLORS,
-  ProgressCut,
-  ProgressMark,
-  ProgressShape,
-  ProgressTarget,
-  QuantityRow,
-  Support,
-  coverage,
-  coverageRuns,
-  insideSupport,
-  quantities,
-  supportGrid,
-  targetKey,
-  todayIso,
-} from '../../domain/progress/progress';
+import { Activity, ACTIVITY_COLORS, ProgressCut, ProgressMark, ProgressShape, ProgressTarget, QuantityRow, Support, coverage, coverageRuns, insideSupport, quantities, supportGrid, targetKey, todayIso } from '../../domain/progress/progress';
 import type { ProgressStore } from '../../infrastructure/sqlite/ProgressStore';
 
 export type ProgressTool = 'brush' | 'eraser' | 'fill' | 'rect';
@@ -47,7 +31,7 @@ export interface ProgressDraft {
 }
 
 /** Capa de dibujo de un soporte: rectángulos de celdas pintadas, con su color. */
-export interface ProgressLayer {
+interface ProgressLayer {
   readonly targetKey: string;
   readonly color: string;
   /** 1 = corte activo; menos = cortes anteriores (tenue). */
@@ -76,7 +60,7 @@ export interface ProgressState {
 type Listener = (s: ProgressState) => void;
 
 /** Opacidad de lo pintado en cortes anteriores al activo. */
-export const PREVIOUS_CUT_OPACITY = 0.35;
+const PREVIOUS_CUT_OPACITY = 0.35;
 
 export class ProgressController {
   private state: ProgressState = {
@@ -301,7 +285,7 @@ export class ProgressController {
 
   private addMark(target: ProgressTarget, shape: ProgressShape, erase: boolean): Promise<void> {
     const mark: ProgressMark = {
-      id: generateId() as unknown as string,
+      id: generateId() as string,
       spaceId: this.spaceId,
       cutId: this.state.cutId!,
       activityId: this.state.activityId!,

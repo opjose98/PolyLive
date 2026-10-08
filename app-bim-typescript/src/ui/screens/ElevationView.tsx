@@ -51,7 +51,7 @@ import type { ReviewView } from '../../domain/review/review';
 const TOUCH_TOL = sizes.canvasTouchTolerance;
 const cm = (m: number) => Math.round(m * 100);
 
-export interface ElevationViewProps {
+interface ElevationViewProps {
   readonly editor: ElevationEditor;
   readonly width: number;
   readonly height: number;
@@ -147,7 +147,7 @@ export function ElevationView(props: ElevationViewProps) {
   const photoPins = useMemo(
     () =>
       facePhotos.map((m) => ({ kind: 'pin' as const, at: { x: m.face!.x, y: m.face!.y }, label: m.label ?? 'Foto', color: palette.selection })),
-    [facePhotos, palette.selection], // eslint-disable-line react-hooks/exhaustive-deps
+    [facePhotos, palette.selection],  
   );
   const facePhotoTool = useMemo(() => {
     if (!ws.activeTool) return false;

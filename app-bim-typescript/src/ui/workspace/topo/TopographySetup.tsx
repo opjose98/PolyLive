@@ -31,7 +31,7 @@ export interface SetupCommon {
   azimuth: number;
 }
 
-export interface TopographySetupProps {
+interface TopographySetupProps {
   open: boolean;
   geo: Georeference | null;
   /** Mojones del proyecto que ya sirven para amarrar (coordenadas + posición). */

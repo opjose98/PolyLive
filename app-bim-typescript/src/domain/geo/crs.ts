@@ -17,7 +17,7 @@ import proj4 from 'proj4';
 
 export type CrsId = 'EPSG:3114' | 'EPSG:3115' | 'EPSG:3116' | 'EPSG:3117' | 'EPSG:3118' | 'EPSG:9377' | 'EPSG:4686';
 
-export interface CrsDef {
+interface CrsDef {
   readonly id: CrsId;
   readonly name: string;
   readonly short: string;

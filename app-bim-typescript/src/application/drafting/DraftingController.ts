@@ -15,18 +15,7 @@
 
 import type { Point2D } from '../../domain/geometry/types';
 import { generateId } from '../../domain/objects/base';
-import {
-  DRAFT_DEFAULTS,
-  DraftItem,
-  DraftKind,
-  DraftView,
-  ONE_POINT_KINDS,
-  TWO_POINT_KINDS,
-  dimensionLine,
-  segmentLength,
-  trussSegments,
-  viewKeyOf,
-} from '../../domain/drafting/drafting';
+import { DRAFT_DEFAULTS, DraftItem, DraftKind, DraftView, ONE_POINT_KINDS, TWO_POINT_KINDS, dimensionLine, segmentLength, trussSegments, viewKeyOf } from '../../domain/drafting/drafting';
 import type { DraftStore } from '../../infrastructure/sqlite/DraftStore';
 import type { IObjectStore } from '../../domain/objects';
 import { Command, ICommand } from '../commands/Command';
@@ -55,7 +44,7 @@ type Listener = (s: DraftingState) => void;
  * Historia compartida (la CommandStack del levantamiento): con ella, deshacer
  * sigue el orden real de las acciones, sean muros o cotas.
  */
-export interface SharedHistory {
+interface SharedHistory {
   execute(command: ICommand): Promise<void>;
   undo(): Promise<void>;
   redo(): Promise<void>;
@@ -86,7 +75,7 @@ async function applyOp(store: DraftStore, op: Op, reverse: boolean): Promise<voi
 }
 
 /** Largo mínimo de un elemento A→B (m): por debajo es un toque, no un trazo. */
-export const MIN_DRAFT_LENGTH = 0.05;
+const MIN_DRAFT_LENGTH = 0.05;
 
 export class DraftingController {
   private state: DraftingState = {
@@ -255,7 +244,7 @@ export class DraftingController {
 
   private async create(view: DraftView, kind: DraftKind, points: readonly Point2D[], text: string, targetId?: string): Promise<DraftItem> {
     const item: DraftItem = {
-      id: generateId() as unknown as string,
+      id: generateId() as string,
       spaceId: this.spaceId,
       view,
       levelId: view.kind === 'plan' ? this.levelId : '',

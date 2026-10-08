@@ -13,7 +13,7 @@ import { Degrees, degrees } from './types';
  * Ángulos comunes en arquitectura a los que el trazo "salta" automáticamente.
  * Incluye equivalentes normalizados para cubrir todo el rango [0, 360).
  */
-export const SNAP_ANGLES: readonly Degrees[] = [
+const SNAP_ANGLES: readonly Degrees[] = [
   degrees(0),
   degrees(30),
   degrees(45),

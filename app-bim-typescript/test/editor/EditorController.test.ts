@@ -436,6 +436,39 @@ describe('EditorController', () => {
       expect(reread.thickness).toBeCloseTo(0.25);
     });
 
+    it('deshacer revierte cada propiedad editada, en orden (nombre, espesor, función)', async () => {
+      await drawRectangle();
+      editor.setTool('select');
+      await editor.handleTap(px(2), px(0), TOL_PX);
+      const id = editor.getState().selectedId!;
+
+      const before = (await services.store.readObject(id)) as Wall;
+      await editor.updateSelectedProperty('properties', { ...before.properties, name: 'M-izq' });
+      await editor.updateSelectedProperty('thickness', meters(0.2));
+      await editor.updateSelectedProperty('isStructural', false);
+
+      await editor.undo();
+      let w = (await services.store.readObject(id)) as Wall;
+      expect(w.isStructural).toBe(true);
+      expect(Number(w.thickness)).toBeCloseTo(0.2);
+      await editor.undo();
+      w = (await services.store.readObject(id)) as Wall;
+      expect(Number(w.thickness)).toBeCloseTo(0.15);
+      await editor.undo();
+      w = (await services.store.readObject(id)) as Wall;
+      expect(w.properties.name).not.toBe('M-izq');
+    });
+
+    it('pasar un muro a partición avisa que el recinto deja de estar cerrado', async () => {
+      await drawRectangle();
+      expect(editor.getState().rooms).toHaveLength(1);
+      editor.setTool('select');
+      await editor.handleTap(px(2), px(0), TOL_PX);
+      await editor.updateSelectedProperty('isStructural', false);
+      expect(editor.getState().rooms).toHaveLength(0);
+      expect(editor.getState().notice?.message).toMatch(/dejó de estar cerrado \(solo los muros portantes/);
+    });
+
     it('un valor inválido deja el objeto intacto y publica un error legible', async () => {
       await drawRectangle();
       editor.setTool('select');
@@ -467,6 +500,20 @@ describe('EditorController', () => {
       const column = editor.getState().objects.find((o): o is Column => o instanceof Column)!;
       expect(column.position.x).toBeCloseTo(3);
       expect(column.position.y).toBeCloseTo(1.5);
+    });
+
+    it('una columna seleccionada se arrastra agarrando su cuerpo, no solo el centro', async () => {
+      editor.setTool('column');
+      await editor.handleTap(px(2), px(1.5), TOL_PX);
+      editor.setTool('select');
+      await editor.handleTap(px(2), px(1.5), TOL_PX);
+      const before = editor.getState().objects.find((o): o is Column => o instanceof Column)!;
+      const edge = (before.dimensionX as number) * 0.45; // dentro del cuerpo, lejos del centro
+      // Tolerancia chica: el toque NO alcanza el manejador central, solo el cuerpo.
+      expect(editor.beginDrag(px(2 + edge), px(1.5), 5)).toBe(true);
+      await editor.endDrag(px(3 + edge), px(1.5));
+      const column = editor.getState().objects.find((o): o is Column => o instanceof Column)!;
+      expect(column.position.x).toBeCloseTo(3);
     });
 
     it('beginDrag devuelve false lejos de todo handle, para que la vista panee', async () => {
@@ -553,6 +600,64 @@ describe('EditorController', () => {
       await editor.applyMeasurementToWall(meters(5));
       expect(editor.walls.some((w) => Math.abs(w.startPoint.x - 5) < 1e-6 && Math.abs(w.endPoint.y - 3) < 1e-6)).toBe(true);
       expect(editor.getState().rooms).toHaveLength(1);
+    });
+
+    // CRITERIO DE ACEPTACIÓN DE CAMPO (docs/24): un recinto dibujado a ojo y medido con láser de
+    // cara interior a cara interior debe cerrar: cada cara medida queda a < 1 cm de lo medido y el
+    // área neta del recinto a ±0,5 % del producto de las medidas.
+    it('criterio de campo: medir cara interior a cara interior cierra el recinto (< 1 cm, área ±0,5 %)', async () => {
+      await drawRectangle(); // 4 × 3 al eje, dibujado a ojo
+      const t = editor.walls[0].thickness as number;
+      const measureAt = async (x: number, y: number, value: number) => {
+        editor.setTool('measure');
+        await editor.handleTap(px(x), px(y), TOL_PX);
+        const avg = await editor.captureMeasurement('manual', meters(value), undefined, 'interior');
+        await editor.applyMeasurementToWall(avg!, 'interior');
+        return editor.measureFaces()!;
+      };
+      const top = await measureAt(2, 0, 3.7); // muro de arriba: 3,70 m entre caras interiores
+      expect(Math.abs(top.interior! - 3.7)).toBeLessThan(0.01);
+      expect(Math.abs(top.axis - (3.7 + t))).toBeLessThan(0.01); // eje = cara + 2 medios espesores
+      const right = await measureAt(editor.walls.find((w) => w.startPoint.x > 3)!.startPoint.x, 1.5, 2.6);
+      expect(Math.abs(right.interior! - 2.6)).toBeLessThan(0.01);
+      // La primera medida no se deshizo al aplicar la segunda.
+      editor.setTool('measure');
+      await editor.handleTap(px(2), px(0), TOL_PX);
+      expect(Math.abs(editor.measureFaces()!.interior! - 3.7)).toBeLessThan(0.01);
+      const room = editor.getState().rooms[0];
+      expect(Math.abs((room.netArea ?? 0) / (3.7 * 2.6) - 1)).toBeLessThan(0.005);
+      // Trazabilidad: cada medida guarda qué se midió y qué eje se aplicó.
+      const ms = await services.store.listMeasurements(ROOM_ID);
+      expect(ms).toHaveLength(2);
+      expect(ms.every((m) => m.reference === 'interior' && m.appliedLength !== null)).toBe(true);
+    });
+
+    it('diagonal de control: se registra, compara con el modelo y dice si el recinto cierra', async () => {
+      await drawRectangle();
+      const zone = editor.getState().rooms[0];
+      const info = (await editor.zoneDiagonal(zone.id!))!;
+      expect(info.check).toBeNull();
+      const ok = (await editor.recordZoneDiagonal(zone.id!, meters(info.model + 0.004)))!;
+      expect(ok.ok).toBe(true);
+      const bad = (await editor.recordZoneDiagonal(zone.id!, meters(info.model + 0.05)))!;
+      expect(bad.ok).toBe(false);
+      const again = (await editor.zoneDiagonal(zone.id!))!;
+      expect(again.check?.measured).toBeCloseTo(info.model + 0.05);
+      const stored = (await services.store.listMeasurements(ROOM_ID)).filter((m) => m.reference === 'diagonal');
+      expect(stored).toHaveLength(2);
+      expect(stored[0].appliedLength).toBeCloseTo(info.model);
+    });
+
+    it('medir la cara exterior y el eje también; sin recinto la cara cae al eje y lo avisa', async () => {
+      await drawRectangle();
+      const t = editor.walls[0].thickness as number;
+      editor.setTool('measure');
+      await editor.handleTap(px(2), px(0), TOL_PX);
+      await editor.applyMeasurementToWall(meters(4.5), 'exterior');
+      expect(Math.abs(editor.measureFaces()!.exterior! - 4.5)).toBeLessThan(0.01);
+      expect(Math.abs(editor.measureFaces()!.axis - (4.5 - t))).toBeLessThan(0.01);
+      await editor.applyMeasurementToWall(meters(4.2), 'axis');
+      expect(editor.measureFaces()!.axis).toBeCloseTo(4.2, 6);
     });
   });
 
@@ -707,6 +812,34 @@ describe('EditorController', () => {
       expect(r.netArea).toBeCloseTo(3.85 * 2.85, 4);
       const stored = await services.zones.list(ROOM_ID as unknown as string);
       expect(stored.map((z) => z.id)).toEqual([r.id]);
+    });
+
+    it('reabrir el espacio antes de cargar los niveles no duplica el recinto', async () => {
+      const lv = {
+        active: 'L0',
+        base: 'L0',
+        all: new Set(['L0']),
+        underlay: new Set<string>(),
+        elevations: new Map([['L0', 0]]),
+      };
+      editor.setScope(lv, null);
+      await drawRectangle();
+      const id = editor.getState().rooms[0].id!;
+
+      // Reabrir: el editor lee los muros ANTES de que lleguen los niveles (alcance nulo).
+      const reopened = new EditorController({
+        services,
+        roomId: ROOM_ID,
+        roomObjectId: ROOM_OBJECT_ID,
+        initialTransform: { scale: 100, offsetX: 0, offsetY: 0 },
+      });
+      await reopened.init();
+      reopened.setScope(lv, null);
+      await reopened.reload();
+
+      const stored = await services.zones.list(ROOM_ID as unknown as string);
+      expect(stored.map((z) => z.id)).toEqual([id]);
+      expect(reopened.getState().rooms.map((r) => r.id)).toEqual([id]);
     });
 
     it('el recinto conserva id y nombre al mover un muro, y al dividirlo nace otro', async () => {

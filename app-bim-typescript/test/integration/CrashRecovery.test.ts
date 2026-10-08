@@ -38,7 +38,7 @@ function tempDbPath(name: string): string {
 }
 
 const ROOM_ID = roomId('recovery-room');
-const LEVEL_ID = levelId('level-1');
+const _LEVEL_ID = levelId('level-1');
 
 // ---------------------------------------------------------------------------
 // 1-2. Corrupción de SQLite — backup-integridad.md

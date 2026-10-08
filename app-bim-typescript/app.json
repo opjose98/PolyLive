@@ -3,14 +3,9 @@
     "name": "PolyLive BIM",
     "slug": "polylive-bim",
     "version": "0.1.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#FFFFFF"
-    },
     "assetBundlePatterns": [
       "**/*"
     ],
@@ -24,7 +19,8 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Geolocalización para levantamiento topográfico"
+          "locationWhenInUsePermission": "Ubicación GPS para georreferenciar el levantamiento y las fotos",
+          "isAndroidBackgroundLocationEnabled": false
         }
       ],
       "expo-file-system",
@@ -34,6 +30,15 @@
           "isBackgroundEnabled": false,
           "neverForLocation": false,
           "bluetoothAlwaysPermission": "Conectar a dispositivo Huepa BLE para mediciones de distancia"
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#FFFFFF"
         }
       ]
     ],
@@ -57,13 +62,15 @@
         "android.permission.CAMERA",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.BLUETOOTH",
-        "android.permission.BLUETOOTH_ADMIN",
         "android.permission.BLUETOOTH_SCAN",
         "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.INTERNET"
+      ],
+      "blockedPermissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.INTERNET"
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "extra": {
@@ -71,7 +78,7 @@
         "projectId": "6609f093-633a-4c64-955c-c8648c8897d5"
       }
     },
-    "owner": "opjose98",
+    "owner": "opjose98s-team",
     "runtimeVersion": {
       "policy": "appVersion"
     },

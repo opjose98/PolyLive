@@ -82,12 +82,12 @@ export function calculateMiter(
   tolerance: Meters = meters(0.05),
 ): MiterResult {
   // Detectar cuál extremo de wall1 está cerca de cuál extremo de wall2
-  const combinations: Array<{
+  const combinations: {
     w1End: Point2D;
     w2Start: Point2D;
     w1Other: Point2D;
     w2Other: Point2D;
-  }> = [
+  }[] = [
     {
       w1End: wall1.endPoint,
       w2Start: wall2.startPoint,

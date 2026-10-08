@@ -14,19 +14,7 @@
 // =============================================================================
 
 import { createStore } from 'zustand/vanilla';
-import {
-  CanvasThemeId,
-  FilterId,
-  GridId,
-  LayerId,
-  PropKey,
-  ScaleToggleId,
-  SnapId,
-  WorkModeId,
-  categoriesFor,
-  findTool,
-  isToolEnabled,
-} from '../application/workspace/catalog';
+import { CanvasThemeId, FilterId, GridId, LayerId, PropKey, ScaleToggleId, SnapId, WorkModeId, categoriesFor, findTool, isToolEnabled } from '../application/workspace/catalog';
 import { FAB_CLOSED, FabState, openFabMethods, pickFabCategory, pressFabMain } from '../application/workspace/fabMachine';
 import type { ActiveTool } from '../application/workspace/bpcContext';
 import { RangeSlot, RangeState, createRangeState, moveThumb, toggleSlotActive, withItems } from '../application/workspace/rangeModel';
@@ -35,7 +23,7 @@ import { RangeSlot, RangeState, createRangeState, moveThumb, toggleSlotActive, w
 // Tipos
 // ---------------------------------------------------------------------------
 
-export type WorkspaceMode = 'plan' | 'elevation';
+type WorkspaceMode = 'plan' | 'elevation';
 export type RangeKey = 'levels' | 'phases';
 
 export type PanelKey =
@@ -47,7 +35,7 @@ export type PanelKey =
   | 'configDrawer'
   | 'mainMenu';
 
-export interface FloatingWindow {
+interface FloatingWindow {
   readonly id: string;
   /** Panel que puede seguir abierto junto a esta ventana. */
   readonly owner?: PanelKey;
@@ -74,7 +62,7 @@ export interface WorkspaceData {
   readonly minimapExpanded: boolean;
 }
 
-export type ToolActivation =
+type ToolActivation =
   | { readonly ok: true; readonly tool: ActiveTool }
   | { readonly ok: false; readonly reason: 'disabled' | 'not-found' };
 
@@ -132,7 +120,7 @@ const RANGE_LABELS: Record<RangeKey, { item: string; base: string }> = {
   phases: { item: 'Fase', base: 'Fase 0' },
 };
 
-export function initialWorkspaceData(mode: WorkspaceMode = 'plan'): WorkspaceData {
+function initialWorkspaceData(mode: WorkspaceMode = 'plan'): WorkspaceData {
   return {
     mode,
     currentPanel: null,
@@ -263,7 +251,14 @@ export function createWorkspaceStore(initial: Partial<WorkspaceData> = {}) {
       toggleFilter: (id) => set((p) => ({ filters: { ...p.filters, [id]: !p.filters[id] } })),
       toggleLayer: (id) => set((p) => ({ layers: { ...p.layers, [id]: !p.layers[id] } })),
       setCanvasTheme: (canvasTheme) => set({ canvasTheme }),
-      toggleGrid: (id) => set((p) => ({ grid: { ...p.grid, [id]: !p.grid[id] } })),
+      // Líneas y puntos son dos estilos de la MISMA cuadrícula: activar uno apaga el otro
+      // (juntos saturaban el lienzo). La rotación es independiente.
+      toggleGrid: (id) =>
+        set((p) => {
+          const on = !p.grid[id];
+          const other = id === 'lines' ? 'dots' : id === 'dots' ? 'lines' : null;
+          return { grid: { ...p.grid, [id]: on, ...(on && other ? { [other]: false } : {}) } };
+        }),
       toggleSnap: (id) => set((p) => ({ snap: { ...p.snap, [id]: !p.snap[id] } })),
       toggleScale: (id) => set((p) => ({ scale: { ...p.scale, [id]: !p.scale[id] } })),
       setScaleDenominator: (value) =>
@@ -280,8 +275,6 @@ export function createWorkspaceStore(initial: Partial<WorkspaceData> = {}) {
     };
   });
 }
-
-export type WorkspaceStore = ReturnType<typeof createWorkspaceStore>;
 
 /** Instancia única de la app. Los tests crean las suyas con `createWorkspaceStore`. */
 export const workspaceStore = createWorkspaceStore();

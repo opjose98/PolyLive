@@ -3,9 +3,11 @@
 // =============================================================================
 
 import { Database } from '../../src/infrastructure/sqlite/database';
+import { Wall, Room, roomId, levelId, revitObjectId } from '../../src/domain/objects';
+import { meters } from '../../src/domain/geometry/types';
 import { ObjectStore } from '../../src/infrastructure/sqlite/ObjectStore';
 import { Operator, operatorId } from '../../src/domain/objects/operator';
-import { Room, roomId, levelId, revitObjectId } from '../../src/domain/objects';
+
 
 describe('Operator (domain)', () => {
   it('rechaza un nombre vacío', () => {
@@ -134,8 +136,6 @@ describe('ObjectStore.listAllRooms', () => {
   });
 
   it('no incluye Walls/Doors/etc. de ningún Recinto — solo objetos tipo Room', async () => {
-    const { Wall } = await import('../../src/domain/objects');
-    const { meters } = await import('../../src/domain/geometry/types');
     const rId = roomId('room-with-wall');
     await store.createObject(
       new Room({ id: revitObjectId(rId as unknown as string), roomId: rId, levelId: levelId('level-1'), isOpen: true }),

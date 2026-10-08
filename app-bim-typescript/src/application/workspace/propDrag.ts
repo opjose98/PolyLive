@@ -10,9 +10,9 @@ import type { PropDef } from './catalog';
  * con mouse; con el dedo 6 px es demasiado nervioso (el pulso ya mueve 2–3
  * pasos), por eso el valor táctil es mayor.
  */
-export const PX_PER_STEP = 10;
+const PX_PER_STEP = 10;
 
-export function clampProp(def: PropDef, value: number): number {
+function clampProp(def: PropDef, value: number): number {
   return Math.max(def.min, Math.min(def.max, value));
 }
 

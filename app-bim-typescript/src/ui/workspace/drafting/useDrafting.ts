@@ -21,7 +21,7 @@ import { haptic } from '../../design/haptics';
 import { annotativeTextScale, DraftRenderContext, draftPreviewShapes, draftShapes } from '../../canvas/draftShapes';
 import type { SketchShape, SketchSource } from '../../canvas/sketch';
 
-export interface DraftingInput {
+interface DraftingInput {
   services: AppServices;
   spaceId: string;
   editor: EditorController;
@@ -36,7 +36,7 @@ export interface DraftingInput {
 }
 
 /** Píldoras de la BPC (cm o pt) → propiedades del elemento (m o pt). */
-export function draftPropsFromPills(kind: DraftKind, pills: Readonly<Record<string, number | undefined>>): Record<string, number> {
+function draftPropsFromPills(kind: DraftKind, pills: Readonly<Record<string, number | undefined>>): Record<string, number> {
   const m = (v: number | undefined) => (v === undefined ? undefined : v / 100);
   const out: Record<string, number | undefined> = {
     offset: kind === 'dimension' ? m(pills.offset) : undefined,

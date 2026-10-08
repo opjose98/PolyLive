@@ -4,22 +4,13 @@
 // =============================================================================
 
 import { ValidationWarning } from '../../domain/geometry/types';
-import {
-  IObjectStore,
-  Room,
-  Wall,
-  Door,
-  Column,
-  Floor,
-  RoomId,
-  RevitObjectId,
-} from '../../domain/objects';
-import { Window } from '../../domain/objects';
+import { revitObjectId, IObjectStore, Room, Wall, Door, Column, Floor, RoomId, Window } from '../../domain/objects';
+
 import { floorZoneId } from '../../domain/objects/floor';
 import { IValidationService, IIFCSerializer, ValidationError } from './types';
 import type { IfcMapConversionInput, IfcMemberInput, IfcZoneInput } from '../../infrastructure/export/ifc/types';
 
-export interface ExportRoomIfcInput {
+interface ExportRoomIfcInput {
   roomId: RoomId;
   /** Niveles del proyecto: cada uno será un piso (IfcBuildingStorey). */
   levels?: readonly { id: string; name: string; elevation: number; isBase?: boolean }[];
@@ -39,7 +30,7 @@ export interface ExportRoomIfcInput {
   members?: readonly IfcMemberInput[];
 }
 
-export interface ExportRoomIfcOutput {
+interface ExportRoomIfcOutput {
   ifcContent: string;
   warnings: ValidationWarning[];
   exportTime: number; // ms
@@ -60,7 +51,7 @@ export class ExportRoomIfcUseCase {
     const startTime = Date.now();
 
     // 1. Validar
-    const room = await this.store.readObject(input.roomId as unknown as RevitObjectId);
+    const room = await this.store.readObject(revitObjectId(input.roomId));
     if (!room || !(room instanceof Room)) throw new Error('Room no existe');
 
     const validationResult = this.validationService.validateExport(room);

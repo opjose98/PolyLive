@@ -14,10 +14,12 @@ const mockPaint = {
   setStrokeJoin: jest.fn(),
 };
 
-const mockPath = {
-  moveTo: jest.fn(),
-  lineTo: jest.fn(),
-  close: jest.fn(),
+// PathBuilder (Skia 2): métodos encadenables; `detach()` entrega el SkPath.
+const mockPath: Record<string, jest.Mock> = {
+  moveTo: jest.fn(() => mockPath),
+  lineTo: jest.fn(() => mockPath),
+  close: jest.fn(() => mockPath),
+  detach: jest.fn(() => ({ kind: 'SkPath' })),
 };
 
 const mockCanvas = {
@@ -40,8 +42,8 @@ jest.mock('@shopify/react-native-skia', () => ({
     XYWHRect: jest.fn((x: number, y: number, w: number, h: number) => ({
       x, y, width: w, height: h,
     })),
-    Path: {
-      Make: jest.fn(() => ({ ...mockPath })),
+    PathBuilder: {
+      Make: jest.fn(() => mockPath),
     },
   },
   PaintStyle: { Fill: 0, Stroke: 1 },

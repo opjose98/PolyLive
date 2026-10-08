@@ -13,6 +13,7 @@
 // solo el estado de los toques y lo que se dibuja.
 // =============================================================================
 
+import { localStamp } from '../../../shared/dates';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useStore } from 'zustand';
 import type { Point2D } from '../../../domain/geometry/types';
@@ -21,19 +22,7 @@ import type { GridPoint } from '../../../domain/geo/crs';
 import { gridToLatLon, workingCrs, crsDef } from '../../../domain/geo/crs';
 import { modelToGrid } from '../../../domain/geo/georeference';
 import { isGeoreferenced } from '../../../application/geo/coordinateText';
-import {
-  InverseResult,
-  bearingOf,
-  coordinateGrid,
-  formatAzimuth,
-  gridPolygonMetrics,
-  inverse,
-  parsePointsCsv,
-  pointsToCsv,
-  toKml,
-  PointOrder,
-  clipToConvex,
-} from '../../../application/geo/surveyTools';
+import { InverseResult, bearingOf, coordinateGrid, formatAzimuth, gridPolygonMetrics, inverse, parsePointsCsv, pointsToCsv, toKml, PointOrder, clipToConvex } from '../../../application/geo/surveyTools';
 import { categoriesFor, findTool } from '../../../application/workspace/catalog';
 import type { AppServices } from '../../../application/AppServices';
 import type { EditorController } from '../../../application/editor/EditorController';
@@ -45,9 +34,9 @@ import { saveTextToUserFolder } from '../../../native/export/saveToUserFolder';
 import { folderHint } from '../folderHint';
 import { uniqueVertices, type Topography } from './useTopography';
 
-export type TopoToolId = 'inverso' | 'area' | 'replanteo';
+type TopoToolId = 'inverso' | 'area' | 'replanteo';
 
-export interface TopoToolsInput {
+interface TopoToolsInput {
   services: AppServices;
   projectId?: string;
   spaceId: string;
@@ -273,13 +262,13 @@ export function useTopoTools({ services, projectId, spaceId, projectName, editor
   }, [topo, editor, gridOf]);
 
   const save = useCallback(async (filename: string, content: string, label: string) => {
-    folderHint();
+    await folderHint();
     const r = await saveTextToUserFolder(filename, content);
     if (r.ok) toast(`${label} guardado en ${r.folderLabel}`, { kind: 'success' });
     else if (r.reason !== 'cancelled') toast(`No se pudo guardar el ${label}`, { kind: 'error' });
   }, []);
 
-  const stamp = () => new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
+  const stamp = () => localStamp().replace('-', '');
   const base = `${projectName.replace(/[^A-Za-z0-9]+/g, '-')}-${stamp()}`;
 
   const exportCsv = useCallback(() => void save(`${base}-puntos.csv`, pointsToCsv(exportRows()), 'CSV'), [save, base, exportRows]);

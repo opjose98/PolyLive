@@ -17,7 +17,7 @@
  * - geometry_json contiene la geometría serializada (puntos, polígonos)
  * - is_deleted = 1 → soft-delete (excluido de exportaciones, pero no borrado)
  */
-export const CREATE_REVIT_OBJECTS = `
+const CREATE_REVIT_OBJECTS = `
 CREATE TABLE IF NOT EXISTS revit_objects (
   id              TEXT PRIMARY KEY NOT NULL,
   object_type     TEXT NOT NULL CHECK(object_type IN ('Wall','Door','Window','Column','Floor','Room')),
@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS revit_objects (
  * - values_json: array JSON de muestras [Meters]
  * - average: promedio calculado (sin outliers para BLE)
  */
-export const CREATE_MEASUREMENTS = `
+const CREATE_MEASUREMENTS = `
 CREATE TABLE IF NOT EXISTS measurements (
   id              TEXT PRIMARY KEY NOT NULL,
   room_id         TEXT NOT NULL,
@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS measurements (
  * - metadata_json: { timestamp, filename, linkedObjectId?, notes? }
  * - linked_object_id: objeto BIM vinculado (nullable)
  */
-export const CREATE_AUDIT_PHOTOS = `
+const CREATE_AUDIT_PHOTOS = `
 CREATE TABLE IF NOT EXISTS audit_photos (
   id                TEXT PRIMARY KEY NOT NULL,
   room_id           TEXT NOT NULL,
@@ -79,7 +79,7 @@ CREATE TABLE IF NOT EXISTS audit_photos (
  * comentario de alcance en domain/objects/operator.ts (solo `name`, sin
  * autenticación).
  */
-export const CREATE_OPERATORS = `
+const CREATE_OPERATORS = `
 CREATE TABLE IF NOT EXISTS operators (
   id          TEXT PRIMARY KEY NOT NULL,
   name        TEXT NOT NULL,
@@ -99,7 +99,7 @@ CREATE TABLE IF NOT EXISTS operators (
  * - is_deleted = 1 → soft-delete. Los Recintos del proyecto NO se borran:
  *   borrar el proyecto no debe destruir el levantamiento de nadie.
  */
-export const CREATE_PROJECTS = `
+const CREATE_PROJECTS = `
 CREATE TABLE IF NOT EXISTS projects (
   id           TEXT PRIMARY KEY NOT NULL,
   bim_code     TEXT NOT NULL,
@@ -129,7 +129,7 @@ CREATE TABLE IF NOT EXISTS projects (
  * PK compuesta (project_id, room_id): un Recinto aparece como máximo una vez
  * en un proyecto dado.
  */
-export const CREATE_PROJECT_SPACES = `
+const CREATE_PROJECT_SPACES = `
 CREATE TABLE IF NOT EXISTS project_spaces (
   project_id   TEXT NOT NULL,
   room_id      TEXT NOT NULL,
@@ -152,7 +152,7 @@ CREATE TABLE IF NOT EXISTS project_spaces (
  * local del muro), no en coordenadas mundo: un vano pertenece a SU muro y
  * moverlo no debe reescribir la elevación.
  */
-export const CREATE_WALL_ELEVATIONS = `
+const CREATE_WALL_ELEVATIONS = `
 CREATE TABLE IF NOT EXISTS wall_elevations (
   wall_id      TEXT PRIMARY KEY NOT NULL,
   room_id      TEXT NOT NULL,
@@ -170,7 +170,7 @@ CREATE TABLE IF NOT EXISTS wall_elevations (
  * existentes la crean con `IF NOT EXISTS`, sin tocar ninguna otra tabla.
  * La base de cada tipo tiene un id determinista y se crea al primer uso.
  */
-export const CREATE_PROJECT_MARKERS = `
+const CREATE_PROJECT_MARKERS = `
 CREATE TABLE IF NOT EXISTS project_markers (
   id           TEXT PRIMARY KEY NOT NULL,
   project_id   TEXT NOT NULL,
@@ -188,7 +188,7 @@ CREATE TABLE IF NOT EXISTS project_markers (
  * Topografía (M2): amarre del proyecto a coordenadas reales, biblioteca común
  * de mojones y su enlace a cada proyecto. Aditivas, como las demás.
  */
-export const CREATE_PROJECT_GEOREFERENCE = `
+const CREATE_PROJECT_GEOREFERENCE = `
 CREATE TABLE IF NOT EXISTS project_georeference (
   project_id   TEXT PRIMARY KEY NOT NULL,
   data_json    TEXT NOT NULL,
@@ -196,7 +196,7 @@ CREATE TABLE IF NOT EXISTS project_georeference (
 );
 `;
 
-export const CREATE_BENCHMARKS = `
+const CREATE_BENCHMARKS = `
 CREATE TABLE IF NOT EXISTS benchmarks (
   id           TEXT PRIMARY KEY NOT NULL,
   name         TEXT NOT NULL,
@@ -212,7 +212,7 @@ CREATE TABLE IF NOT EXISTS benchmarks (
 );
 `;
 
-export const CREATE_PROJECT_BENCHMARKS = `
+const CREATE_PROJECT_BENCHMARKS = `
 CREATE TABLE IF NOT EXISTS project_benchmarks (
   project_id   TEXT NOT NULL,
   benchmark_id TEXT NOT NULL,
@@ -234,7 +234,7 @@ CREATE TABLE IF NOT EXISTS project_benchmarks (
  *   para recuperarlo al deshacer)
  * - polygon_json / net_polygon_json: contorno al eje y a cara interior
  */
-export const CREATE_ZONES = `
+const CREATE_ZONES = `
 CREATE TABLE IF NOT EXISTS zones (
   id                TEXT PRIMARY KEY NOT NULL,
   space_id          TEXT NOT NULL,
@@ -262,7 +262,7 @@ CREATE TABLE IF NOT EXISTS zones (
  * marcas pintadas por espacio. Las marcas guardan su soporte (suelo de un
  * recinto o cara de muro) y su forma como JSON. Ver domain/progress.
  */
-export const CREATE_PROGRESS = `
+const CREATE_PROGRESS = `
 CREATE TABLE IF NOT EXISTS progress_activities (
   id           TEXT PRIMARY KEY NOT NULL,
   project_id   TEXT NOT NULL,
@@ -302,7 +302,7 @@ CREATE INDEX IF NOT EXISTS idx_progress_cuts_project ON progress_cuts(project_id
  * Revisión (M4): observaciones con su marca, comentario, autor, estado y foto,
  * por espacio. Ver domain/review.
  */
-export const CREATE_REVIEW = `
+const CREATE_REVIEW = `
 CREATE TABLE IF NOT EXISTS review_items (
   id           TEXT PRIMARY KEY NOT NULL,
   space_id     TEXT NOT NULL,
@@ -326,7 +326,7 @@ CREATE INDEX IF NOT EXISTS idx_review_items_space ON review_items(space_id) WHER
  * Dibujo técnico (F6b): cotas, textos, etiquetas, coordenadas, líneas,
  * polígonos, vigas, cerchas y correas por espacio. Ver domain/drafting.
  */
-export const CREATE_DRAFT = `
+const CREATE_DRAFT = `
 CREATE TABLE IF NOT EXISTS draft_items (
   id           TEXT PRIMARY KEY NOT NULL,
   space_id     TEXT NOT NULL,
@@ -347,7 +347,7 @@ CREATE INDEX IF NOT EXISTS idx_draft_items_space ON draft_items(space_id) WHERE 
 // Índices para consultas frecuentes
 // ---------------------------------------------------------------------------
 
-export const CREATE_INDEXES = `
+const CREATE_INDEXES = `
 CREATE INDEX IF NOT EXISTS idx_revit_objects_room_id
   ON revit_objects(room_id);
 

@@ -17,7 +17,8 @@
 // =============================================================================
 
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
+import { CommitTextInput } from '../primitives/CommitTextInput';
 import { spacing, radius, sizes } from '../design/tokens';
 import { type } from '../design/typography';
 import { themedStyles, useTheme } from '../design/theme';
@@ -26,7 +27,7 @@ import { themedStyles, useTheme } from '../design/theme';
 // NumberField
 // ---------------------------------------------------------------------------
 
-export interface NumberFieldProps {
+interface NumberFieldProps {
   label: string;
   value: number;
   /** Sufijo de unidad mostrado a la derecha ('m', 'm²', '°'...). */
@@ -36,8 +37,14 @@ export interface NumberFieldProps {
   min?: number;
   max?: number;
   disabled?: boolean;
-  /** Se invoca solo al CONFIRMAR (blur o submit), nunca en cada pulsación. */
+  /** Se invoca solo al CONFIRMAR (blur, "hecho", teclado oculto o cierre de la hoja), nunca en cada pulsación. */
   onCommit: (value: number) => void;
+  /**
+   * Lo que va tecleado AHORA (número válido, o `null` si no lo es), en cada pulsación.
+   * Para un botón "Guardar" aparte: cerrar el teclado con Atrás no confirma el campo
+   * y el botón aplicaría el valor anterior. No cambia `value`, así que no pisa lo escrito.
+   */
+  onDraft?: (value: number | null) => void;
   /** Texto de ayuda o de error bajo el campo. */
   hint?: string;
 }
@@ -51,6 +58,7 @@ export function NumberField({
   max,
   disabled,
   onCommit,
+  onDraft,
   hint,
 }: NumberFieldProps) {
   const styles = useStyles();
@@ -65,10 +73,10 @@ export function NumberField({
     setError(null);
   }, [value, decimals]);
 
-  const commit = () => {
+  const commit = (raw: string) => {
     // Se acepta coma decimal: el teclado numérico de muchos Android en español
     // ofrece "," y no ".", y rechazar la coma haría el campo intocable.
-    const parsed = Number(text.replace(',', '.'));
+    const parsed = Number(raw.replace(',', '.'));
 
     if (!Number.isFinite(parsed)) {
       setError('Introduce un número válido.');
@@ -94,12 +102,17 @@ export function NumberField({
     <View style={styles.fieldRow}>
       <Text style={styles.fieldLabel}>{label}</Text>
       <View style={styles.fieldInputWrap}>
-        <TextInput
+        <CommitTextInput
           style={[styles.fieldInput, disabled && styles.fieldInputDisabled, !!error && styles.fieldInputError]}
           value={text}
-          onChangeText={setText}
-          onBlur={commit}
-          onSubmitEditing={commit}
+          onChangeText={(t) => {
+            setText(t);
+            if (onDraft) {
+              const n = Number(t.replace(',', '.'));
+              onDraft(t.trim() !== '' && Number.isFinite(n) ? n : null);
+            }
+          }}
+          onCommitText={commit}
           keyboardType="decimal-pad"
           editable={!disabled}
           returnKeyType="done"
@@ -117,7 +130,7 @@ export function NumberField({
 // TextField
 // ---------------------------------------------------------------------------
 
-export interface TextFieldProps {
+interface TextFieldProps {
   label: string;
   value: string;
   placeholder?: string;
@@ -165,12 +178,13 @@ export function TextField({
   return (
     <View style={styles.fieldRow}>
       <Text style={styles.fieldLabel}>{label}</Text>
-      <TextInput
+      <CommitTextInput
         style={[styles.fieldInput, styles.fieldInputBlock, multiline && styles.fieldInputMultiline, disabled && styles.fieldInputDisabled]}
         value={controlled ? value : draft}
         onChangeText={controlled ? onCommit : setDraft}
-        onBlur={controlled ? undefined : () => {
-          if (draft !== value) onCommit(draft);
+        // En modo `blur` confirma también al ocultar el teclado o cerrar la hoja (ver CommitTextInput).
+        onCommitText={(t) => {
+          if (!controlled && t !== value) onCommit(t);
         }}
         placeholder={placeholder}
         placeholderTextColor={colors.textDisabled}
@@ -186,7 +200,7 @@ export function TextField({
 // SegmentedField — elección entre pocas opciones
 // ---------------------------------------------------------------------------
 
-export interface SegmentedFieldProps<T extends string> {
+interface SegmentedFieldProps<T extends string> {
   label: string;
   value: T;
   options: readonly { value: T; label: string }[];

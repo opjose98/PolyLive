@@ -13,8 +13,7 @@
 // - Coordenadas en píxeles de pantalla (ya transformadas por CanvasManager)
 // =============================================================================
 
-import type { SkCanvas, SkPaint } from '@shopify/react-native-skia';
-import { Skia, PaintStyle, PointMode, StrokeCap, StrokeJoin, matchFont } from '@shopify/react-native-skia';
+import { Skia, PaintStyle, PointMode, StrokeCap, StrokeJoin, matchFont, type SkCanvas, type SkPaint, type SkPath } from '@shopify/react-native-skia';
 
 // ---------------------------------------------------------------------------
 // Interfaz genérica que el dominio/aplicación consume
@@ -111,35 +110,20 @@ export class SkiaCanvasAdapter implements ICanvasRenderer {
     if (points.length < 3) return;
 
     this.syncFillPaint();
-    const path = Skia.Path.Make();
-    path.moveTo(points[0].x, points[0].y);
-    for (let i = 1; i < points.length; i++) {
-      path.lineTo(points[i].x, points[i].y);
-    }
-    path.close();
-    this.canvas.drawPath(path, this.fillPaint);
+    this.canvas.drawPath(polyPath(points, true), this.fillPaint);
   }
 
   strokePolygon(points: { x: number; y: number }[]): void {
     if (points.length < 2) return;
 
     this.syncStrokePaint();
-    const path = Skia.Path.Make();
-    path.moveTo(points[0].x, points[0].y);
-    for (let i = 1; i < points.length; i++) {
-      path.lineTo(points[i].x, points[i].y);
-    }
-    path.close();
-    this.canvas.drawPath(path, this.strokePaint);
+    this.canvas.drawPath(polyPath(points, true), this.strokePaint);
   }
 
   strokePolyline(points: { x: number; y: number }[]): void {
     if (points.length < 2) return;
     this.syncStrokePaint();
-    const path = Skia.Path.Make();
-    path.moveTo(points[0].x, points[0].y);
-    for (let i = 1; i < points.length; i++) path.lineTo(points[i].x, points[i].y);
-    this.canvas.drawPath(path, this.strokePaint);
+    this.canvas.drawPath(polyPath(points, false), this.strokePaint);
   }
 
   drawLine(x1: number, y1: number, x2: number, y2: number): void {
@@ -313,3 +297,15 @@ export class SkiaCanvasAdapter implements ICanvasRenderer {
     return font;
   }
 }
+
+/**
+ * Polilínea como SkPath, con PathBuilder (Skia 2): los métodos mutables de
+ * SkPath (moveTo/lineTo/close) están obsoletos y se quitarán.
+ */
+function polyPath(points: readonly { x: number; y: number }[], close: boolean): SkPath {
+  const b = Skia.PathBuilder.Make().moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i++) b.lineTo(points[i].x, points[i].y);
+  if (close) b.close();
+  return b.detach();
+}
+

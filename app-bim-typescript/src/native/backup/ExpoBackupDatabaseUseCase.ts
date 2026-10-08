@@ -34,14 +34,14 @@
 // (y el asunto de los sidecars WAL) en ExpoRestoreDatabaseUseCase.ts.
 // =============================================================================
 
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { IDatabase } from '../../infrastructure/sqlite/database';
 import { AppError, AppErrorCode } from '../../shared/errors/AppError';
 
 const BACKUP_PREFIX = 'polylive-backup-';
 const BACKUP_EXT = '.db';
 
-export interface ExpoBackupDatabaseInput {
+interface ExpoBackupDatabaseInput {
   /**
    * Base de datos ABIERTA a respaldar.
    *
@@ -56,11 +56,22 @@ export interface ExpoBackupDatabaseInput {
   backupDir?: string;
   /** Máximo de backups a conservar (por defecto 5, igual que la variante Node). */
   maxBackups?: number;
+  /** Si el respaldo más reciente es más nuevo que esto (ms), no se hace otro. */
+  minIntervalMs?: number;
 }
 
-export interface ExpoBackupDatabaseOutput {
+interface ExpoBackupDatabaseOutput {
   backupPath: string;
   prunedPaths: string[];
+  /** true si no se respaldó porque había uno reciente (`backupPath` es ese). */
+  skipped?: boolean;
+}
+
+/** Fecha de un respaldo por su nombre (`polylive-backup-2026-10-06T16-40-00-000Z-xxxx.db`). */
+/** @public (lo usa el test con el módulo simulado) */
+export function backupTime(filename: string): number | null {
+  const m = /^polylive-backup-(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z/.exec(filename);
+  return m ? Date.parse(`${m[1]}T${m[2]}:${m[3]}:${m[4]}.${m[5]}Z`) : null;
 }
 
 export class ExpoBackupDatabaseUseCase {
@@ -71,6 +82,16 @@ export class ExpoBackupDatabaseUseCase {
     try {
       // 1. Asegurar que el directorio de backups existe.
       await this.ensureDir(backupDir);
+
+      if (input.minIntervalMs) {
+        const newest = (await FileSystem.readDirectoryAsync(backupDir))
+          .filter((f) => f.startsWith(BACKUP_PREFIX) && f.endsWith(BACKUP_EXT))
+          .sort((a, b) => b.localeCompare(a))[0];
+        const t = newest ? backupTime(newest) : null;
+        if (newest && t !== null && Date.now() - t < input.minIntervalMs) {
+          return { backupPath: `${backupDir}${newest}`, prunedPaths: [], skipped: true };
+        }
+      }
 
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const uniqueSuffix = Math.random().toString(36).slice(2, 8);

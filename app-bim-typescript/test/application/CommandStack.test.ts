@@ -7,10 +7,10 @@ import {
   RevitObjectBase,
   RevitObjectId,
   RoomId,
-  revitObjectId,
-  roomId,
+  
+  
 } from '../../src/domain/objects';
-import { Command, ICommand, CommandId } from '../../src/application/commands/Command';
+import { Command } from '../../src/application/commands/Command';
 import { CommandStack } from '../../src/application/state/CommandStack';
 
 // ---------------------------------------------------------------------------

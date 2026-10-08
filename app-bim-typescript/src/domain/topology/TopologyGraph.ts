@@ -189,7 +189,7 @@ export class TopologyGraph {
       for (const edgeId of node.connectedEdgeIds) {
         const edge = this.edges.get(edgeId);
         if (edge && edge.sourceWall.id !== wall.id) {
-          adjacent.add(edge.sourceWall.id as unknown as string);
+          adjacent.add(edge.sourceWall.id as string);
         }
       }
     }
@@ -200,7 +200,7 @@ export class TopologyGraph {
   wallAdjacencyMap(): Map<string, Set<string>> {
     const nodeToWalls = new Map<string, Set<string>>();
     for (const edge of this.edges.values()) {
-      const wallId = edge.sourceWall.id as unknown as string;
+      const wallId = edge.sourceWall.id as string;
       for (const nodeId of [edge.startNodeId, edge.endNodeId]) {
         const set = nodeToWalls.get(nodeId) ?? new Set<string>();
         set.add(wallId);
@@ -350,8 +350,8 @@ export class TopologyGraph {
   /** Por cada nodo, sus aristas ordenadas por ángulo de salida ascendente. */
   private buildRotationSystem(
     wallEdges: readonly TopologyEdge[],
-  ): Map<string, Array<{ angle: number; edgeId: string }>> {
-    const outAngles = new Map<string, Array<{ angle: number; edgeId: string }>>();
+  ): Map<string, { angle: number; edgeId: string }[]> {
+    const outAngles = new Map<string, { angle: number; edgeId: string }[]>();
 
     for (const edge of wallEdges) {
       for (const nodeId of [edge.startNodeId, edge.endNodeId]) {
@@ -376,7 +376,7 @@ export class TopologyGraph {
   private nextHalfEdge(
     toNode: string,
     incomingEdgeId: string,
-    outAngles: Map<string, Array<{ angle: number; edgeId: string }>>,
+    outAngles: Map<string, { angle: number; edgeId: string }[]>,
   ): string | null {
     const angles = outAngles.get(toNode);
     if (!angles || angles.length < 2) return null;

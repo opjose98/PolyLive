@@ -18,17 +18,7 @@
 
 import { ProjectStore } from '../../infrastructure/sqlite/ProjectStore';
 import { ObjectStore } from '../../infrastructure/sqlite/ObjectStore';
-import {
-  Project,
-  ProjectSpace,
-  ProjectId,
-  ProjectSummary,
-  BimDiscipline,
-  DEFAULT_DISCIPLINE,
-  projectId as toProjectId,
-  normalizeBimCode,
-  isValidBimCode,
-} from '../../domain/objects/project';
+import { Project, ProjectSpace, ProjectId, ProjectSummary, BimDiscipline, DEFAULT_DISCIPLINE, projectId as toProjectId, normalizeBimCode, isValidBimCode } from '../../domain/objects/project';
 import { Room } from '../../domain/objects/room';
 import { LevelId, RoomId, generateId, revitObjectId, roomId as toRoomId } from '../../domain/objects/base';
 import { AppError, AppErrorCode } from '../../shared/errors/AppError';
@@ -37,7 +27,7 @@ import { AppError, AppErrorCode } from '../../shared/errors/AppError';
 // Entrada / salida
 // ---------------------------------------------------------------------------
 
-export interface CreateProjectInput {
+interface CreateProjectInput {
   name: string;
   /** Si se omite, se genera el primer código libre (BIM001, BIM002...). */
   bimCode?: string;
@@ -46,7 +36,7 @@ export interface CreateProjectInput {
   author?: string;
 }
 
-export interface CreateSpaceInput {
+interface CreateSpaceInput {
   projectId: ProjectId;
   name: string;
   /** Si se omite, se genera el primer código libre del proyecto (SPC001...). */
@@ -90,7 +80,7 @@ export class ProjectService {
     }
 
     const project = new Project({
-      id: toProjectId(generateId() as unknown as string),
+      id: toProjectId(generateId() as string),
       bimCode,
       name: input.name,
       description: input.description,
@@ -156,7 +146,7 @@ export class ProjectService {
     const newRoomId = generateId();
     const room = new Room({
       id: newRoomId,
-      roomId: toRoomId(newRoomId as unknown as string),
+      roomId: toRoomId(newRoomId as string),
       levelId: this.defaultLevelId,
       geometry: [],
       isOpen: true,
@@ -165,7 +155,7 @@ export class ProjectService {
 
     const space = new ProjectSpace({
       projectId: input.projectId,
-      roomId: newRoomId as unknown as string,
+      roomId: newRoomId as string,
       bimCode,
       name: input.name,
       orderIndex: existingSpaces.length,
@@ -187,6 +177,7 @@ export class ProjectService {
    */
   async listSpaceDetails(project: ProjectId): Promise<SpaceDetail[]> {
     const spaces = await this.projects.listSpaces(project);
+    const net = await this.projects.netAreaBySpace();
 
     const details: SpaceDetail[] = [];
     for (const space of spaces) {
@@ -195,7 +186,8 @@ export class ProjectService {
       details.push({
         space,
         room,
-        areaM2: room?.area != null ? Number(room.area) : null,
+        // Neta (cara interior) si hay recintos; si no, la del Recinto al eje.
+        areaM2: room?.area != null ? net.get(space.roomId) ?? Number(room.area) : null,
         // El propio Room está en la lista de objetos de su Recinto; se descuenta
         // para que el número que se enseña sea "elementos dibujados".
         objectCount: Math.max(0, objects.length - (room ? 1 : 0)),
@@ -223,7 +215,7 @@ export class ProjectService {
 
   /** Proyecto al que pertenece un Recinto, o `null`. */
   projectOfRoom(roomId: RoomId): Promise<ProjectId | null> {
-    return this.projects.projectOfRoom(roomId as unknown as string);
+    return this.projects.projectOfRoom(roomId as string);
   }
 
   // -------------------------------------------------------------------------

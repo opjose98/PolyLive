@@ -23,7 +23,7 @@
 
 import type { Point2D } from '../../domain/geometry/types';
 
-export interface WallInput {
+interface WallInput {
   readonly id: string;
   readonly start: Point2D;
   readonly end: Point2D;
@@ -40,7 +40,7 @@ export interface WallOutline {
 }
 
 /** Distancia (m) a la que dos extremos se consideran el mismo nudo. */
-export const NODE_TOLERANCE = 1e-3;
+const NODE_TOLERANCE = 1e-3;
 /** Largo máximo del inglete, en múltiplos del espesor mayor. */
 const MAX_MITER_RATIO = 4;
 
@@ -148,7 +148,7 @@ export function buildWallOutlines(walls: readonly WallInput[], tolerance = NODE_
  * Proyección escalar de `p` sobre el eje del muro, medida desde `start`.
  * Sirve para cortar las caras por los vanos (que se definen a lo largo del eje).
  */
-export function alongAxis(start: Point2D, end: Point2D, p: Point2D): number {
+function alongAxis(start: Point2D, end: Point2D, p: Point2D): number {
   const d = unit(sub(end, start));
   return (p.x - start.x) * d.x + (p.y - start.y) * d.y;
 }

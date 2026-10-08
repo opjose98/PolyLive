@@ -18,19 +18,7 @@
 import type { Point2D } from '../../domain/geometry/types';
 import { toLocal } from '../../domain/geometry/handedness';
 import { CrsId, GridPoint, LatLon, gridToLatLon, latLonToGrid } from '../../domain/geo/crs';
-import {
-  AmarreMethod,
-  DEFAULT_GPS_SECONDS,
-  Georeference,
-  SpacePlacement,
-  amarreByPointAndAzimuth,
-  fitControlPoints,
-  gridToLocal,
-  gridToModel,
-  modelToGrid,
-  placementOf,
-  spaceToProject,
-} from '../../domain/geo/georeference';
+import { AmarreMethod, DEFAULT_GPS_SECONDS, Georeference, SpacePlacement, amarreByPointAndAzimuth, fitControlPoints, gridToLocal, gridToModel, modelToGrid, placementOf, spaceToProject } from '../../domain/geo/georeference';
 import { ProjectBenchmark, isControlPoint } from '../../domain/geo/benchmark';
 import type { GpsAverage } from '../../domain/geo/gpsAverage';
 import { GeoStore } from '../../infrastructure/sqlite/GeoStore';
@@ -42,7 +30,7 @@ export interface RealCoordinates {
   readonly h: number | null;
 }
 
-export interface AmarreBase {
+interface AmarreBase {
   readonly crs: CrsId;
   /** Cota real (msnm) del Z = 0 local. */
   readonly z0: number;

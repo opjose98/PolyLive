@@ -6,7 +6,7 @@
 // escribe en la caché de la app y se comparte desde allí.
 // =============================================================================
 
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 
 export async function shareFile(

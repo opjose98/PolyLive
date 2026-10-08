@@ -34,7 +34,7 @@ import { themedStyles } from '../design/theme';
 // Props
 // ---------------------------------------------------------------------------
 
-export interface PropertiesPanelProps {
+interface PropertiesPanelProps {
   object: RevitObjectBase | null;
   /** Longitud del muro padre — acota el offset de un vano a algo colocable. */
   parentWallLength?: number;

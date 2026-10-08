@@ -54,7 +54,7 @@ export type PropValues = Partial<Record<PropKey, number>>;
 
 export type TopoAction = 'mojon' | 'punto-gps' | 'coordenada' | 'inverso' | 'area' | 'replanteo';
 
-export type ToolBinding =
+type ToolBinding =
   | { readonly kind: 'plan'; readonly tool: EditorTool }
   | { readonly kind: 'elevation'; readonly opening: OpeningType }
   /** Herramientas del modo Topografía (M2): no crean objetos BIM, crean mojones. */
@@ -68,16 +68,16 @@ export type ToolBinding =
   /** Foto anclada a la cara visible del muro (alzado). */
   | { readonly kind: 'facePhoto' };
 
-export type ReviewToolId = 'freehand' | 'arrow' | 'rect' | 'text' | 'cloud';
+type ReviewToolId = 'freehand' | 'arrow' | 'rect' | 'text' | 'cloud';
 
 /** Forma de creación de una herramienta (nivel 3 del FAB). */
-export interface MethodDef {
+interface MethodDef {
   readonly id: string;
   readonly label: string;
   readonly icon: string;
 }
 
-export interface ToolDef {
+interface ToolDef {
   readonly id: string;
   readonly label: string;
   readonly icon: string;
@@ -87,17 +87,17 @@ export interface ToolDef {
   readonly methods?: readonly MethodDef[];
 }
 
-export const WALL_METHODS: readonly MethodDef[] = [
+const WALL_METHODS: readonly MethodDef[] = [
   { id: 'drag', label: 'Arrastre libre', icon: 'gesture-swipe-horizontal' },
   { id: 'points', label: 'Punto a punto', icon: 'vector-polyline' },
 ];
 
-export const COLUMN_METHODS: readonly MethodDef[] = [
+const COLUMN_METHODS: readonly MethodDef[] = [
   { id: 'rectangular', label: 'Rectangular', icon: 'square' },
   { id: 'circular', label: 'Circular', icon: 'circle' },
 ];
 
-export interface CategoryDef {
+interface CategoryDef {
   readonly id: string;
   readonly label: string;
   readonly icon: string;
@@ -304,7 +304,6 @@ export function findTool(
 // Vistas, filtros, capas
 // ---------------------------------------------------------------------------
 
-
 export interface OptionDef<Id extends string = string> {
   readonly id: Id;
   readonly label: string;
@@ -322,7 +321,7 @@ export interface OptionDef<Id extends string = string> {
 
 export type WorkModeId = 'levantamiento' | 'topografia' | 'avance' | 'revision';
 
-export interface WorkModeDef extends OptionDef<WorkModeId> {
+interface WorkModeDef extends OptionDef<WorkModeId> {
   readonly icon: string;
   /** Color del botón del FAB de vista con este modo activo. */
   readonly color: string;
@@ -345,7 +344,7 @@ export function workModeDef(id: WorkModeId): WorkModeDef {
   return WORK_MODES.find((m) => m.id === id) ?? WORK_MODES[0];
 }
 
-export type ModeBlock = 'planOnly' | 'needsObjects';
+type ModeBlock = 'planOnly' | 'needsObjects';
 
 /** ¿Se puede entrar al modo? Devuelve el motivo si no. */
 export function modeBlock(id: WorkModeId, ctx: { view: 'plan' | 'elevation'; hasObjects: boolean }): ModeBlock | null {
@@ -382,7 +381,7 @@ export type FilterId =
   | 'comentarios'
   | 'resueltos';
 
-export const FILTERS_PLAN: readonly OptionDef<FilterId>[] = [
+const FILTERS_PLAN: readonly OptionDef<FilterId>[] = [
   { id: 'muros', label: 'Muros' },
   { id: 'columnas', label: 'Columnas' },
   { id: 'cotas', label: 'Cotas' },
@@ -390,7 +389,7 @@ export const FILTERS_PLAN: readonly OptionDef<FilterId>[] = [
 ];
 
 /** Topografía: qué se rotula y qué se dibuja de fondo. */
-export const FILTERS_TOPOGRAPHY: readonly OptionDef<FilterId>[] = [
+const FILTERS_TOPOGRAPHY: readonly OptionDef<FilterId>[] = [
   { id: 'muros', label: 'Muros' },
   { id: 'columnas', label: 'Columnas' },
   { id: 'vertices', label: 'Vértices' },
@@ -401,19 +400,19 @@ export const FILTERS_TOPOGRAPHY: readonly OptionDef<FilterId>[] = [
   { id: 'norte', label: 'Norte' },
 ];
 
-export const FILTERS_PROGRESS: readonly OptionDef<FilterId>[] = [
+const FILTERS_PROGRESS: readonly OptionDef<FilterId>[] = [
   { id: 'actividades', label: 'Actividades del corte' },
   { id: 'cortesAnteriores', label: 'Cortes anteriores' },
   { id: 'cotas', label: 'Cotas' },
 ];
 
-export const FILTERS_REVIEW: readonly OptionDef<FilterId>[] = [
+const FILTERS_REVIEW: readonly OptionDef<FilterId>[] = [
   { id: 'comentarios', label: 'Comentarios abiertos' },
   { id: 'resueltos', label: 'Resueltos' },
   { id: 'cotas', label: 'Cotas' },
 ];
 
-export const FILTERS_ELEVATION: readonly OptionDef<FilterId>[] = [
+const FILTERS_ELEVATION: readonly OptionDef<FilterId>[] = [
   { id: 'vanos', label: 'Vanos' },
   { id: 'puertas', label: 'Puertas' },
   { id: 'ventanas', label: 'Ventanas' },

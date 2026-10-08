@@ -24,7 +24,7 @@ export function reviewSvgMarks(items: readonly ReviewItem[]): SvgMark[] {
   return out;
 }
 
-export interface ReviewMeta {
+interface ReviewMeta {
   readonly project: string;
   readonly space: string;
   readonly reviewer: string;

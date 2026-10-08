@@ -4,22 +4,14 @@
 // =============================================================================
 
 import { Meters, ValidationWarning } from '../../domain/geometry/types';
-import {
-  IObjectStore,
-  Wall,
-  RoomId,
-  WallId,
-  RevitObjectId,
-  generateId,
-  ObjectProperties,
-} from '../../domain/objects';
-import { Window } from '../../domain/objects';
+import { revitObjectId, IObjectStore, Wall, RoomId, WallId, generateId, ObjectProperties, Window } from '../../domain/objects';
+
 import { CommandStack } from '../state/CommandStack';
 import { CreateWindowCommand } from '../commands/CreateWindowCommand';
 import { CommandId } from '../commands/Command';
 import { IValidationService, ValidationError } from './types';
 
-export interface CreateWindowInput {
+interface CreateWindowInput {
   roomId: RoomId;
   parentWallId: WallId;
   offsetAlongWall: Meters;
@@ -33,7 +25,7 @@ export interface CreateWindowInput {
   properties?: ObjectProperties;
 }
 
-export interface CreateWindowOutput {
+interface CreateWindowOutput {
   window: Window;
   warnings: ValidationWarning[];
   commandId: CommandId;
@@ -48,7 +40,7 @@ export class CreateWindowUseCase {
 
   async execute(input: CreateWindowInput): Promise<CreateWindowOutput> {
     // 1. Verificar Wall padre
-    const parentWall = await this.store.readObject(input.parentWallId as unknown as RevitObjectId);
+    const parentWall = await this.store.readObject(revitObjectId(input.parentWallId));
     if (!parentWall || !(parentWall instanceof Wall)) {
       throw new Error('Wall padre no existe o no es un Wall');
     }

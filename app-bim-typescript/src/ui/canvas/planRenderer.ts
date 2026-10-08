@@ -158,7 +158,7 @@ const STROKE = { cut: 2, medium: 1.2, thin: 0.75 } as const;
 /** Paso de la trama de mampostería (px). */
 const HATCH_PX = 6;
 
-export type WallRendering = 'solid' | 'hatch' | 'outline';
+type WallRendering = 'solid' | 'hatch' | 'outline';
 
 /**
  * Cómo se rellena un muro cortado. El material escrito manda (concreto,
@@ -214,7 +214,7 @@ function makeCtx(r: ICanvasRenderer, scene: PlanScene): Ctx {
   const vanosByWall = new Map<string, (Door | Window)[]>();
   for (const o of scene.objects) {
     if (!(o instanceof Door) && !(o instanceof Window)) continue;
-    const key = o.parentWallId as unknown as string;
+    const key = o.parentWallId as string;
     vanosByWall.set(key, [...(vanosByWall.get(key) ?? []), o]);
   }
   return {
@@ -296,7 +296,7 @@ function drawGrid(r: ICanvasRenderer, scene: PlanScene, pal: CanvasPalette): voi
   const style = scene.gridStyle ?? { lines: true, dots: false };
 
   if (style.lines) {
-    r.setLineWidth(0.5 * pal.lineScale);
+    r.setLineWidth(0.5); // la cuadrícula fina no engrosa con el tema (alto contraste duplicaba su trazo)
     r.setStrokeStyle(pal.grid);
     for (let x = firstX; x < x1; x += stepPx) r.drawLine(x, y0, x, y1);
     for (let y = firstY; y < y1; y += stepPx) r.drawLine(x0, y, x1, y);
@@ -832,7 +832,7 @@ function drawSelection(ctx: Ctx): void {
   } else if (selected instanceof Room && selected.geometry.length >= 3) {
     r.strokePolygon(selected.geometry.map(toScreen));
   } else if (selected instanceof Door || selected instanceof Window) {
-    const wall = ctx.wallsById.get(selected.parentWallId as unknown as string);
+    const wall = ctx.wallsById.get(selected.parentWallId as string);
     if (wall) {
       const a = Math.max(0, selected.offsetAlongWall as number);
       const b = a + (selected.width as number);

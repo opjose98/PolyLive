@@ -118,7 +118,7 @@ function TextBody({ drafting }: { drafting: Drafting }) {
   useEffect(() => setText(pending?.suggested ?? ''), [pending]);
   return (
     <View style={styles.body}>
-      <Text style={styles.title}>{pending?.kind === 'tag' ? 'Etiqueta' : 'Texto en el plano'}</Text>
+      <Text style={styles.title}>{pending?.kind === 'tag' ? 'Etiqueta' : pending?.view.kind === 'wallFace' ? 'Texto en el alzado' : 'Texto en el plano'}</Text>
       <TextField label="Texto" value={text} multiline onCommit={setText} />
       <View style={styles.row}>
         <ActionButton label="Cancelar" variant="secondary" onPress={() => drafting.ctl.cancelText()} />

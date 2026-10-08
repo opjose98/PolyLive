@@ -4,21 +4,14 @@
 // =============================================================================
 
 import { Point2D, Meters, ValidationWarning } from '../../domain/geometry/types';
-import {
-  IObjectStore,
-  Column,
-  RoomId,
-  WallId,
-  generateId,
-  ObjectProperties,
-} from '../../domain/objects';
+import { IObjectStore, Column, RoomId, WallId, generateId, ObjectProperties } from '../../domain/objects';
 import type { VerticalExtent } from '../../domain/objects/vertical';
 import { CommandStack } from '../state/CommandStack';
 import { CreateColumnCommand } from '../commands/CreateColumnCommand';
 import { CommandId } from '../commands/Command';
 import { IValidationService, ValidationError } from './types';
 
-export interface CreateColumnInput {
+interface CreateColumnInput {
   roomId: RoomId;
   position: Point2D;
   diameter: Meters;
@@ -35,7 +28,7 @@ export interface CreateColumnInput {
   properties?: ObjectProperties;
 }
 
-export interface CreateColumnOutput {
+interface CreateColumnOutput {
   column: Column;
   warnings: ValidationWarning[];
   commandId: CommandId;

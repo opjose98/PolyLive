@@ -3,19 +3,14 @@
 // Basado en: CapturePhotoUseCase.md (Obsidian 02-Aplicación/use-cases)
 // =============================================================================
 
-import {
-  IObjectStore,
-  RoomId,
-  AuditPhotoId,
-  AuditPhoto,
-  generateId,
-} from '../../domain/objects';
+import { sealPhoto } from '../../domain/evidence/seal';
+import { auditPhotoId, IObjectStore, RoomId, AuditPhotoId, AuditPhoto, generateId } from '../../domain/objects';
 import type { PhotoMetadata } from '../../domain/objects/audit-photo';
 import { CommandStack } from '../state/CommandStack';
 import { CapturePhotoCommand, PhotoLifecycle } from '../commands/CapturePhotoCommand';
 import { CommandId } from '../commands/Command';
 
-export interface CapturePhotoInput {
+interface CapturePhotoInput {
   roomId: RoomId;
   /** `Uint8Array`, no `Buffer` — ver el comentario en domain/objects/audit-photo.ts. */
   photoData: Uint8Array;
@@ -45,7 +40,7 @@ export interface CapturePhotoInput {
   metadata?: Partial<PhotoMetadata>;
 }
 
-export interface CapturePhotoOutput {
+interface CapturePhotoOutput {
   photoId: AuditPhotoId;
   commandId: CommandId;
 }
@@ -57,7 +52,7 @@ export class CapturePhotoUseCase {
   ) {}
 
   async execute(input: CapturePhotoInput): Promise<CapturePhotoOutput> {
-    const photoId = generateId() as unknown as AuditPhotoId;
+    const photoId = auditPhotoId(generateId());
     const timestamp = Date.now();
     const filename = input.filename ?? `room-${input.roomId}-${timestamp}.jpg`;
 
@@ -67,7 +62,13 @@ export class CapturePhotoUseCase {
       foto: input.photoData,
       // `timestamp` y `filename` van DESPUÉS del spread: son responsabilidad de
       // este UseCase y no deben poder pisarse desde fuera.
-      metadata_json: JSON.stringify({ ...input.metadata, timestamp, filename }),
+      metadata_json: JSON.stringify({
+        ...input.metadata,
+        timestamp,
+        filename,
+        // Sello de evidencia: imagen + código + operador + fecha + GPS (domain/evidence/seal.ts).
+        seal: sealPhoto(input.photoData, { bimCode: input.metadata?.bimCode, operator: input.metadata?.operator, timestamp, geo: input.metadata?.geo }),
+      }),
     });
 
     await (this.store as any).createAuditPhoto(photo);

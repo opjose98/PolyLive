@@ -39,7 +39,7 @@ export type BpcContext =
       readonly items?: readonly string[];
     };
 
-export interface BpcInput {
+interface BpcInput {
   readonly tool: ActiveTool | null;
   readonly selection: SelectionSummary | null;
   readonly viewLabel: string;

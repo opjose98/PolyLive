@@ -104,7 +104,7 @@ export function interiorPoint(polygon: readonly Point2D[]): Point2D {
 // ---------------------------------------------------------------------------
 
 /** Lo mínimo de un muro para conocer el espesor de cada lado del recinto. */
-export interface ZoneWall {
+interface ZoneWall {
   readonly start: Point2D;
   readonly end: Point2D;
   readonly thickness: number;
@@ -184,7 +184,7 @@ export function insetPolygon(polygon: readonly Point2D[], offsets: readonly numb
   return out;
 }
 
-export interface NetGeometry {
+interface NetGeometry {
   readonly netPolygon: Point2D[];
   readonly netArea: number;
   readonly perimeter: number;

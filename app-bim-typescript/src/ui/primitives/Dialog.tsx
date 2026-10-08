@@ -23,7 +23,7 @@ import { type } from '../design/typography';
 import { haptic } from '../design/haptics';
 import { themedStyles } from '../design/theme';
 
-export interface DialogButton {
+interface DialogButton {
   text: string;
   style?: 'default' | 'cancel' | 'destructive';
   onPress?: () => void;

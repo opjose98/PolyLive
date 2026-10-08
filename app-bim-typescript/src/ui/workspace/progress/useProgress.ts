@@ -23,7 +23,7 @@ import { toast } from '../../primitives';
 import { haptic } from '../../design/haptics';
 import type { SketchShape, SketchSource } from '../../canvas/sketch';
 
-export interface ProgressInput {
+interface ProgressInput {
   services: AppServices;
   projectId?: string;
   spaceId: string;

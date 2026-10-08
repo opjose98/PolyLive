@@ -2,6 +2,7 @@
 // ReviewSheets — Observación (comentario, estado, color, foto), texto y acta (M4)
 // =============================================================================
 
+import { localDate } from '../../../shared/dates';
 import React, { useEffect, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { BottomSheet, ActionButton, Tappable, toast, confirm } from '../../primitives';
@@ -15,7 +16,7 @@ import { haptic } from '../../design/haptics';
 import { safeName, saveCsv, savePdf, sharePdf } from '../reportActions';
 import type { Review } from './useReview';
 
-export interface ReviewSheetsProps {
+interface ReviewSheetsProps {
   review: Review;
   projectName: string;
   spaceName: string;
@@ -151,7 +152,7 @@ function ListBody({ review, projectName, spaceName, operatorName, viewName, view
     const ordered = [...views.values()].sort((a, b) => (a.view.kind === 'plan' ? -1 : b.view.kind === 'plan' ? 1 : 0));
     return reviewHtml(meta, items, ordered.map((v) => ({ title: viewName(v.view), svg: viewSvg(v.view, v.items) })), where, photos);
   };
-  const base = `${safeName(projectName)}-${safeName(spaceName)}-revision-${new Date().toISOString().slice(0, 10)}`;
+  const base = `${safeName(projectName)}-${safeName(spaceName)}-revision-${localDate()}`;
   return (
     <ScrollView contentContainerStyle={styles.body}>
       <Text style={styles.title}>Observaciones</Text>

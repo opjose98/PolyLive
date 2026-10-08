@@ -14,15 +14,15 @@
 // de los motivos para tener DXF. Se exporta lo que haya.
 // =============================================================================
 
-import { RoomId, RevitObjectId } from '../../domain/objects/base';
+import { RoomId, IObjectStore, revitObjectId } from '../../domain/objects/base';
 import { Room } from '../../domain/objects/room';
 import { Wall } from '../../domain/objects/wall';
 import { Column } from '../../domain/objects/column';
-import { IObjectStore } from '../../domain/objects/base';
+
 import type { WallElevation } from '../../domain/objects/wall-elevation';
 import { DXFSerializer, DXFExportData } from '../../infrastructure/export/dxf/DXFSerializer';
 
-export interface ExportRoomDxfInput {
+interface ExportRoomDxfInput {
   roomId: RoomId;
   /** Nombre del dibujo. Por defecto, el nombre del Recinto. */
   title?: string;
@@ -39,7 +39,7 @@ export interface ExportRoomDxfInput {
   drafting?: DXFExportData['drafting'];
 }
 
-export interface ExportRoomDxfOutput {
+interface ExportRoomDxfOutput {
   dxfContent: string;
   /** Cifras para que la UI diga QUÉ se exportó, no solo que se exportó. */
   stats: {
@@ -58,7 +58,7 @@ export class ExportRoomDxfUseCase {
     const startTime = Date.now();
 
     const room = (await this.store.readObject(
-      input.roomId as unknown as RevitObjectId,
+      revitObjectId(input.roomId),
     )) as Room | null;
 
     const objects = await this.store.listObjects(input.roomId);

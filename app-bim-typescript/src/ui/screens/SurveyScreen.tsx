@@ -14,12 +14,14 @@
 // su propia capa (Topografía: mojones y coordenadas).
 // =============================================================================
 
+import type { MenuScreen } from '../workspace/useSurveyMenu';
+import { record } from '../../shared/diagnostics';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Dimensions, Modal, BackHandler } from 'react-native';
+import { View, Dimensions, Modal, BackHandler } from 'react-native';
 
 import { PlanCanvas } from '../canvas/PlanCanvas';
 import { BottomSheet, toast, alertDialog } from '../primitives';
-import { sizes } from '../design/tokens';
+import { radius, sizes, sizes as chromeSizes, spacing, spacing as chromeSpacing } from '../design/tokens';
 import { themedStyles, useCanvasPalette } from '../design/theme';
 import { haptic } from '../design/haptics';
 import { workspaceStore } from '../../state/workspaceStore';
@@ -38,19 +40,12 @@ import { FabView } from '../workspace/FabView';
 import { CornerTools } from '../workspace/CornerTools';
 import { LevelChip } from '../workspace/LevelChip';
 import { ConfigDrawer } from '../workspace/ConfigDrawer';
-import { MainMenu, MainMenuItem } from '../workspace/MainMenu';
+import { MainMenu } from '../workspace/MainMenu';
 import { RangeSelectors } from '../workspace/RangeSelector';
-import { DEFAULT_EDITOR_DEFAULTS } from '../../application/editor/EditorController';
+import { DEFAULT_EDITOR_DEFAULTS, EditorController, EditorState } from '../../application/editor/EditorController';
 import { ConstraintSelector } from '../workspace/ConstraintSelector';
-import {
-  ConstraintEdit,
-  ConstraintLevel,
-  defaultExtent,
-  describeExtent,
-  sortLevels,
-} from '../../application/workspace/constraintModel';
+import { ConstraintEdit, ConstraintLevel, defaultExtent, describeExtent, sortLevels } from '../../application/workspace/constraintModel';
 import { isUniformWall, sameExtent } from '../../domain/objects/vertical';
-import { exportRevitIfc } from '../workspace/exportActions';
 import { useProjectLevels } from '../workspace/useProjectLevels';
 import { createLiveSource, draggedIds, isDragging, sameStructure } from '../canvas/liveOverlay';
 import { uniqueVertices, useTopography } from '../workspace/topo/useTopography';
@@ -61,59 +56,36 @@ import { StakeoutSheet } from '../workspace/topo/StakeoutSheet';
 import { useProgress } from '../workspace/progress/useProgress';
 import { ProgressSheets } from '../workspace/progress/ProgressSheets';
 import { planSvg, faceSvg } from '../../application/report/planSvg';
+import { MeasureDialog } from '../workspace/MeasureDialog';
+import { useSurveyMenu } from '../workspace/useSurveyMenu';
+import { saveFieldPhoto } from '../workspace/fieldPhotos';
 import { useReview } from '../workspace/review/useReview';
-import { useDrafting } from '../workspace/drafting/useDrafting';
+import { DRAFT_HINT, draftDetail, useEditorDrafting } from '../workspace/drafting/useEditorDrafting';
 import { DraftSheets, KIND_LABEL } from '../workspace/drafting/DraftSheets';
 import { mergeSketches } from '../canvas/sketch';
-import { DraftItem, DraftKind, itemLength, polygonMetrics } from '../../domain/drafting/drafting';
-
-/** Lo que dice la BPC de un elemento de dibujo seleccionado. */
-function draftDetail(i: DraftItem): string {
-  if (i.kind === 'polygon') return `${polygonMetrics(i.points).area.toFixed(2)} m²`;
-  if (i.kind === 'text' || i.kind === 'tag') return i.text.split(/\n/)[0];
-  if (i.kind === 'coordinate') return 'Punto rotulado';
-  return `${itemLength(i).toFixed(2)} m`;
-}
 import type { PhotoFaceAnchor } from '../../domain/objects/audit-photo';
-
-/** Qué hacer con cada herramienta de dibujo técnico (texto de la BPC). */
-const DRAFT_HINT: Record<DraftKind, string> = {
-  dimension: 'Arrastra de un punto a otro · se pega a los nodos',
-  text: 'Toca donde va el texto',
-  tag: 'Toca un muro, columna, vano o recinto',
-  coordinate: 'Toca el punto a rotular',
-  line: 'Arrastra de un punto a otro',
-  polygon: 'Toca los vértices · toca el primero o "Cerrar polígono"',
-  beam: 'Arrastra el eje de la viga',
-  truss: 'Arrastra de apoyo a apoyo',
-  purlin: 'Toca donde va la correa (en sección)',
-};
-import { gridLabel, isGeoreferenced as isGeoref, localLabel } from '../../application/geo/coordinateText';
-import { modelToGrid } from '../../domain/geo/georeference';
+import { amarreSummary, coordinateInline } from '../../application/geo/coordinateText';
 import { ReviewSheets } from '../workspace/review/ReviewSheets';
 import { reviewSvgMarks } from '../../application/review/reviewReport';
 import { countByStatus, ReviewItem, ReviewView } from '../../domain/review/review';
-import { zoneCode as zoneCodeOf } from '../../domain/objects/zone';
-import { amarreSummary, coordinateInline } from '../../application/geo/coordinateText';
+import { zoneCode, zoneCode as zoneCodeOf } from '../../domain/objects/zone';
+
 import { ElevationEditor } from '../../application/elevation/ElevationEditor';
 import { ElevationView } from './ElevationView';
 import type { CanvasTransform } from '../../domain/geometry/types';
-import { sizes as chromeSizes, spacing as chromeSpacing } from '../design/tokens';
+
 import { useStore } from 'zustand';
 import { CameraCaptureView } from '../components/CameraCaptureView';
 import { ExpoPhotoCapture } from '../../native/camera/ExpoPhotoCapture';
 import { ExpoFileSystem } from '../../native/filesystem/ExpoFileSystem';
 import { ExpoGpsProvider } from '../../native/location/ExpoGpsProvider';
-import { base64ToUint8Array, uint8ArrayToBase64 } from '../../shared/encoding/base64';
-import { PHOTO_BIM_CODE_PREFIX } from '../../domain/objects/audit-photo';
-import { generateBimCode } from '../../domain/objects/project';
-import { ActionButton } from '../primitives';
+import { uint8ArrayToBase64 } from '../../shared/encoding/base64';
+
 import { PropertiesPanel } from '../components/PropertiesPanel';
 import { ZoneSheet } from '../workspace/ZoneSheet';
-import { zoneCode } from '../../domain/objects/zone';
-import { NumberField } from '../components/fields';
+
 import { AppServices } from '../../application/AppServices';
-import { EditorController, EditorState } from '../../application/editor/EditorController';
+
 import { Wall } from '../../domain/objects/wall';
 import { Door } from '../../domain/objects/door';
 import { Window } from '../../domain/objects/window';
@@ -121,7 +93,7 @@ import { Measurement } from '../../domain/objects/measurement';
 import { RoomId, revitObjectId, wallId } from '../../domain/objects/base';
 import { AppError } from '../../shared/errors/AppError';
 import { meters } from '../../domain/geometry/types';
-import { radius, spacing } from '../design/tokens';
+
 import { type } from '../design/typography';
 
 const CANVAS_TOUCH_TOLERANCE_PX = sizes.canvasTouchTolerance;
@@ -130,7 +102,7 @@ const CANVAS_TOUCH_TOLERANCE_PX = sizes.canvasTouchTolerance;
 // Props
 // ---------------------------------------------------------------------------
 
-export interface SurveyScreenProps {
+interface SurveyScreenProps {
   services: AppServices;
   roomId: RoomId;
   /** Abre la galería filtrada por el objeto indicado. */
@@ -148,14 +120,33 @@ export interface SurveyScreenProps {
   onExitProject?: () => void;
   /** Abre una pantalla del menú ☰ (galería, exportar, ajustes...). */
   onNavigate?: (screen: MenuScreen) => void;
+  /**
+   * Hay una pantalla del menú encima: el botón Atrás es suyo. Sin esto, el
+   * manejador del editor (que se vuelve a registrar al cambiar su estado)
+   * ganaba y Atrás en la Galería sacaba del espacio.
+   */
+  covered?: boolean;
 }
 
 /** Pantallas que se abren desde el menú ☰, por encima del levantamiento. */
-export type MenuScreen = 'gallery' | 'export' | 'settings' | 'profile';
+export type { MenuScreen } from '../workspace/useSurveyMenu';
 
 // ---------------------------------------------------------------------------
 // Componente
 // ---------------------------------------------------------------------------
+
+/** Fracción de la tolerancia de toque que cuenta como "justo encima" de un objeto BIM. */
+const STRICT_HIT_RATIO = 0.4;
+
+/** Nombre del tipo de objeto para los avisos (el `type` del dominio está en inglés). */
+const OBJECT_LABEL: Readonly<Record<string, string>> = {
+  Wall: 'Muro',
+  Column: 'Columna',
+  Door: 'Puerta',
+  Window: 'Ventana',
+  Floor: 'Suelo',
+  Opening: 'Vano',
+};
 
 export function SurveyScreen({
   services,
@@ -169,9 +160,17 @@ export function SurveyScreen({
   onExit,
   onExitProject,
   onNavigate,
+  covered = false,
 }: SurveyScreenProps) {
-  const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
-  const canvasHeight = Math.max(240, Math.round(screenHeight * 0.45));
+  const coveredRef = useRef(covered);
+  coveredRef.current = covered;
+  // Tamaño INICIAL (solo para la primera cámara): al girar el equipo el lienzo se
+  // vuelve a medir con onLayout; si el editor dependiera del tamaño de la ventana,
+  // girar lo recrearía y se perderían la selección y el deshacer.
+  const [{ screenWidth, canvasHeight }] = useState(() => {
+    const win = Dimensions.get('window');
+    return { screenWidth: win.width, canvasHeight: Math.max(240, Math.round(win.height * 0.45)) };
+  });
 
   // --- Controlador del editor: uno por Recinto activo ---
   const editor = useMemo(
@@ -179,17 +178,26 @@ export function SurveyScreen({
       new EditorController({
         services,
         roomId,
-        roomObjectId: revitObjectId(roomId as unknown as string),
+        roomObjectId: revitObjectId(roomId as string),
         initialTransform: { scale: 100, offsetX: screenWidth / 2, offsetY: canvasHeight / 2 },
       }),
-    [services, roomId, screenWidth, canvasHeight],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- el tamaño inicial no recrea el editor
+    [services, roomId],
   );
 
   const [state, setState] = useState<EditorState>(() => editor.getState());
+
+  // Cada espacio abre en Levantamiento, en planta y sin herramienta (decisión de
+  // diseño: el modo no se arrastra de un espacio a otro).
+  useEffect(() => {
+    const ws = workspaceStore.getState();
+    ws.clearTool();
+    ws.closePanels();
+    if (ws.workMode !== 'levantamiento') ws.setWorkMode('levantamiento');
+  }, [roomId]);
   const [panelOpen, setPanelOpen] = useState(false);
   const [zoneSheetOpen, setZoneSheetOpen] = useState(false);
   const [manualMeasureOpen, setManualMeasureOpen] = useState(false);
-  const [manualValue, setManualValue] = useState(3);
   const [measurements, setMeasurements] = useState<readonly Measurement[]>([]);
 
   // --- Cromo del espacio de trabajo (FABs, BPC, herramientas de esquina) ---
@@ -368,7 +376,7 @@ export function SurveyScreen({
   const topo = useTopography({
     services,
     projectId,
-    spaceId: roomId as unknown as string,
+    spaceId: roomId as string,
     editor,
     levelZ: Number.isFinite(levelInfo.active.value) ? levelInfo.active.value : 0,
     operatorName,
@@ -379,7 +387,7 @@ export function SurveyScreen({
   const topoTools = useTopoTools({
     services,
     projectId,
-    spaceId: roomId as unknown as string,
+    spaceId: roomId as string,
     projectName,
     editor,
     topo,
@@ -391,7 +399,7 @@ export function SurveyScreen({
   const progress = useProgress({
     services,
     projectId,
-    spaceId: roomId as unknown as string,
+    spaceId: roomId as string,
     editor,
     operatorName,
     objectsVersion: state.objects,
@@ -400,45 +408,31 @@ export function SurveyScreen({
   // --- Revisión (M4): marcas y observaciones ---
   const review = useReview({
     services,
-    spaceId: roomId as unknown as string,
+    spaceId: roomId as string,
     editor,
     operatorName,
     touchTolerancePx: CANVAS_TOUCH_TOLERANCE_PX,
   });
 
+  // Control de cierre del recinto abierto en la hoja.
+  const [zoneDiagonal, setZoneDiagonal] = useState<Awaited<ReturnType<EditorController['zoneDiagonal']>>>(null);
+  useEffect(() => {
+    const id = zoneSheetOpen ? editor.selectedZone?.id : undefined;
+    if (!id) return setZoneDiagonal(null);
+    void editor.zoneDiagonal(id).then(setZoneDiagonal);
+  }, [zoneSheetOpen, editor, state.selectedZoneId, state.rooms]);
+
+  const measureFaces = useMemo(() => (manualMeasureOpen ? editor.measureFaces() : null), [manualMeasureOpen, editor, state.objects]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // --- Dibujo técnico (F6b): cotas, textos, etiquetas, coordenadas, líneas, polígonos, vigas… ---
-  const coordText = useCallback(
-    (p: { x: number; y: number }) => (isGeoref(topo.geo) ? gridLabel(modelToGrid(topo.geo, roomId as unknown as string, p)) : localLabel(p)),
-    [topo.geo, roomId],
-  );
-  const tagAt = useCallback(
-    (x: number, y: number) => {
-      const o = editor.objectAt(x, y, CANVAS_TOUCH_TOLERANCE_PX);
-      if (o instanceof Wall) {
-        return { targetId: o.id as string, text: `Muro · ${Math.round(Number(o.thickness) * 100)} cm · ${Number(o.length).toFixed(2)} m${o.material ? ` · ${o.material}` : ''}` };
-      }
-      if (o instanceof Column) return { targetId: o.id as string, text: `Columna ${Math.round(Number(o.dimensionX) * 100)}${o.isCircular ? ' Ø' : `×${Math.round(Number(o.dimensionY ?? o.dimensionX) * 100)}`} cm` };
-      if (o instanceof Door) return { targetId: o.id as string, text: `Puerta ${Number(o.width).toFixed(2)} × ${Number(o.height).toFixed(2)}` };
-      if (o instanceof Window) return { targetId: o.id as string, text: `Ventana ${Number(o.width).toFixed(2)} × ${Number(o.height).toFixed(2)}` };
-      const z = editor.zoneAt(x, y);
-      if (z?.id) return { targetId: z.id, text: `${z.name ?? 'Recinto'}\n${(z.netArea ?? z.area).toFixed(2)} m²` };
-      return null;
-    },
-    [editor],
-  );
-  const targetCenter = useCallback((id: string) => editor.objectCenter(id), [editor]);
-  // Estable: si cambiara en cada render, el dibujo (y la planta entera) se regrabaría cada vez.
-  const draftColors = useMemo(() => ({ ink: canvasPalette.label, accent: canvasPalette.selection }), [canvasPalette.label, canvasPalette.selection]);
-  const drafting = useDrafting({
+  const drafting = useEditorDrafting({
     services,
-    spaceId: roomId as unknown as string,
     editor,
+    spaceId: roomId as string,
     levelId: levelInfo.active.id,
+    geo: topo.geo,
+    palette: canvasPalette,
     touchTolerancePx: CANVAS_TOUCH_TOLERANCE_PX,
-    coordText,
-    tagAt,
-    targetCenter,
-    colors: draftColors,
   });
   const [draftSheetOpen, setDraftSheetOpen] = useState(false);
 
@@ -490,6 +484,7 @@ export function SurveyScreen({
   useEffect(() => {
     if (elevWallId) return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (coveredRef.current) return false; // lo atiende la pantalla del menú
       // Lo abierto se cierra antes de salir del espacio: hojas, textos y flujos de cada modo.
       if (review.state.pendingText) {
         review.ctl.cancelText();
@@ -606,32 +601,7 @@ export function SurveyScreen({
   const handlePhotoCaptured = useCallback(
     async (photo: { base64: string }) => {
       try {
-        const saved = await photoFs.savePhoto(photo.base64);
-
-        let geo: { latitude: number; longitude: number; accuracyMeters: number } | undefined;
-        try {
-          const fix = await gps.getCurrentPosition();
-          geo = {
-            latitude: fix.latitude,
-            longitude: fix.longitude,
-            accuracyMeters: Number(fix.accuracy),
-          };
-        } catch {
-          geo = undefined;
-        }
-
-        const existing = await services.store.listAuditPhotos(roomId);
-        const bimCode = generateBimCode(
-          PHOTO_BIM_CODE_PREFIX,
-          existing.map((p) => p.metadata.bimCode).filter((c): c is string => !!c),
-        );
-
-        const result = await services.useCases.capturePhoto.execute({
-          roomId,
-          photoData: base64ToUint8Array(photo.base64),
-          filename: saved.filename,
-          metadata: { bimCode, geo },
-        });
+        const result = await saveFieldPhoto({ services, fs: photoFs, roomId, base64: photo.base64, operator: operatorName, gps });
 
         if (pendingFacePhoto) {
           setPendingFacePhoto(null);
@@ -645,7 +615,7 @@ export function SurveyScreen({
         closeCamera();
       }
     },
-    [photoFs, gps, services, roomId, editor, pendingFacePhoto, closeCamera],
+    [photoFs, gps, services, roomId, editor, pendingFacePhoto, closeCamera, operatorName],
   );
 
   // Tocar solo selecciona (o dibuja); las propiedades se abren con long-press,
@@ -674,14 +644,18 @@ export function SurveyScreen({
           return;
         }
       }
-      if (drafting.planTap(x, y)) return;
+      // Un toque JUSTO sobre un objeto BIM (puerta, muro, columna) lo elige aunque haya
+      // una cota encima; si no, va al dibujo técnico. Antes ganaba siempre la cota.
+      const onObject = editor.objectAt(x, y, CANVAS_TOUCH_TOLERANCE_PX * STRICT_HIT_RATIO) !== null;
+      if (!onObject && drafting.planTap(x, y)) return;
+      if (onObject && drafting.ctl.getState().selectedId) drafting.ctl.select(null);
       const before = editor.getState().selectedId;
       void editor.handleTap(x, y, CANVAS_TOUCH_TOLERANCE_PX).then(() => {
         const after = editor.getState().selectedId;
         if (editor.getState().tool === 'select' && after && after !== before) haptic.select();
       });
     },
-    [editor, topo.handleTap, topoTools.handleTap, progress.handleTap, review.plan, drafting.planTap, drafting.tool, onOpenPhoto],
+    [editor, topo.handleTap, topoTools.handleTap, progress.handleTap, review.plan, drafting.planTap, drafting.tool, drafting.ctl, onOpenPhoto],
   );
 
   // Propiedades (con edición y borrado) solo donde se edita el modelo: en los
@@ -719,7 +693,7 @@ export function SurveyScreen({
   const handleDragCancel = useCallback(() => editor.cancelDrag(), [editor]);
 
   const handleDelete = useCallback(() => {
-    const label = editor.selected?.type ?? 'Objeto';
+    const label = OBJECT_LABEL[editor.selected?.type ?? ''] ?? 'Objeto';
     setPanelOpen(false);
     haptic.destroy();
     void editor.deleteSelected().then(() =>
@@ -759,7 +733,7 @@ export function SurveyScreen({
       floors: editor.floorViews,
       genericOpenings: state.genericOpenings,
       showNodes: state.tool === 'wall',
-      measureTargetId: state.measureTargetId as unknown as string | null,
+      measureTargetId: state.measureTargetId as string | null,
       photoMarkers: state.photoMarkers,
     }),
     [displayObjects, dragging, state.selectedId, handles, state.rooms, roomName, state.selectedZoneId, state.tool, state.measureTargetId, state.photoMarkers, state.genericOpenings],
@@ -977,8 +951,8 @@ export function SurveyScreen({
       const m = meters(valueCm / 100);
       if (sel instanceof Wall && key === 'thickness') await editor.updateSelectedProperty('thickness', m);
       else if (sel instanceof Column && key === 'side') {
-        await editor.updateSelectedProperty('dimensionX', m);
-        if (!sel.isCircular) await editor.updateSelectedProperty('dimensionY', m);
+        // Un solo paso de deshacer: antes eran dos (X y luego Y).
+        await editor.updateSelectedProperty('dimensionX', m, sel.isCircular ? undefined : { dimensionY: m });
       } else if ((sel instanceof Door || sel instanceof Window) && key === 'width') {
         await editor.updateSelectedProperty('width', m);
       }
@@ -986,17 +960,24 @@ export function SurveyScreen({
     [editor],
   );
 
+  // «Lado» de una columna circular es su diámetro: el rótulo lo dice.
+  const circular =
+    (bpcContext.kind === 'tool' && activeTool?.methodId === 'circular') ||
+    (bpcContext.kind === 'selection' && editor.selected instanceof Column && editor.selected.isCircular);
+  const pillLabel = (key: PropKey) => (key === 'side' && circular ? 'Diámetro' : undefined);
   const bpcPills: BpcPill[] =
     bpcContext.kind === 'tool'
       ? (Object.entries(bpcContext.tool.props) as [PropKey, number][]).map(([key, value]) => ({
           key,
           value,
+          label: pillLabel(key),
           onCommit: (v) => workspaceStore.getState().setToolProp(key, v),
         }))
       : bpcContext.kind === 'selection' && editable
         ? (Object.entries(bpcContext.selection.props) as [PropKey, number][]).map(([key, value]) => ({
             key,
             value,
+            label: pillLabel(key),
             onCommit: (v) => void commitSelectionProp(key, v),
           }))
         : [];
@@ -1088,32 +1069,24 @@ export function SurveyScreen({
     }),
     [projectName, projectCode, roomName, operatorName, wallCount, state.objects.length, areaLabel],
   );
-  // --- Exportar a IFC (Revit): niveles, fases y antepechos del proyecto ---
-  const handleExportIfc = useCallback(
-    () =>
-      exportRevitIfc(services, {
-        roomId,
-        projectId,
-        projectName,
-        spaceName: roomName ?? 'Espacio',
-        author: operatorName,
-      }),
-    [services, projectId, roomId, projectName, operatorName, roomName],
-  );
-
-  const menuItems = useMemo((): MainMenuItem[] => {
-    const go = (s: MenuScreen) => () => onNavigate?.(s);
-    return [
-      { section: 'Espacio', icon: 'fit-to-screen-outline', label: 'Encuadrar todo', onPress: () => handleZoom('zoomFit') },
-      { icon: 'image-multiple-outline', label: 'Galería de fotos', onPress: go('gallery') },
-      ...(onExit ? [{ icon: 'view-grid-outline', label: 'Otros espacios del proyecto', onPress: onExit }] : []),
-      { section: 'Exportar', icon: 'file-export-outline', label: 'IFC para Revit', detail: 'Pisos por nivel y restricciones', onPress: () => void handleExportIfc() },
-      { icon: 'file-cad', label: 'IFC y DXF del recinto', onPress: go('export') },
-      ...(onExitProject ? [{ section: 'Proyecto', icon: 'folder-outline', label: 'Cambiar de proyecto', onPress: onExitProject }] : []),
-      { section: 'App', icon: 'account-circle-outline', label: 'Operador', detail: operatorName || undefined, onPress: go('profile') },
-      { icon: 'cog-outline', label: 'Ajustes y respaldos', onPress: go('settings') },
-    ];
-  }, [onExit, onExitProject, onNavigate, handleZoom, handleExportIfc, operatorName]);
+  const handleZoomFit = useCallback(() => handleZoom('zoomFit'), [handleZoom]);
+  // --- Menú ☰ y entregables (IFC, plano PDF, cuadro de áreas, registro fotográfico, paquete) ---
+  const menuItems = useSurveyMenu({
+    services,
+    editor,
+    rooms: state.rooms,
+    roomId,
+    projectId,
+    projectName,
+    projectCode,
+    spaceName: roomName ?? 'Espacio',
+    levelName: projectId ? levelInfo.active.name : undefined,
+    operatorName,
+    onNavigate,
+    onExit,
+    onExitProject,
+    onZoomFit: handleZoomFit,
+  });
 
   const topoVertices = useMemo(() => uniqueVertices(editor.walls), [editor, state.objects, levelInfo]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1187,8 +1160,9 @@ export function SurveyScreen({
         try {
           const p = await services.store.readAuditPhoto(id as never);
           if (p?.foto) out.set(id, `data:image/jpeg;base64,${uint8ArrayToBase64(p.foto as Uint8Array)}`);
-        } catch {
+        } catch (err) {
           // Sin la foto el acta igual sale (dice "Con foto").
+          record('warn', 'review-report', `Foto ${id} no disponible para el acta`, err);
         }
       }
       return out;
@@ -1203,25 +1177,15 @@ export function SurveyScreen({
       review.clearPhotoRequest();
       if (!itemId) return;
       try {
-        const saved = await photoFs.savePhoto(photo.base64);
-        const existing = await services.store.listAuditPhotos(roomId);
-        const bimCode = generateBimCode(
-          PHOTO_BIM_CODE_PREFIX,
-          existing.map((p) => p.metadata.bimCode).filter((c): c is string => !!c),
-        );
-        const result = await services.useCases.capturePhoto.execute({
-          roomId,
-          photoData: base64ToUint8Array(photo.base64),
-          filename: saved.filename,
-          metadata: { bimCode, notes: 'Revisión' },
-        });
-        await review.ctl.attachPhoto(itemId, result.photoId as unknown as string);
+        const { photoId, bimCode } = await saveFieldPhoto({ services, fs: photoFs, roomId, base64: photo.base64, operator: operatorName, notes: 'Revisión' });
+        const result = { photoId };
+        await review.ctl.attachPhoto(itemId, result.photoId as string);
         toast(`Foto ${bimCode} adjunta`, { kind: 'success' });
       } catch (err: unknown) {
         alertDialog('Error', err instanceof AppError ? err.userMessage : 'No se pudo guardar la foto.');
       }
     },
-    [review, photoFs, services, roomId],
+    [review, photoFs, services, roomId, operatorName],
   );
 
   // Un solo dueño del trazo de un dedo en la planta, según la herramienta activa.
@@ -1265,9 +1229,12 @@ export function SurveyScreen({
         style={styles.stage}
         onLayout={(e) => {
           const { width, height } = e.nativeEvent.layout;
-          setCanvasSize((prev) =>
-            Math.abs(prev.w - width) < 1 && Math.abs(prev.h - height) < 1 ? prev : { w: width, h: height },
-          );
+          const prev = canvasSize;
+          if (Math.abs(prev.w - width) < 1 && Math.abs(prev.h - height) < 1) return;
+          // Al girar el equipo el centro del dibujo se queda en el centro del lienzo.
+          const t = editor.getState().transform;
+          editor.setTransform({ ...t, offsetX: t.offsetX + (width - prev.w) / 2, offsetY: t.offsetY + (height - prev.h) / 2 });
+          setCanvasSize({ w: width, h: height });
         }}
       >
         <PlanCanvas
@@ -1437,6 +1404,11 @@ export function SurveyScreen({
               return f ? ((f.thickness as number | undefined) ?? 0) : null;
             })()}
             onAddFloor={() => editor.selectedZone?.id && void editor.addFloorToZone(editor.selectedZone.id)}
+            diagonal={zoneDiagonal}
+            onDiagonal={(v) => {
+              const id = editor.selectedZone?.id;
+              if (id) void editor.recordZoneDiagonal(id, meters(v)).then(() => editor.zoneDiagonal(id).then(setZoneDiagonal));
+            }}
             onRemoveFloor={() => {
               const id = editor.selectedZone?.id;
               if (!id) return;
@@ -1496,47 +1468,16 @@ export function SurveyScreen({
         />
       </Modal>
 
-      {/* --- Medición manual --- */}
-      <Modal
-        visible={manualMeasureOpen}
-        animationType="fade"
-        transparent
-        onRequestClose={() => setManualMeasureOpen(false)}
-      >
-        <View style={styles.dialogScrim}>
-          <View style={styles.dialog}>
-            <Text style={styles.dialogTitle}>Medida manual</Text>
-            <Text style={styles.dialogBody}>
-              Se guardará como medición del muro seleccionado. Útil cuando el láser no alcanza o no hay
-              batería.
-            </Text>
-            <NumberField
-              label="Distancia"
-              unit="m"
-              decimals={3}
-              min={0.01}
-              max={200}
-              value={manualValue}
-              onCommit={setManualValue}
-            />
-            <View style={styles.dialogActions}>
-              <ActionButton
-                label="Cancelar"
-                variant="secondary"
-                onPress={() => setManualMeasureOpen(false)}
-              />
-              <ActionButton
-                label="Guardar"
-                onPress={async () => {
-                  setManualMeasureOpen(false);
-                  const average = await editor.captureMeasurement('manual', meters(manualValue));
-                  if (average != null) await editor.applyMeasurementToWall(average);
-                }}
-              />
-            </View>
-          </View>
-        </View>
-      </Modal>
+      {/* --- Medida del muro (cara interior / exterior / eje) --- */}
+      <MeasureDialog
+        open={manualMeasureOpen}
+        faces={measureFaces}
+        onClose={() => setManualMeasureOpen(false)}
+        onApply={async (value, reference) => {
+          const average = await editor.captureMeasurement('manual', meters(value), undefined, reference);
+          if (average != null) await editor.applyMeasurementToWall(average, reference);
+        }}
+      />
     </View>
   );
 }
@@ -1555,4 +1496,3 @@ const useStyles = themedStyles((colors) => ({
   dialogActions: { flexDirection: 'row', gap: spacing.sm },
 }));
 
-export default SurveyScreen;

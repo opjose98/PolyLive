@@ -34,9 +34,9 @@ export interface RangeState {
   readonly seq: number;
 }
 
-export const NEG_INF_ID = 'inf-';
-export const POS_INF_ID = 'inf+';
-export const BASE_ID = 'base';
+const NEG_INF_ID = 'inf-';
+const POS_INF_ID = 'inf+';
+const BASE_ID = 'base';
 
 export function createRangeState(baseName: string): RangeState {
   return {
@@ -51,7 +51,7 @@ export function createRangeState(baseName: string): RangeState {
   };
 }
 
-export function isFiniteItem(item: RangeItem): boolean {
+function isFiniteItem(item: RangeItem): boolean {
   return Number.isFinite(item.value);
 }
 

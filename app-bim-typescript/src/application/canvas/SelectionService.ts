@@ -50,7 +50,7 @@ export interface Handle {
 // Entrada del hit-test
 // ---------------------------------------------------------------------------
 
-export interface HitTestInput {
+interface HitTestInput {
   /** Punto tocado, en coordenadas MUNDO (metros). */
   readonly worldPoint: Point2D;
   /** Todos los objetos visibles del Recinto (ya filtrados de borrados). */
@@ -77,7 +77,7 @@ export class SelectionService {
     // 1. Vanos (Door / Window) — se posicionan sobre el eje de su muro padre.
     for (const obj of objects) {
       if (!(obj instanceof Door) && !(obj instanceof Window)) continue;
-      const wall = wallsById.get(obj.parentWallId as unknown as string);
+      const wall = wallsById.get(obj.parentWallId as string);
       if (!wall) continue; // vano huérfano: su muro fue borrado — no es seleccionable
       if (this.hitsVano(worldPoint, obj, wall, thresholdMeters)) return obj;
     }
@@ -230,7 +230,7 @@ export class SelectionService {
       .filter(
         (o): o is Door | Window =>
           (o instanceof Door || o instanceof Window) &&
-          (o.parentWallId as unknown as string) === (wallId as string),
+          (o.parentWallId as string) === (wallId as string),
       )
       .map((o) => o.id);
   }

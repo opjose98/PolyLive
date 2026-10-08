@@ -4,24 +4,51 @@
 //
 // En Android la app no puede escribir en Descargas ni en Drive por su cuenta:
 // el Storage Access Framework le pide al usuario una carpeta y devuelve un
-// permiso sobre ella. La carpeta elegida se recuerda mientras la app esté
-// abierta, para que exportar varias veces no pregunte cada vez.
+// permiso sobre ella. La carpeta elegida se recuerda (también entre sesiones:
+// se guarda en un archivo de la app; Android conserva el permiso), para que
+// exportar no pregunte cada vez.
 //
 // Fuera de Android (o si el usuario cancela) no hay carpeta: el llamador
 // decide qué hacer (en iOS, guardar en los documentos de la app).
 // =============================================================================
 
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
 
 let rememberedDir: string | null = null;
+let loaded = false;
+const FOLDER_FILE = `${FileSystem.documentDirectory ?? ''}export-folder.txt`;
 
-/** ¿La próxima exportación va a abrir el selector de carpetas del sistema? */
-export function willAskForFolder(): boolean {
-  return Platform.OS === 'android' && rememberedDir === null;
+/** Carga la carpeta recordada de la sesión anterior (una vez). */
+async function loadRemembered(): Promise<void> {
+  if (loaded) return;
+  loaded = true;
+  try {
+    const dir = (await FileSystem.readAsStringAsync(FOLDER_FILE)).trim();
+    if (dir) rememberedDir = dir;
+  } catch {
+    // Primera vez: no hay carpeta recordada.
+  }
 }
 
-export type SaveResult =
+async function remember(dir: string | null): Promise<void> {
+  rememberedDir = dir;
+  try {
+    if (dir) await FileSystem.writeAsStringAsync(FOLDER_FILE, dir);
+    else await FileSystem.deleteAsync(FOLDER_FILE, { idempotent: true });
+  } catch {
+    // Si no se puede guardar, se recuerda solo en esta sesión.
+  }
+}
+
+/** ¿La próxima exportación va a abrir el selector de carpetas del sistema? */
+export async function willAskForFolder(): Promise<boolean> {
+  if (Platform.OS !== 'android') return false;
+  await loadRemembered();
+  return rememberedDir === null;
+}
+
+type SaveResult =
   | { readonly ok: true; readonly uri: string; readonly folderLabel: string }
   | { readonly ok: false; readonly reason: 'cancelled' | 'unsupported' | 'failed'; readonly detail?: string };
 
@@ -68,12 +95,13 @@ async function saveToUserFolder(
     return uri;
   };
 
+  await loadRemembered();
   if (rememberedDir && !opts.askAgain) {
     try {
       return { ok: true, uri: await write(rememberedDir), folderLabel: folderLabelOf(rememberedDir) };
     } catch {
       // El permiso caducó (o se borró la carpeta): se vuelve a preguntar.
-      rememberedDir = null;
+      await remember(null);
     }
   }
 
@@ -81,7 +109,7 @@ async function saveToUserFolder(
   if (!perm.granted) return { ok: false, reason: 'cancelled' };
   try {
     const uri = await write(perm.directoryUri);
-    rememberedDir = perm.directoryUri;
+    await remember(perm.directoryUri);
     return { ok: true, uri, folderLabel: folderLabelOf(perm.directoryUri) };
   } catch (err) {
     return { ok: false, reason: 'failed', detail: err instanceof Error ? err.message : String(err) };

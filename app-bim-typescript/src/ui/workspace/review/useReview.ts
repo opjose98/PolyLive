@@ -14,7 +14,7 @@ import { workspaceStore } from '../../../state/workspaceStore';
 import { toast } from '../../primitives';
 import type { SketchShape, SketchSource } from '../../canvas/sketch';
 
-export interface ReviewInput {
+interface ReviewInput {
   services: AppServices;
   spaceId: string;
   editor: EditorController;
@@ -27,7 +27,7 @@ const MIN_MARK_PX = 12;
 const STROKE_PX = 3;
 
 /** Una marca como formas del lienzo (más su número). */
-export function markupShapes(m: Markup, color: string, number?: number, selected = false): SketchShape[] {
+function markupShapes(m: Markup, color: string, number?: number, selected = false): SketchShape[] {
   const out: SketchShape[] = [];
   if (m.kind === 'freehand') out.push({ kind: 'stroke', points: m.points, width: STROKE_PX, widthIn: 'px', color });
   else if (m.kind === 'arrow') out.push({ kind: 'arrow', a: m.a, b: m.b, color });

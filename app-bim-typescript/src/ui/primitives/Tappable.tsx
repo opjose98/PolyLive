@@ -18,7 +18,7 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 export type HapticKind = keyof typeof haptic | 'none';
 
-export interface TappableProps extends Omit<PressableProps, 'style' | 'children' | 'disabled'> {
+interface TappableProps extends Omit<PressableProps, 'style' | 'children' | 'disabled'> {
   children?: React.ReactNode;
   style?: StyleProp<ViewStyle>;
   disabled?: boolean;

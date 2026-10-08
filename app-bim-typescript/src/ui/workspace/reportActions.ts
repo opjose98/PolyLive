@@ -4,8 +4,8 @@
 
 import { saveBase64ToUserFolder, saveTextToUserFolder } from '../../native/export/saveToUserFolder';
 import { folderHint } from './folderHint';
-import * as FileSystem from 'expo-file-system';
-import { shareExistingFile, shareFile } from '../../native/export/shareFile';
+import * as FileSystem from 'expo-file-system/legacy';
+import { shareExistingFile } from '../../native/export/shareFile';
 import { htmlToPdf } from '../../native/export/printPdf';
 import { toast } from '../primitives';
 import { haptic } from '../design/haptics';
@@ -32,7 +32,7 @@ async function guard(label: string, fn: () => Promise<void>): Promise<void> {
 
 export function saveCsv(filename: string, csv: string): Promise<void> {
   return guard('CSV', async () => {
-    folderHint();
+    await folderHint();
     // BOM: Excel reconoce las tildes.
     const r = await saveTextToUserFolder(filename, '﻿' + csv);
     if (r.ok) {
@@ -46,7 +46,7 @@ export function savePdf(filename: string, html: string): Promise<void> {
   return guard('PDF', async () => {
     toast('Generando PDF…', { kind: 'info', durationMs: 1200 });
     const pdf = await htmlToPdf(html);
-    folderHint();
+    await folderHint();
     const r = await saveBase64ToUserFolder(filename, pdf.base64, 'application/pdf');
     if (r.ok) {
       haptic.commit();
@@ -68,12 +68,5 @@ export function sharePdf(html: string, dialogTitle: string, filename?: string): 
       await FileSystem.copyAsync({ from: pdf.uri, to: uri });
     }
     if (!(await shareExistingFile(uri, 'application/pdf', dialogTitle))) toast('Compartir no está disponible', { kind: 'error' });
-  });
-}
-
-export function shareCsv(filename: string, csv: string): Promise<void> {
-  return guard('CSV', async () => {
-    const r = await shareFile(filename, '﻿' + csv, { mimeType: 'text/csv' });
-    if (!r.ok) toast('Compartir no está disponible', { kind: 'error' });
   });
 }

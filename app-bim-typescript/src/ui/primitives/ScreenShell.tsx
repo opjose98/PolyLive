@@ -70,7 +70,9 @@ export function ScreenShell({
 }
 
 const useStyles = themedStyles((colors) => ({
-  root: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.background },
+  // Por encima del cromo del levantamiento: en Android el orden de dibujo lo
+  // decide la elevación, y la barra superior del editor tapaba la cabecera.
+  root: { ...StyleSheet.absoluteFill, backgroundColor: colors.background, zIndex: 100, elevation: 24 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

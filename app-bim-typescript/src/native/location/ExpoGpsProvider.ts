@@ -24,12 +24,12 @@ import { meters, Meters } from '../../domain/geometry/types';
 import { GpsCoordinates } from '../../domain/geo/gpsAverage';
 import { AppError, AppErrorCode } from '../../shared/errors/AppError';
 
-export interface IGpsProvider {
+interface IGpsProvider {
   /** Posición actual. Lanza AppError si no hay permiso o no se puede fijar. */
   getCurrentPosition(): Promise<GpsCoordinates>;
 }
 
-export interface ExpoGpsProviderConfig {
+interface ExpoGpsProviderConfig {
   /**
    * Precisión pedida al sistema. `High` es lo adecuado en topografía: el modo
    * `Balanced` puede resolver por red y devolver un error de cientos de metros,
@@ -46,7 +46,7 @@ export interface ExpoGpsProviderConfig {
   maxAcceptableAccuracyMeters: number;
 }
 
-export const DEFAULT_GPS_CONFIG: ExpoGpsProviderConfig = {
+const DEFAULT_GPS_CONFIG: ExpoGpsProviderConfig = {
   accuracy: 4 as Location.LocationAccuracy, // LocationAccuracy.High
   timeoutMs: 15000,
   maxAcceptableAccuracyMeters: 25,

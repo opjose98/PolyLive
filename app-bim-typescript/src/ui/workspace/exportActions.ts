@@ -9,10 +9,12 @@
 // app, donde el operador no podía encontrar el archivo.
 // =============================================================================
 
+import { localStamp } from '../../shared/dates';
 import type { AppServices } from '../../application/AppServices';
 import { ValidationError } from '../../application/use-cases/types';
 import type { RoomId } from '../../domain/objects/base';
 import type { ProjectMarker } from '../../domain/objects/marker';
+import { projectId as toProjectId } from '../../domain/objects/project';
 import { AppError } from '../../shared/errors/AppError';
 import { saveTextToUserFolder } from '../../native/export/saveToUserFolder';
 import { folderHint } from './folderHint';
@@ -30,7 +32,7 @@ import { Wall } from '../../domain/objects/wall';
 import { Column } from '../../domain/objects/column';
 import { workspaceStore } from '../../state/workspaceStore';
 
-export interface ExportContext {
+interface ExportContext {
   readonly roomId: RoomId;
   readonly projectId?: string;
   readonly projectName: string;
@@ -38,7 +40,7 @@ export interface ExportContext {
   readonly author?: string;
 }
 
-export type ExportOutcome =
+type ExportOutcome =
   | { readonly ok: true; readonly folder: string; readonly detail?: string }
   | { readonly ok: false; readonly message: string | null };
 
@@ -51,9 +53,7 @@ const slug = (s: string) =>
 
 /** Nombre con fecha y hora LOCAL (la que reconoce el operador al buscarlo). */
 export function exportFilename(ctx: ExportContext, ext: string, now = new Date()): string {
-  const two = (n: number) => String(n).padStart(2, '0');
-  const stamp = `${now.getFullYear()}${two(now.getMonth() + 1)}${two(now.getDate())}-${two(now.getHours())}${two(now.getMinutes())}`;
-  return `${slug(ctx.projectName)}-${slug(ctx.spaceName)}-${stamp}.${ext}`;
+  return `${slug(ctx.projectName)}-${slug(ctx.spaceName)}-${localStamp(now)}.${ext}`;
 }
 
 function failureMessage(err: unknown, fallback: string): string {
@@ -63,7 +63,7 @@ function failureMessage(err: unknown, fallback: string): string {
 }
 
 async function save(ctx: ExportContext, ext: string, content: string, detail?: string): Promise<ExportOutcome> {
-  folderHint();
+  await folderHint();
   const saved = await saveTextToUserFolder(exportFilename(ctx, ext), content);
   if (saved.ok) {
     haptic.commit();
@@ -85,7 +85,7 @@ async function save(ctx: ExportContext, ext: string, content: string, detail?: s
 /** Dibujo técnico del espacio; si falla la lectura, el plano sale sin él (no se pierde la exportación). */
 async function loadDrafts(services: AppServices, ctx: ExportContext): Promise<DraftItem[]> {
   try {
-    return await services.drafts.list(ctx.roomId as unknown as string);
+    return await services.drafts.list(ctx.roomId as string);
   } catch (err) {
     console.warn('[export-drafts]', err);
     return [];
@@ -100,7 +100,7 @@ export async function exportRevitIfc(services: AppServices, ctx: ExportContext):
   try {
     const none = Promise.resolve([] as ProjectMarker[]);
     const geo = ctx.projectId ? await services.topography.getGeoreference(ctx.projectId) : null;
-    const space = ctx.roomId as unknown as string;
+    const space = ctx.roomId as string;
     // Proyecto amarrado: el IFC sale georreferenciado (coordenadas compartidas en Revit).
     const mapConversion = isGeoreferenced(geo)
       ? mapConversionFor(geo, space, workingCrs(geo.crs), crsDef(workingCrs(geo.crs)).name)
@@ -109,7 +109,7 @@ export async function exportRevitIfc(services: AppServices, ctx: ExportContext):
       ctx.projectId ? services.markers.list(ctx.projectId, 'level') : none,
       ctx.projectId ? services.markers.list(ctx.projectId, 'phase') : none,
       services.elevations.listElevations(ctx.roomId),
-      services.zones.list(ctx.roomId as unknown as string),
+      services.zones.list(ctx.roomId as string),
     ]);
     const sills = new Map<string, number>();
     for (const e of elevs) for (const o of e.openings) if (o.vanoId) sills.set(o.vanoId, o.sillHeight);
@@ -148,7 +148,7 @@ export async function exportPlanDxf(services: AppServices, ctx: ExportContext): 
     const elevations = await services.elevations.listElevations(ctx.roomId);
     // La planta del DXF es la del nivel base: sus recintos (los de otros niveles se superpondrían).
     const base = ctx.projectId ? (await services.markers.list(ctx.projectId, 'level')).find((m) => m.isBase)?.id : undefined;
-    const allZones = await services.zones.list(ctx.roomId as unknown as string);
+    const allZones = await services.zones.list(ctx.roomId as string);
     const zones = dxfZones(allZones, base ?? '');
     // Dibujo técnico del mismo nivel (el de planta; lo de alzado no va al plano de planta).
     const drafts = (await loadDrafts(services, ctx)).filter(
@@ -179,7 +179,7 @@ async function draftContext(
   ctx: ExportContext,
   zones: Awaited<ReturnType<AppServices['zones']['list']>>,
 ): Promise<Parameters<typeof draftDxfEntities>[1]> {
-  const space = ctx.roomId as unknown as string;
+  const space = ctx.roomId as string;
   const geo = ctx.projectId ? await services.topography.getGeoreference(ctx.projectId).catch(() => null) : null;
   const centers = new Map<string, Point2D>();
   for (const o of await services.store.listObjects(ctx.roomId)) {
@@ -196,3 +196,88 @@ async function draftContext(
     targetCenter: (id) => centers.get(id) ?? null,
   };
 }
+
+/**
+ * El PROYECTO completo en un IFC: todos sus espacios, cada uno en su ubicación
+ * (amarre), con un solo IfcProject/sitio/edificio y un piso por nivel. Revit lo
+ * abre como un modelo, sin vincular un archivo por espacio.
+ */
+export async function exportProjectIfc(
+  services: AppServices,
+  ctx: { readonly projectId: string; readonly projectName: string; readonly author?: string },
+): Promise<ExportOutcome> {
+  toast('Generando IFC del proyecto…', { kind: 'info', durationMs: 1200 });
+  const fileCtx: ExportContext = { roomId: '' as RoomId, projectId: ctx.projectId, projectName: ctx.projectName, spaceName: 'proyecto', author: ctx.author };
+  try {
+    const geo = await services.topography.getGeoreference(ctx.projectId).catch(() => null);
+    // El origen del IFC es el del proyecto (no el de un espacio): giro e x,y nulos.
+    const mapConversion = isGeoreferenced(geo)
+      ? mapConversionFor(geo, PROJECT_ORIGIN, workingCrs(geo.crs), crsDef(workingCrs(geo.crs)).name)
+      : undefined;
+    const [lv, ph, details] = await Promise.all([
+      services.markers.list(ctx.projectId, 'level'),
+      services.markers.list(ctx.projectId, 'phase'),
+      services.projects.listSpaceDetails(toProjectId(ctx.projectId)),
+    ]);
+    const spaces = [];
+    let memberCount = 0;
+    for (const d of details) {
+      if (!d.room) continue;
+      const roomId = d.space.roomId as RoomId;
+      const spaceCtx: ExportContext = { ...fileCtx, roomId, spaceName: d.space.name };
+      const [elevs, zones, drafts] = await Promise.all([
+        services.elevations.listElevations(roomId),
+        services.zones.list(d.space.roomId as string),
+        loadDrafts(services, spaceCtx),
+      ]);
+      const sills = new Map<string, number>();
+      for (const e of elevs) for (const o of e.openings) if (o.vanoId) sills.set(o.vanoId, o.sillHeight);
+      const members = draftIfcMembers(drafts);
+      memberCount += members.length;
+      spaces.push({ roomId, placement: geo?.placements[d.space.roomId as string], zones: ifcZones(zones), openingSills: sills, members });
+    }
+    if (!spaces.length) {
+      const message = 'El proyecto no tiene espacios con datos para exportar.';
+      toast(message, { kind: 'error' });
+      return { ok: false, message };
+    }
+    const out = await services.useCases.exportProjectIfc.execute({
+      levels: lv.map((m) => ({ id: m.id, name: m.name, elevation: m.value, isBase: m.isBase })),
+      phaseNames: new Map(ph.map((m) => [m.id, m.name] as [string, string])),
+      projectName: ctx.projectName,
+      projectKey: ctx.projectId,
+      author: ctx.author,
+      mapConversion,
+      spaces,
+    });
+    if (!out.spaces) {
+      const message = `No se puede exportar: ningún espacio pasa la validación (${out.skipped.join(', ')}).`;
+      toast(message, { kind: 'error' });
+      return { ok: false, message };
+    }
+    // Sin ubicación en el proyecto todos los espacios nacen en el mismo origen y se
+    // superponen en el modelo: se avisa cuáles faltan (se ubican en Topografía).
+    const unplaced = spaces.length > 1 ? spaces.filter((s) => !s.placement).length : 0;
+    if (unplaced) {
+      toast(`${unplaced} espacio(s) sin ubicar en el proyecto quedan superpuestos en el origen. Ubícalos con mojones en Topografía → Amarre → «Ubicar solo este espacio».`, {
+        kind: 'warning',
+        durationMs: 5000,
+      });
+    }
+    const detail =
+      `${out.spaces} espacio(s), ${lv.length || 1} nivel(es)` +
+      (unplaced ? `, ${unplaced} sin ubicar` : '') +
+      summarize(memberCount, 'barra de dibujo', 'barras de dibujo') +
+      (mapConversion ? ', georreferenciado' : '') +
+      (out.skipped.length ? ` · omitidos: ${out.skipped.join(', ')}` : '');
+    return await save(fileCtx, 'ifc', out.ifcContent, detail);
+  } catch (err) {
+    console.warn('[export-project-ifc]', err);
+    const message = failureMessage(err, 'No se pudo exportar el IFC del proyecto.');
+    toast(message, { kind: 'error' });
+    return { ok: false, message };
+  }
+}
+
+/** Id que no es de ningún espacio: su ubicación es la identidad (el origen del proyecto). */
+const PROJECT_ORIGIN = '__project__';

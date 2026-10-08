@@ -186,7 +186,7 @@ function isPolygonSelfIntersecting(vertices: Point2D[]): boolean {
   if (n < 3) return false;
 
   // Crear aristas (incluyendo la que cierra el polígono)
-  const edges: Array<[Point2D, Point2D]> = [];
+  const edges: [Point2D, Point2D][] = [];
   for (let i = 0; i < n; i++) {
     edges.push([vertices[i], vertices[(i + 1) % n]]);
   }

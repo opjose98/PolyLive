@@ -17,7 +17,7 @@ import { Column } from '../../src/domain/objects/column';
 import { Door } from '../../src/domain/objects/door';
 import { Window } from '../../src/domain/objects/window';
 import { revitObjectId, roomId, levelId, wallId } from '../../src/domain/objects/base';
-import { meters, squareMeters } from '../../src/domain/geometry/types';
+import { meters } from '../../src/domain/geometry/types';
 import { CANVAS_PALETTES } from '../../src/ui/design/canvasThemes';
 
 const GRID_COLOR = CANVAS_PALETTES.claro.grid;
@@ -524,11 +524,15 @@ describe('drawPlan — temas y rejilla', () => {
     expect(strokes(claro).has(CANVAS_PALETTES.claro.grid)).toBe(true);
   });
 
-  it('alto contraste engrosa la rejilla', () => {
+  it('alto contraste: la rejilla fina no engrosa (no compite con el dibujo); los ejes sí', () => {
     const r = new RecordingRenderer();
-    drawPlan(r, scene({ showGrid: true, palette: CANVAS_PALETTES.contraste }));
-    const gridLine = r.ops('drawLine').find((c) => (c.args[4] as { stroke: string }).stroke === CANVAS_PALETTES.contraste.grid)!;
-    expect((gridLine.args[4] as { width: number }).width).toBe(0.5 * CANVAS_PALETTES.contraste.lineScale);
+    const pal = CANVAS_PALETTES.contraste;
+    drawPlan(r, scene({ showGrid: true, palette: pal }));
+    const style = (c: { args: unknown[] }) => c.args[4] as { stroke: string; width: number };
+    const gridLine = r.ops('drawLine').find((c) => style(c).stroke === pal.grid)!;
+    expect(style(gridLine).width).toBe(0.5);
+    const axis = r.ops('drawLine').find((c) => style(c).stroke === pal.gridMajor)!;
+    expect(style(axis).width).toBe(1 * pal.lineScale);
   });
 
   it('la rejilla de puntos se dibuja en una sola llamada', () => {

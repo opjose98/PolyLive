@@ -16,7 +16,7 @@
 // =============================================================================
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Text, TextInput, View } from 'react-native';
+import { Text, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useStore } from 'zustand';
@@ -32,7 +32,7 @@ import {
   itemAt,
   trackFractionOf,
 } from '../../application/workspace/rangeModel';
-import { FloatWindow, Icon, IconButton, Tappable, toast } from '../primitives';
+import { CommitTextInput, FloatWindow, Icon, IconButton, Tappable, toast } from '../primitives';
 import { elevation, radius, sizes, spacing } from '../design/tokens';
 import { type } from '../design/typography';
 import { spring } from '../design/motion';
@@ -259,24 +259,25 @@ function ConfigWindow({ cfg, handlers }: { cfg: Config; handlers: RangeEditHandl
         <Text style={[styles.cfgHeadText, styles.cfgValueCol]}>{cfg.valueLabel}</Text>
         <View style={styles.cfgDel} />
       </View>
-      {items.map((it) => (
+      {/* De arriba hacia abajo, como el selector: el nivel más alto primero (antes, en orden de creación). */}
+      {[...items].sort((a, b) => b.value - a.value).map((it) => (
         <View key={it.id} style={styles.cfgRow}>
-          <TextInput
+          <CommitTextInput
             style={[styles.cfgInput, styles.cfgName]}
             defaultValue={it.name}
-            onEndEditing={(e) => {
-              const v = e.nativeEvent.text.trim();
+            onCommitText={(text) => {
+              const v = text.trim();
               if (v && v !== it.name) handlers.onRename(it.id, v);
             }}
             accessibilityLabel={`Nombre de ${it.name}`}
           />
-          <TextInput
+          <CommitTextInput
             style={[styles.cfgInput, styles.cfgValueCol, it.base && styles.cfgDisabled]}
             defaultValue={String(it.value)}
             editable={!it.base}
             keyboardType="numbers-and-punctuation"
-            onEndEditing={async (e) => {
-              const v = parseFloat(e.nativeEvent.text.replace(',', '.'));
+            onCommitText={async (text) => {
+              const v = parseFloat(text.replace(',', '.'));
               if (v === it.value) return;
               const reason = await handlers.onSetValue(it.id, v);
               if (reason === 'duplicate') toast(`Ya existe un elemento con ${cfg.valueLabel.toLowerCase()} ${v}`, { kind: 'warning' });
@@ -306,7 +307,8 @@ const useStyles = themedStyles((colors) => ({
   fabs: { gap: spacing.md, alignItems: 'flex-start' },
   panel: {
     height: '62%',
-    minHeight: 280,
+    // 200 y no más: en un teléfono en horizontal el 62 % es poco y no debe desbordar.
+    minHeight: 200,
     width: sizes.rangePanelWidth,
     backgroundColor: colors.surface,
     borderRadius: radius.round,

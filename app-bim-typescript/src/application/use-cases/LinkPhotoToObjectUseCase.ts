@@ -3,21 +3,17 @@
 // Basado en: LinkPhotoToObjectUseCase.md (Obsidian 02-Aplicación/use-cases)
 // =============================================================================
 
-import {
-  IObjectStore,
-  RevitObjectId,
-  AuditPhotoId,
-} from '../../domain/objects';
+import { IObjectStore, RevitObjectId, AuditPhotoId } from '../../domain/objects';
 import { CommandStack } from '../state/CommandStack';
 import { LinkPhotoCommand } from '../commands/LinkPhotoCommand';
 import { CommandId } from '../commands/Command';
 
-export interface LinkPhotoToObjectInput {
+interface LinkPhotoToObjectInput {
   photoId: AuditPhotoId;
   objectId: RevitObjectId;
 }
 
-export interface LinkPhotoToObjectOutput {
+interface LinkPhotoToObjectOutput {
   success: boolean;
   commandId: CommandId;
 }

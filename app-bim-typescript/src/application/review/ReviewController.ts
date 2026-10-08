@@ -211,7 +211,7 @@ export class ReviewController {
   private create(view: ReviewView, markup: Markup, color: string, comment: string): Promise<ReviewItem> {
     const run = async (): Promise<ReviewItem> => {
       const item: ReviewItem = {
-        id: generateId() as unknown as string,
+        id: generateId() as string,
         spaceId: this.spaceId,
         number: await this.store.nextNumber(this.spaceId),
         view,

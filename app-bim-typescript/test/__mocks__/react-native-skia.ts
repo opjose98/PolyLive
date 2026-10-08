@@ -14,6 +14,15 @@ const mockPath = () => ({
   close: jest.fn(),
 });
 
+/** PathBuilder (Skia 2): métodos encadenables y `detach()` devuelve el SkPath. */
+const mockPathBuilder = () => {
+  const b: Record<string, jest.Mock> = {};
+  for (const m of ['moveTo', 'lineTo', 'close', 'addArc', 'addCircle']) b[m] = jest.fn(() => b);
+  b.detach = jest.fn(() => mockPath());
+  b.build = jest.fn(() => mockPath());
+  return b;
+};
+
 /**
  * `matchFont` en el entorno de Node no tiene tipografías del sistema que
  * resolver. Se devuelve un objeto con `measureText` para que el adapter pueda
@@ -30,6 +39,10 @@ export const Skia = {
   XYWHRect: (x: number, y: number, w: number, h: number) => ({ x, y, width: w, height: h }),
   Path: {
     Make: mockPath,
+    Circle: mockPath,
+  },
+  PathBuilder: {
+    Make: mockPathBuilder,
   },
 };
 
@@ -39,7 +52,7 @@ export const StrokeJoin = { Miter: 0 };
 
 export const Canvas = 'Canvas';
 export const Picture = 'Picture';
-export const createPicture = (cb: any, _rect?: any) => {
+export const createPicture = (_cb: any, _rect?: any) => {
   // Return a mock SkPicture
   return { __typename: 'SkPicture' };
 };

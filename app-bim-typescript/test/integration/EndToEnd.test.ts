@@ -18,17 +18,17 @@ import { Database } from '../../src/infrastructure/sqlite/database';
 import { ObjectStore } from '../../src/infrastructure/sqlite/ObjectStore';
 import {
   Wall,
-  Door,
+  
   Room,
   RevitObjectId,
-  RoomId,
-  WallId,
+  
+  
   roomId,
   wallId,
   levelId,
   revitObjectId,
 } from '../../src/domain/objects';
-import { meters, squareMeters, Point2D } from '../../src/domain/geometry/types';
+import { meters, squareMeters } from '../../src/domain/geometry/types';
 import { CommandStack } from '../../src/application/state/CommandStack';
 import { CanvasManager } from '../../src/application/canvas/CanvasManager';
 import { canvasPoint } from '../../src/application/canvas/types';
@@ -208,7 +208,7 @@ describe('Flujo 4 — ExportIfc', () => {
     const output = await exportUseCase.execute({ roomId: exportRoomId });
 
     expect(output.ifcContent).toContain('ISO-10303-21');
-    expect(output.ifcContent).toContain('IFCWALLSTANDARDCASE');
+    expect(output.ifcContent).toContain('IFCWALL(');
 
     // Write file: el paso de escritura a disco no está en el UseCase (retorna el
     // string completo) — se simula aquí el paso que haría la capa de infraestructura.

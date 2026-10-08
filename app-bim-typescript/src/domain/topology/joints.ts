@@ -26,7 +26,7 @@ export interface JointWall {
   readonly end: Point2D;
 }
 
-export type WallEnd = 'start' | 'end';
+type WallEnd = 'start' | 'end';
 
 /** Nueva posición de los extremos de un muro (solo los que cambian). */
 export interface WallEndsChange {
@@ -192,19 +192,6 @@ export function planWallTranslate(
   return plan.changes();
 }
 
-/** Aplica un plan a la lista de muros (para vistas previas y tests). */
-export function applyEndsChanges<W extends JointWall>(
-  walls: readonly W[],
-  changes: readonly WallEndsChange[],
-  rebuild: (w: W, start: Point2D, end: Point2D) => W,
-): W[] {
-  const byId = new Map(changes.map((c) => [c.id, c]));
-  return walls.map((w) => {
-    const c = byId.get(w.id);
-    return c ? rebuild(w, c.start ?? w.start, c.end ?? w.end) : w;
-  });
-}
-
 /** Muros del plan que quedarían más cortos que `min` (el cambio se rechaza entero). */
 export function degenerateInPlan(
   walls: readonly JointWall[],
@@ -218,4 +205,28 @@ export function degenerateInPlan(
     if (dist(c.start ?? w.start, c.end ?? w.end) < min) out.push(c.id);
   }
   return out;
+}
+
+/**
+ * Aplicar una MEDIDA al muro `wallId` llevando su extremo final a `to`. En una
+ * esquina en L (un solo vecino, no alineado) el vecino se TRASLADA entero (y
+ * estira al siguiente): medir "este muro mide 3,70" deja el recinto con sus
+ * ángulos, como lo entiende quien mide. Antes el vecino giraba sobre su otro
+ * extremo y un rectángulo medido quedaba trapecio. En otros casos (T, varios
+ * vecinos, extremo libre) se mueve el extremo con sus uniones.
+ */
+export function planMeasureMove(walls: readonly JointWall[], wallId: string, to: Point2D, tol = JOINT_TOLERANCE): WallEndsChange[] {
+  const wall = walls.find((w) => w.id === wallId);
+  if (!wall) return [];
+  const joined = endsAt(walls, wall.end, new Set([wallId]), tol);
+  if (joined.length === 1) {
+    const nb = walls.find((w) => w.id === joined[0].id)!;
+    const ux = wall.end.x - wall.start.x;
+    const uy = wall.end.y - wall.start.y;
+    const vx = nb.end.x - nb.start.x;
+    const vy = nb.end.y - nb.start.y;
+    const cross = Math.abs(ux * vy - uy * vx) / ((Math.hypot(ux, uy) * Math.hypot(vx, vy)) || 1);
+    if (cross > 1e-3) return planWallTranslate(walls, nb.id, to.x - wall.end.x, to.y - wall.end.y, { tol });
+  }
+  return planEndMove(walls, wallId, 'end', to, { tol });
 }

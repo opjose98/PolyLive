@@ -25,25 +25,25 @@ const SIZE = 72;
 const C = SIZE / 2;
 const LEN = 24;
 
-export const AXIS_COLORS = { x: '#E53935', y: '#43A047', z: '#1E88E5', north: '#D32F2F' } as const;
+const AXIS_COLORS = { x: '#E53935', y: '#43A047', z: '#1E88E5', north: '#D32F2F' } as const;
 
 function arrow(dx: number, dy: number, len = LEN) {
-  const p = Skia.Path.Make();
   const ex = C + dx * len;
   const ey = C + dy * len;
-  p.moveTo(C, C);
-  p.lineTo(ex, ey);
-  // Punta
+  // Asta y punta.
   const hx = -dx * 7;
   const hy = -dy * 7;
-  p.moveTo(ex, ey);
-  p.lineTo(ex + hx - dy * 4, ey + hy + dx * 4);
-  p.moveTo(ex, ey);
-  p.lineTo(ex + hx + dy * 4, ey + hy - dx * 4);
-  return p;
+  return Skia.PathBuilder.Make()
+    .moveTo(C, C)
+    .lineTo(ex, ey)
+    .moveTo(ex, ey)
+    .lineTo(ex + hx - dy * 4, ey + hy + dx * 4)
+    .moveTo(ex, ey)
+    .lineTo(ex + hx + dy * 4, ey + hy - dx * 4)
+    .detach();
 }
 
-export interface AxisGizmoProps {
+interface AxisGizmoProps {
   readonly kind: 'plan' | 'elevation';
   /** Giro de la vista en planta (rad, horario en pantalla). */
   readonly rotation?: number;

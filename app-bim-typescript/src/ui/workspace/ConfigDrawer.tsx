@@ -11,21 +11,14 @@ import React from 'react';
 import { ScrollView, Text, TextInput, View } from 'react-native';
 import { useStore } from 'zustand';
 import { workspaceStore } from '../../state/workspaceStore';
-import {
-  CANVAS_THEMES,
-  LAYERS,
-  WORK_MODES,
-  ZoomAction,
-  filtersFor,
-  workModeDef,
-} from '../../application/workspace/catalog';
+import { CANVAS_THEMES, LAYERS, WORK_MODES, ZoomAction, filtersFor, workModeDef } from '../../application/workspace/catalog';
 import { selectWorkMode } from './FabView';
 import { Accordion, SideDrawer, TagToggle, Tappable, Icon } from '../primitives';
 import { radius, spacing } from '../design/tokens';
 import { type } from '../design/typography';
 import { themedStyles, useTheme } from '../design/theme';
 
-export interface FileInfo {
+interface FileInfo {
   project: string;
   projectCode: string;
   space: string;
@@ -35,7 +28,7 @@ export interface FileInfo {
   area: string;
 }
 
-export interface ConfigDrawerProps {
+interface ConfigDrawerProps {
   top: number;
   info: FileInfo;
   zoomPercent: number;
@@ -111,6 +104,7 @@ export const ConfigDrawer = React.memo(function ConfigDrawer({ top, info, zoomPe
             <Action icon="fit-to-screen-outline" label="Encuadre" onPress={() => onZoom('zoomFit')} />
             <Action icon="magnify-minus-outline" label="Alejar" onPress={() => onZoom('zoomOut')} />
             <Action icon="magnify-plus-outline" label="Acercar" onPress={() => onZoom('zoomIn')} />
+            <Action icon="selection-drag" label="Selección" onPress={() => onZoom('zoomSelection')} />
           </View>
         </Accordion>
 

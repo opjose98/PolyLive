@@ -4,17 +4,11 @@
 // =============================================================================
 
 import { Meters, meters } from '../../domain/geometry/types';
-import {
-  IObjectStore,
-  WallId,
-  RoomId,
-  MeasurementId,
-  Measurement,
-  generateId,
-} from '../../domain/objects';
+import { measurementId, IObjectStore, WallId, RoomId, MeasurementId, Measurement, generateId } from '../../domain/objects';
 import { IBLEManager } from './types';
+import type { MeasurementKind } from '../../domain/objects/measurement';
 
-export interface CaptureMeasurementInput {
+interface CaptureMeasurementInput {
   roomId: RoomId;
   wallId: WallId;
   method: 'ble' | 'manual';
@@ -35,9 +29,11 @@ export interface CaptureMeasurementInput {
    * un manager de lectura simple.
    */
   samples?: readonly number[];
+  /** Qué se midió (cara interior / exterior / eje). Por defecto, eje. */
+  reference?: MeasurementKind;
 }
 
-export interface CaptureMeasurementOutput {
+interface CaptureMeasurementOutput {
   measurementId: MeasurementId;
   average: Meters;
   samples: number[];
@@ -87,7 +83,7 @@ export class CaptureMeasurementUseCase {
     const average = meters(avg);
 
     // Persistir
-    const id = generateId() as unknown as MeasurementId;
+    const id = measurementId(generateId());
     const measurement = new Measurement({
       id,
       roomId: input.roomId,
@@ -95,6 +91,7 @@ export class CaptureMeasurementUseCase {
       capture_method: input.method,
       values_json: JSON.stringify(samples),
       average,
+      reference: input.reference ?? 'axis',
     });
 
     await (this.store as any).createMeasurement(measurement);

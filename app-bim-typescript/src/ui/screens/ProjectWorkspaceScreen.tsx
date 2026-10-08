@@ -11,19 +11,7 @@
 // =============================================================================
 
 import React, { useCallback, useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  SafeAreaView,
-  FlatList,
-  TouchableOpacity,
-  Modal,
-  RefreshControl,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-} from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, Modal, RefreshControl, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 
 import { AppServices } from '../../application/AppServices';
 import { SpaceDetail } from '../../application/projects/ProjectService';
@@ -41,7 +29,7 @@ import { themedStyles, useTheme } from '../design/theme';
 // Props
 // ---------------------------------------------------------------------------
 
-export interface ProjectWorkspaceScreenProps {
+interface ProjectWorkspaceScreenProps {
   services: AppServices;
   project: Project;
   onOpenSpace: (roomId: RoomId) => void;
@@ -165,17 +153,17 @@ export function ProjectWorkspaceScreen({
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.center}>
+      <View style={styles.center}>
         <ActivityIndicator color={colors.accentText} />
         <Text style={styles.muted}>Cargando espacios...</Text>
-      </SafeAreaView>
+      </View>
     );
   }
 
   const closedArea = spaces.reduce((sum, s) => sum + (s.areaM2 ?? 0), 0);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
@@ -275,7 +263,7 @@ export function ProjectWorkspaceScreen({
           <ScrollView contentContainerStyle={styles.dialog} keyboardShouldPersistTaps="handled" style={styles.dialogCard}>
             <Text style={styles.dialogTitle}>Nuevo espacio</Text>
             <Text style={styles.muted}>
-              Se creará un Recinto nuevo dentro de "{project.name}" y se le asignará el siguiente código
+              Se creará un Recinto nuevo dentro de «{project.name}» y se le asignará el siguiente código
               de espacio libre.
             </Text>
             <TextField
@@ -302,7 +290,7 @@ export function ProjectWorkspaceScreen({
           </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -361,7 +349,7 @@ function SpaceCard({
           </View>
 
           <Text style={styles.cardMeta}>
-            {areaM2 != null ? `${areaM2.toFixed(2)} m² · cerrado` : 'Sin cerrar'}
+            {areaM2 != null ? `${areaM2.toFixed(2)} m² netos · cerrado` : 'Sin cerrar'}
           </Text>
           <Text style={styles.cardMeta}>
             {objectCount} {objectCount === 1 ? 'elemento' : 'elementos'}
@@ -570,4 +558,3 @@ const useStyles = themedStyles((colors) => ({
   },
 }));
 
-export default ProjectWorkspaceScreen;

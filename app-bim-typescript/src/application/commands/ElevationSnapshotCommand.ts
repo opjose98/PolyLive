@@ -48,7 +48,7 @@ export class ElevationSnapshotCommand extends Command {
     const ids = new Set([...this.before.vanos.keys(), ...this.after.vanos.keys()]);
     for (const id of ids) {
       const target = snap.vanos.get(id) ?? null;
-      const oid = id as unknown as RevitObjectId;
+      const oid = id as RevitObjectId;
       const current = await store.readObject(oid);
       if (target === null) {
         if (current) await store.deleteObject(oid);

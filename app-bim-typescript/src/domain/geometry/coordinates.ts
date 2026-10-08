@@ -3,13 +3,7 @@
 // Basado en: sistema-coordenadas-6-capas.md, transformaciones-coordenadas.md
 // =============================================================================
 
-import {
-  Point2D,
-  Degrees,
-  CanvasTransform,
-  EPSILON,
-  degrees,
-} from './types';
+import { Point2D, Degrees, CanvasTransform, degrees } from './types';
 
 // ---------------------------------------------------------------------------
 // Conversión grados ↔ radianes
@@ -64,46 +58,6 @@ export function worldToScreen(point: Point2D, t: CanvasTransform): Point2D {
 // Rotaciones
 // ---------------------------------------------------------------------------
 
-/** Rota un punto 2D alrededor del origen por el ángulo dado. */
-export function rotatePoint2D(point: Point2D, angle: Degrees): Point2D {
-  const rad = degreesToRadians(angle);
-  const cos = Math.cos(rad);
-  const sin = Math.sin(rad);
-
-  return {
-    x: point.x * cos - point.y * sin,
-    y: point.x * sin + point.y * cos,
-  };
-}
-
 // ---------------------------------------------------------------------------
 // Proyección punto-línea
 // ---------------------------------------------------------------------------
-
-/**
- * Proyecta un punto sobre un segmento de línea (clamped a [0,1]).
- * Retorna el punto más cercano sobre el segmento.
- */
-export function projectPointToLine(
-  point: Point2D,
-  lineStart: Point2D,
-  lineEnd: Point2D,
-): Point2D {
-  const dx = lineEnd.x - lineStart.x;
-  const dy = lineEnd.y - lineStart.y;
-  const denom = dx * dx + dy * dy;
-
-  if (denom < EPSILON * EPSILON) {
-    // Línea degenerada (puntos coincidentes): retornar lineStart
-    return { x: lineStart.x, y: lineStart.y };
-  }
-
-  const t =
-    ((point.x - lineStart.x) * dx + (point.y - lineStart.y) * dy) / denom;
-  const clamped = Math.max(0, Math.min(1, t));
-
-  return {
-    x: lineStart.x + clamped * dx,
-    y: lineStart.y + clamped * dy,
-  };
-}

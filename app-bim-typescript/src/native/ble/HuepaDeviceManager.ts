@@ -20,7 +20,7 @@ import { base64ToUint8Array } from '../../shared/encoding/base64';
 // Types
 // ---------------------------------------------------------------------------
 
-export interface MeasurementResult {
+interface MeasurementResult {
   readonly distance: number;       // metros (promedio de 7 muestras)
   readonly stdDeviation: number;   // metros
   readonly samples: readonly number[];  // las 7 mediciones individuales
@@ -28,15 +28,15 @@ export interface MeasurementResult {
   readonly source: 'huepa' | 'mock';
 }
 
-export interface BLEDevice {
+interface BLEDevice {
   readonly id: string;
   readonly name: string;
   readonly rssi: number;
 }
 
-export type ConnectionState = 'disconnected' | 'scanning' | 'connecting' | 'connected' | 'measuring';
+type ConnectionState = 'disconnected' | 'scanning' | 'connecting' | 'connected' | 'measuring';
 
-export interface HuepaConfig {
+interface HuepaConfig {
   readonly sampleCount: number;       // default: 7
   readonly sampleIntervalMs: number;  // default: 100
   readonly scanTimeoutMs: number;     // default: 10000

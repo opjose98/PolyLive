@@ -4,7 +4,7 @@
 
 import type { Activity, ProgressCut, QuantityRow } from '../../domain/progress/progress';
 
-export interface ReportMeta {
+interface ReportMeta {
   readonly project: string;
   readonly space: string;
   readonly cut: ProgressCut;
@@ -12,7 +12,7 @@ export interface ReportMeta {
   readonly generatedAt: Date;
 }
 
-export interface ReportRow {
+interface ReportRow {
   readonly activity: string;
   readonly color: string;
   readonly support: string;
@@ -23,7 +23,7 @@ export interface ReportRow {
   readonly percent: number;
 }
 
-export interface ActivityTotal {
+interface ActivityTotal {
   readonly activity: string;
   readonly color: string;
   readonly inCut: number;

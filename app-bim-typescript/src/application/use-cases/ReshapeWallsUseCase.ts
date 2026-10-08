@@ -9,9 +9,9 @@ import { ReshapeWallsCommand, WallEndsSnapshot, writeEnds } from '../commands/Re
 import { AppError, AppErrorCode } from '../../shared/errors/AppError';
 
 /** Longitud mínima que puede quedarle a un muro arrastrado por una unión. */
-export const MIN_RESHAPED_LENGTH = 0.05;
+const MIN_RESHAPED_LENGTH = 0.05;
 
-export interface ReshapeWallsInput {
+interface ReshapeWallsInput {
   readonly changes: readonly WallEndsChange[];
 }
 
@@ -24,7 +24,7 @@ export class ReshapeWallsUseCase {
   async execute(input: ReshapeWallsInput): Promise<{ changed: number }> {
     const snapshots: WallEndsSnapshot[] = [];
     for (const c of input.changes) {
-      const wall = await this.store.readObject(c.id as unknown as RevitObjectId);
+      const wall = await this.store.readObject(c.id as RevitObjectId);
       if (!(wall instanceof Wall)) continue;
       const after = { start: c.start ?? wall.startPoint, end: c.end ?? wall.endPoint };
       if (Math.hypot(after.end.x - after.start.x, after.end.y - after.start.y) < MIN_RESHAPED_LENGTH) {

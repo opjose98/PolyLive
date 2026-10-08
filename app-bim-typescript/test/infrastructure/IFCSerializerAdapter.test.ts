@@ -51,7 +51,7 @@ describe('IFCSerializerAdapter', () => {
 
     expect(typeof content).toBe('string');
     expect(content).toContain('ISO-10303-21');
-    expect(content).toContain('IFCWALLSTANDARDCASE');
+    expect(content).toContain('IFCWALL(');
   });
 
   it('lanza AppError EXPORT_FAILED cuando el Compatibility Gate rechaza el Recinto, en vez de retornar contenido vacío silenciosamente', async () => {

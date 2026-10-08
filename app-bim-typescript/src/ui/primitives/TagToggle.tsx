@@ -17,7 +17,7 @@ import { Tappable } from './Tappable';
 import { Icon } from './Icon';
 import { useTheme } from '../design/theme';
 
-export interface TagToggleProps {
+interface TagToggleProps {
   label: string;
   on: boolean;
   onPress: () => void;

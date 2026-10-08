@@ -199,3 +199,13 @@ describe('ExpoBackupDatabaseUseCase', () => {
     expect(a.backupPath).not.toBe(b.backupPath);
   });
 });
+
+describe('backupTime (nombre → fecha, para no respaldar en cada arranque)', () => {
+  it('lee la fecha del nombre que genera el respaldo', () => {
+    const { backupTime } = jest.requireActual('../../../src/native/backup/ExpoBackupDatabaseUseCase');
+    const iso = '2026-10-06T16:40:05.123Z';
+    const name = `polylive-backup-${iso.replace(/[:.]/g, '-')}-ab12cd.db`;
+    expect(backupTime(name)).toBe(Date.parse(iso));
+    expect(backupTime('otro-archivo.db')).toBeNull();
+  });
+});

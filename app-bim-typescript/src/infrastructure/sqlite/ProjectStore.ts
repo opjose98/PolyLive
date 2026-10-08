@@ -12,24 +12,14 @@
 // =============================================================================
 
 import { IDatabase } from './database';
-import {
-  Project,
-  ProjectSpace,
-  ProjectId,
-  ProjectSummary,
-  BimDiscipline,
-  projectId as toProjectId,
-  normalizeBimCode,
-  generateProjectCode,
-  generateSpaceCode,
-} from '../../domain/objects/project';
+import { Project, ProjectSpace, ProjectId, ProjectSummary, BimDiscipline, projectId as toProjectId, normalizeBimCode, generateProjectCode, generateSpaceCode } from '../../domain/objects/project';
 import { AppError, AppErrorCode } from '../../shared/errors/AppError';
 
 // ---------------------------------------------------------------------------
 // Filas
 // ---------------------------------------------------------------------------
 
-export interface ProjectRow {
+interface ProjectRow {
   id: string;
   bim_code: string;
   name: string;
@@ -41,7 +31,7 @@ export interface ProjectRow {
   updated_at: string;
 }
 
-export interface ProjectSpaceRow {
+interface ProjectSpaceRow {
   project_id: string;
   room_id: string;
   bim_code: string;
@@ -228,6 +218,14 @@ export class ProjectStore {
     );
   }
 
+  /** Suma del área neta de los recintos cerrados (ligados) de cada espacio. */
+  async netAreaBySpace(): Promise<Map<string, number>> {
+    const rows = await this.db.all<{ space_id: string; net: number }>(
+      `SELECT space_id, SUM(net_area) AS net FROM zones WHERE is_deleted = 0 AND bound = 1 GROUP BY space_id`,
+    );
+    return new Map(rows.filter((r) => r.net > 0).map((r) => [r.space_id, r.net]));
+  }
+
   async listSpaces(project: ProjectId): Promise<ProjectSpace[]> {
     const rows = await this.db.all<ProjectSpaceRow>(
       `SELECT * FROM project_spaces
@@ -345,6 +343,10 @@ export class ProjectStore {
        WHERE ps.is_deleted = 0`,
     );
 
+    // Área NETA (cara interior) de los recintos ligados de cada espacio: es la que
+    // ve el operador en la planta. El área del Recinto (al eje) solo se usa si el
+    // espacio aún no tiene recintos con identidad.
+    const net = await this.netAreaBySpace();
     const byProject = new Map<string, { count: number; area: number; open: number }>();
     for (const row of rows) {
       const bucket = byProject.get(row.project_id) ?? { count: 0, area: 0, open: 0 };
@@ -362,7 +364,7 @@ export class ProjectStore {
         }
       }
 
-      if (area != null) bucket.area += area;
+      if (area != null) bucket.area += net.get(row.room_id) ?? area;
       else bucket.open += 1;
 
       byProject.set(row.project_id, bucket);

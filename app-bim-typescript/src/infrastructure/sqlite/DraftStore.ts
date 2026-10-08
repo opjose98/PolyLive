@@ -3,6 +3,7 @@
 // =============================================================================
 
 import { IDatabase } from './database';
+import { diagnostics } from '../../shared/diagnostics';
 import type { DraftItem, DraftKind, DraftView } from '../../domain/drafting/drafting';
 
 interface Row {
@@ -32,8 +33,9 @@ function toItem(r: Row): DraftItem | null {
       ...(r.target_id ? { targetId: r.target_id } : {}),
       createdAt: r.created_at,
     };
-  } catch {
+  } catch (err) {
     // Un elemento ilegible se omite: no debe impedir ver el resto del dibujo.
+    diagnostics.error('draft_items', `Se omitió una fila ilegible (${r.id})`, err);
     return null;
   }
 }

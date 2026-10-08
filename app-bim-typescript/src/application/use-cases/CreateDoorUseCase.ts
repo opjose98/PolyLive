@@ -4,16 +4,7 @@
 // =============================================================================
 
 import { Meters, ValidationWarning } from '../../domain/geometry/types';
-import {
-  IObjectStore,
-  Door,
-  Wall,
-  RoomId,
-  WallId,
-  RevitObjectId,
-  generateId,
-  ObjectProperties,
-} from '../../domain/objects';
+import { revitObjectId, IObjectStore, Door, Wall, RoomId, WallId, generateId, ObjectProperties } from '../../domain/objects';
 import { CommandStack } from '../state/CommandStack';
 import { CreateDoorCommand } from '../commands/CreateDoorCommand';
 import { CommandId } from '../commands/Command';
@@ -32,7 +23,7 @@ export interface CreateDoorInput {
   properties?: ObjectProperties;
 }
 
-export interface CreateDoorOutput {
+interface CreateDoorOutput {
   door: Door;
   warnings: ValidationWarning[];
   commandId: CommandId;
@@ -47,7 +38,7 @@ export class CreateDoorUseCase {
 
   async execute(input: CreateDoorInput): Promise<CreateDoorOutput> {
     // 1. Verificar Wall padre existe
-    const parentWall = await this.store.readObject(input.parentWallId as unknown as RevitObjectId);
+    const parentWall = await this.store.readObject(revitObjectId(input.parentWallId));
     if (!parentWall || !(parentWall instanceof Wall)) {
       throw new Error('Wall padre no existe o no es un Wall');
     }

@@ -10,21 +10,21 @@
 
 import type { Point2D } from '../../domain/geometry/types';
 
-export interface SvgWall {
+interface SvgWall {
   readonly start: Point2D;
   readonly end: Point2D;
   readonly thickness: number;
   readonly existing?: boolean;
 }
 
-export interface SvgZone {
+interface SvgZone {
   readonly polygon: readonly Point2D[];
   readonly label: string;
   readonly sublabel?: string;
   readonly at: Point2D;
 }
 
-export interface SvgLayer {
+interface SvgLayer {
   readonly color: string;
   readonly opacity: number;
   readonly runs: readonly { x: number; y: number; w: number; h: number }[];
@@ -36,13 +36,22 @@ export type SvgMark =
   | { readonly kind: 'text'; readonly at: Point2D; readonly text: string; readonly color: string }
   | { readonly kind: 'pin'; readonly at: Point2D; readonly label: string; readonly color: string };
 
-export interface PlanSvgInput {
+interface PlanSvgInput {
   readonly walls: readonly SvgWall[];
   readonly zones?: readonly SvgZone[];
   readonly layers?: readonly SvgLayer[];
   readonly marks?: readonly SvgMark[];
   /** Margen alrededor del dibujo (m). */
   readonly margin?: number;
+  /** Escala gráfica (barra de metros) abajo a la izquierda: vale aunque el PDF se imprima a otro tamaño. */
+  readonly scaleBar?: boolean;
+}
+
+/** Largo "redondo" de la escala gráfica para un dibujo de ancho `w` (m): ~1/5 del ancho. */
+export function scaleBarLength(w: number): number {
+  const target = w / 5;
+  for (const s of [0.5, 1, 2, 5, 10, 20, 50, 100]) if (s >= target) return s;
+  return 100;
 }
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -115,6 +124,19 @@ export function planSvg(input: PlanSvgInput): string {
         `<text x="${n(m.at.x)}" y="${n(m.at.y + unit * 0.7)}" font-size="${n(unit * 1.9)}" text-anchor="middle" font-family="sans-serif" fill="#fff">${esc(m.label)}</text>`,
       );
     }
+  }
+  if (input.scaleBar) {
+    const len = scaleBarLength(w - 2 * margin);
+    const x0 = minX + margin * 0.3;
+    const y0 = minY + h - margin * 0.35;
+    const hb = unit * 0.8;
+    for (let i = 0; i < 4; i++) {
+      out.push(
+        `<rect x="${n(x0 + (len / 4) * i)}" y="${n(y0 - hb)}" width="${n(len / 4)}" height="${n(hb)}" fill="${i % 2 ? '#ffffff' : '#222222'}" stroke="#222" stroke-width="${n(unit * 0.08)}"/>`,
+      );
+    }
+    out.push(`<text x="${n(x0)}" y="${n(y0 - hb * 1.6)}" font-size="${n(unit * 1.6)}" font-family="sans-serif" fill="#222">0</text>`);
+    out.push(`<text x="${n(x0 + len)}" y="${n(y0 - hb * 1.6)}" font-size="${n(unit * 1.6)}" text-anchor="end" font-family="sans-serif" fill="#222">${len} m</text>`);
   }
   out.push('</svg>');
   return out.join('\n');

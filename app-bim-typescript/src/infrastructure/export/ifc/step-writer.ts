@@ -84,6 +84,7 @@ export type IfcValue =
   | { readonly identifier: string }
   | { readonly length: number }
   | { readonly bool: boolean }
+  | { readonly area: number }
   | { readonly real: number };
 
 function ifcValue(v: IfcValue): string {
@@ -91,6 +92,7 @@ function ifcValue(v: IfcValue): string {
   if ('identifier' in v) return `IFCIDENTIFIER(${stepString(v.identifier)})`;
   if ('length' in v) return `IFCLENGTHMEASURE(${stepReal(v.length)})`;
   if ('bool' in v) return `IFCBOOLEAN(${bool(v.bool)})`;
+  if ('area' in v) return `IFCAREAMEASURE(${stepReal(v.area)})`;
   return `IFCREAL(${stepReal(v.real)})`;
 }
 
@@ -98,7 +100,7 @@ function ifcValue(v: IfcValue): string {
 // Escritor
 // ---------------------------------------------------------------------------
 
-export interface Vec2 {
+interface Vec2 {
   readonly x: number;
   readonly y: number;
 }
@@ -118,6 +120,7 @@ export class StepWriter {
   private dirNegY = 0;
   private identity3 = 0;
   private readonly materialSets = new Map<string, number>();
+  private readonly materials = new Map<string, number>();
 
   /** Añade una entidad y devuelve su id. */
   add(entity: string): number {
@@ -239,10 +242,16 @@ export class StepWriter {
     );
   }
 
-  quantities(key: string, name: string, element: number, q: { lengths: [string, number][]; areas?: [string, number][] }): number {
+  quantities(
+    key: string,
+    name: string,
+    element: number,
+    q: { lengths: [string, number][]; areas?: [string, number][]; volumes?: [string, number][] },
+  ): number {
     const ids = [
       ...q.lengths.map(([n, v]) => this.add(`IFCQUANTITYLENGTH(${stepString(n)},$,$,${stepReal(v)},$)`)),
       ...(q.areas ?? []).map(([n, v]) => this.add(`IFCQUANTITYAREA(${stepString(n)},$,$,${stepReal(v)},$)`)),
+      ...(q.volumes ?? []).map(([n, v]) => this.add(`IFCQUANTITYVOLUME(${stepString(n)},$,$,${stepReal(v)},$)`)),
     ];
     const qto = this.add(`IFCELEMENTQUANTITY('${stableGuid(`qto:${name}:${key}`)}',${ref(this.ownerHistory)},${stepString(name)},$,$,${refs(ids)})`);
     return this.add(
@@ -260,6 +269,15 @@ export class StepWriter {
     const set = this.add(`IFCMATERIALLAYERSET((${ref(layer)}),${stepString(`${material} ${Math.round(thickness * 1000)} mm`)},$)`);
     this.materialSets.set(key, set);
     return set;
+  }
+
+  /** Material simple (columnas, barras), reutilizado por nombre. */
+  material(name: string): number {
+    const cached = this.materials.get(name);
+    if (cached) return cached;
+    const id = this.add(`IFCMATERIAL(${stepString(name)},$,$)`);
+    this.materials.set(name, id);
+    return id;
   }
 
   /** Uso de la capa sobre el eje del muro: centrada (desfase −e/2, sentido positivo). */
@@ -358,4 +376,4 @@ export class StepWriter {
   }
 }
 
-export { ref, refs, bool };
+export { ref };

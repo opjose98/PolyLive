@@ -7,7 +7,7 @@
 // =============================================================================
 
 import React, { useEffect } from 'react';
-import { StyleSheet, useWindowDimensions, View } from 'react-native';
+import { AppState, StyleSheet, useWindowDimensions, View } from 'react-native';
 import Animated, {
   Extrapolation,
   interpolate,
@@ -21,7 +21,7 @@ import { elevation, sizes } from '../design/tokens';
 import { spring } from '../design/motion';
 import { themedStyles } from '../design/theme';
 
-export interface SideDrawerProps {
+interface SideDrawerProps {
   open: boolean;
   onClose: () => void;
   side: 'left' | 'right';
@@ -42,6 +42,18 @@ export function SideDrawer({ open, onClose, side, top = 0, children }: SideDrawe
   useEffect(() => {
     drag.value = 0;
     progress.value = withSpring(open ? 1 : 0, spring.gentle);
+  }, [open, progress, drag]);
+
+  // Una entrada del menú abre otra actividad (el selector de carpetas) mientras el cajón
+  // aún se cierra: la animación se queda a medias y, al volver, el cajón se ve abierto
+  // aunque ya está cerrado. Al volver a primer plano se fija en su estado real.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s !== 'active') return;
+      drag.value = 0;
+      progress.value = open ? 1 : 0;
+    });
+    return () => sub.remove();
   }, [open, progress, drag]);
 
   const pan = Gesture.Pan()
@@ -66,7 +78,13 @@ export function SideDrawer({ open, onClose, side, top = 0, children }: SideDrawe
   }));
 
   return (
-    <View pointerEvents={open ? 'auto' : 'none'} style={[StyleSheet.absoluteFill, { top }]}>
+    <View
+      pointerEvents={open ? 'auto' : 'none'}
+      // Cerrado, el lector de pantalla no debe leer (ni ofrecer) sus entradas.
+      importantForAccessibility={open ? 'auto' : 'no-hide-descendants'}
+      accessibilityElementsHidden={!open}
+      style={[StyleSheet.absoluteFill, { top }]}
+    >
       <Animated.View style={[StyleSheet.absoluteFill, styles.scrim, scrimStyle]}>
         <View style={StyleSheet.absoluteFill} onTouchEnd={onClose} accessibilityLabel="Cerrar" />
       </Animated.View>

@@ -19,7 +19,7 @@
 // =============================================================================
 
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { View, Text, SafeAreaView, ScrollView } from 'react-native';
+import { View, Text, ScrollView } from 'react-native';
 import { AppServices } from '../../application/AppServices';
 import { exportPlanDxf, exportRevitIfc } from '../workspace/exportActions';
 import { Room, RoomId, revitObjectId } from '../../domain/objects';
@@ -33,7 +33,7 @@ import { themedStyles } from '../design/theme';
 // Props y estado
 // ---------------------------------------------------------------------------
 
-export interface ExportScreenProps {
+interface ExportScreenProps {
   services: AppServices;
   roomId: RoomId;
   /** Proyecto del recinto: sus niveles y fases van al IFC. */
@@ -55,13 +55,17 @@ type ExportStatus =
 export function ExportScreen({ services, roomId, projectId, projectName = 'Proyecto', operatorName }: ExportScreenProps) {
   const styles = useStyles();
   const [room, setRoom] = useState<Room | null>(null);
+  // Área neta (cara interior) de los recintos cerrados: la que se ve en la planta.
+  const [netArea, setNetArea] = useState<number | null>(null);
   const [status, setStatus] = useState<ExportStatus>({ phase: 'idle' });
-
 
   const loadRoom = useCallback(async () => {
     try {
-      const obj = await services.store.readObject(revitObjectId(roomId as unknown as string));
+      const obj = await services.store.readObject(revitObjectId(roomId as string));
       setRoom(obj instanceof Room ? obj : null);
+      const zones = await services.zones.list(roomId as string);
+      const bound = zones.filter((z) => z.bound);
+      setNetArea(bound.length ? bound.reduce((s, z) => s + z.netArea, 0) : null);
     } catch {
       setRoom(null);
     }
@@ -116,7 +120,7 @@ export function ExportScreen({ services, roomId, projectId, projectName = 'Proye
   // -----------------------------------------------------------------------
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
         {/* --- Estado del Recinto --- */}
         <View style={styles.card}>
@@ -131,7 +135,11 @@ export function ExportScreen({ services, roomId, projectId, projectName = 'Proye
               />
               <ReadonlyRow label="Estado" value={room.isOpen ? 'Abierto (en trazo)' : 'Cerrado'} />
               <ReadonlyRow
-                label="Área"
+                label="Área neta (cara interior)"
+                value={netArea != null ? `${netArea.toFixed(2)} m²` : 'No calculada'}
+              />
+              <ReadonlyRow
+                label="Área al eje de muros"
                 value={room.area != null ? `${Number(room.area).toFixed(2)} m²` : 'No calculada'}
               />
               <ReadonlyRow label="Vértices" value={String(room.geometry.length)} />
@@ -194,7 +202,7 @@ export function ExportScreen({ services, roomId, projectId, projectName = 'Proye
           </View>
         ) : null}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -250,4 +258,3 @@ const useStyles = themedStyles((colors) => ({
   },
 }));
 
-export default ExportScreen;

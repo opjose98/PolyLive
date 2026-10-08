@@ -15,7 +15,7 @@ import { radius, spacing } from '../design/tokens';
 import { type } from '../design/typography';
 import { themedStyles, useTheme } from '../design/theme';
 
-export interface OperatorProfileScreenProps {
+interface OperatorProfileScreenProps {
   store: ObjectStore;
   operator: Operator;
   onUpdated: (operator: Operator) => void;

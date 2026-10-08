@@ -26,7 +26,7 @@ import { RevitObjectId } from '../../domain/objects/base';
 // ---------------------------------------------------------------------------
 
 /** Recinto candidato. NO es un `Room` persistido: es una propuesta. */
-export interface RoomSuggestion {
+interface RoomSuggestion {
   /** Vértices normalizados en orientación horaria (CW). */
   readonly polygon: Point2D[];
   readonly area: SquareMeters;
@@ -35,7 +35,7 @@ export interface RoomSuggestion {
   readonly boundaryWallIds: RevitObjectId[];
 }
 
-export interface DetectRoomsInput {
+interface DetectRoomsInput {
   readonly walls: readonly Wall[];
   /** Tolerancia de fusión de nodos en metros. Por defecto 0.05 (5 cm). */
   readonly snapTolerance?: number;
@@ -43,10 +43,10 @@ export interface DetectRoomsInput {
   readonly minArea?: number;
 }
 
-export interface DetectRoomsOutput {
+interface DetectRoomsOutput {
   readonly suggestions: RoomSuggestion[];
   /** Ciclos hallados pero descartados, con el motivo. Útil para diagnóstico. */
-  readonly rejected: Array<{ reason: string }>;
+  readonly rejected: { reason: string }[];
 }
 
 // ---------------------------------------------------------------------------
@@ -65,7 +65,7 @@ export class DetectRoomsUseCase {
 
     const validator = new PolygonValidator({ minArea: input.minArea });
     const suggestions: RoomSuggestion[] = [];
-    const rejected: Array<{ reason: string }> = [];
+    const rejected: { reason: string }[] = [];
 
     for (const cycle of graph.findMinimalCycles()) {
       const vertices = extractVertices(cycle);
@@ -127,7 +127,7 @@ function uniqueWallIds(edges: readonly TopologyEdge[]): RevitObjectId[] {
   const ids: RevitObjectId[] = [];
   for (const edge of edges) {
     const id = edge.sourceWall.id;
-    const key = id as unknown as string;
+    const key = id as string;
     if (seen.has(key)) continue;
     seen.add(key);
     ids.push(id);

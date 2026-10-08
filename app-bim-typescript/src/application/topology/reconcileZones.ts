@@ -34,7 +34,7 @@ export interface DetectedContour {
   readonly perimeter: number;
 }
 
-export interface ReconcileInput {
+interface ReconcileInput {
   /** Recintos del espacio en ESTE nivel (ligados y desligados). */
   readonly zones: readonly Zone[];
   readonly detected: readonly DetectedContour[];
@@ -46,7 +46,7 @@ export interface ReconcileInput {
   readonly now: string;
 }
 
-export interface ReconcileResult {
+interface ReconcileResult {
   /** Recinto asignado a cada contorno, en el orden de `detected`. */
   readonly assigned: readonly Zone[];
   /** Recintos nuevos o modificados: hay que persistirlos. */

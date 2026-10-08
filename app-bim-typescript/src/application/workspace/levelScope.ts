@@ -13,7 +13,7 @@ import type { LevelScope, PhaseScope } from '../editor/EditorController';
 import { itemAt, RangeItem, RangeState } from './rangeModel';
 
 /** Lo que la vista necesita de los selectores: niveles/fases reales y los activos. */
-export interface LevelView {
+interface LevelView {
   /** Niveles con cota (sin los extremos ±∞ del selector), en su orden. */
   readonly levels: readonly RangeItem[];
   readonly active: RangeItem;

@@ -20,9 +20,9 @@ import { Tappable } from './Tappable';
 import { haptic } from '../design/haptics';
 import { themedStyles, useTheme } from '../design/theme';
 
-export type ToastKind = 'info' | 'success' | 'warning' | 'error';
+type ToastKind = 'info' | 'success' | 'warning' | 'error';
 
-export interface ToastOptions {
+interface ToastOptions {
   kind?: ToastKind;
   action?: { label: string; onPress: () => void };
   durationMs?: number;

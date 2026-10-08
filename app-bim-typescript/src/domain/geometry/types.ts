@@ -41,28 +41,6 @@ export interface Point2D {
   readonly y: number;
 }
 
-/** Punto en 3D con unidades tipadas. Z = altura absoluta en el Piso (Level). */
-export interface Point3D {
-  readonly x: Meters;
-  readonly y: Meters;
-  readonly z: Meters;
-}
-
-/** Triángulo (geometría). */
-export interface Triangle {
-  readonly v0: Point2D;
-  readonly v1: Point2D;
-  readonly v2: Point2D;
-  readonly area: SquareMeters;
-}
-
-/** Polígono simple, opcionalmente con huecos internos (columnas, etc.). */
-export interface Polygon {
-  readonly vertices: Point2D[];
-  readonly holes?: Polygon[];
-  readonly isClosed: boolean;
-}
-
 // ---------------------------------------------------------------------------
 // Resultado de triangulación
 // ---------------------------------------------------------------------------
@@ -78,14 +56,6 @@ export interface ValidationWarning {
   readonly type: ValidationWarningType;
   readonly message: string;
   readonly details?: Record<string, unknown>;
-}
-
-export interface TriangulationResult {
-  readonly triangles: Triangle[];
-  readonly valid: boolean;
-  readonly degenerateCount: number;
-  readonly totalArea: SquareMeters;
-  readonly warnings: ValidationWarning[];
 }
 
 // ---------------------------------------------------------------------------
@@ -137,6 +107,3 @@ export interface MiterResult {
 
 /** Tolerancia para comparaciones de punto flotante (metros). */
 export const EPSILON = 1e-9;
-
-/** Área mínima válida de un triángulo (m²). Triángulos menores = degenerados. */
-export const AREA_MINIMA_VALIDA = 1e-6;

@@ -3,6 +3,7 @@
 // =============================================================================
 
 import { IDatabase } from './database';
+import { diagnostics } from '../../shared/diagnostics';
 import type { Markup, ReviewItem, ReviewStatus, ReviewView } from '../../domain/review/review';
 
 interface Row {
@@ -38,8 +39,9 @@ function toItem(r: Row): ReviewItem | null {
       ...(r.resolved_at ? { resolvedAt: r.resolved_at } : {}),
       ...(r.photo_id ? { photoId: r.photo_id } : {}),
     };
-  } catch {
+  } catch (err) {
     // Una observación ilegible se omite: no debe impedir ver las demás.
+    diagnostics.error('review_items', `Se omitió una fila ilegible (${r.id})`, err);
     return null;
   }
 }

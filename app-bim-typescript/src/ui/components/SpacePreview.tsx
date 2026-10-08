@@ -24,7 +24,7 @@ import { type } from '../design/typography';
 import { CANVAS_PALETTES } from '../design/canvasThemes';
 import { themedStyles } from '../design/theme';
 
-export interface SpacePreviewProps {
+interface SpacePreviewProps {
   geometry: readonly Point2D[];
   width: number;
   height: number;
@@ -38,7 +38,7 @@ export interface SpacePreviewProps {
  * miniatura, y un fallo aquí produce previsualizaciones vacías o recortadas
  * que nadie detecta mirando la pantalla de un vistazo.
  */
-export function fitTransform(
+function fitTransform(
   points: readonly Point2D[],
   width: number,
   height: number,
@@ -134,4 +134,3 @@ const useStyles = themedStyles((colors) => ({
   },
 }));
 
-export default SpacePreview;

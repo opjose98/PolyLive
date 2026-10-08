@@ -17,33 +17,23 @@
 // =============================================================================
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Text, TextInput, View } from 'react-native';
+import { Text, View } from 'react-native';
+import { useLayout } from '../design/layout';
 import Animated, { FadeIn, FadeOut, ZoomIn, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import {
-  ConstraintEdit,
-  ConstraintEnd,
-  ConstraintLevel,
-  applyToEdit,
-  baseIndex,
-  currentExtent,
-  infinityIndex,
-  moveBase,
-  moveTop,
-  topIndex,
-} from '../../application/workspace/constraintModel';
+import { ConstraintEdit, ConstraintEnd, ConstraintLevel, applyToEdit, baseIndex, currentExtent, infinityIndex, moveBase, moveTop, topIndex } from '../../application/workspace/constraintModel';
 import { VerticalExtent } from '../../domain/objects/vertical';
 import { workspaceStore } from '../../state/workspaceStore';
-import { FloatWindow, Icon, IconButton, Tappable } from '../primitives';
+import { CommitTextInput, FloatWindow, Icon, IconButton, Tappable } from '../primitives';
 import { elevation, radius, spacing } from '../design/tokens';
 import { type } from '../design/typography';
 import { spring } from '../design/motion';
 import { haptic } from '../design/haptics';
 import { themedStyles, useTheme } from '../design/theme';
 
-export const CONSTRAINT_WINDOW_ID = 'constraintCfg';
+const CONSTRAINT_WINDOW_ID = 'constraintCfg';
 
-export interface ConstraintSelectorProps {
+interface ConstraintSelectorProps {
   /** Niveles del proyecto, de menor a mayor cota. */
   readonly levels: readonly ConstraintLevel[];
   readonly edit: ConstraintEdit;
@@ -64,6 +54,8 @@ const THUMB = 22;
 export const ConstraintSelector = React.memo(function ConstraintSelector(props: ConstraintSelectorProps) {
   const styles = useStyles();
   const colors = useTheme();
+  // En horizontal el alto no da para 300: el riel se acorta (lo mide onLayout).
+  const panelH = Math.min(300, Math.round(useLayout().height * 0.55));
   const { levels, edit, kind, canUnlink, caption, onChange } = props;
   const [trackH, setTrackH] = useState(0);
   // Estado vivo durante el arrastre: los gestos leen de aquí, no de props
@@ -92,7 +84,7 @@ export const ConstraintSelector = React.memo(function ConstraintSelector(props: 
 
   return (
     <>
-      <Animated.View entering={ZoomIn.springify().damping(18).stiffness(260)} exiting={FadeOut.duration(100)} style={styles.panel}>
+      <Animated.View entering={ZoomIn.springify().damping(18).stiffness(260)} exiting={FadeOut.duration(100)} style={[styles.panel, { height: panelH }]}>
         <Text style={styles.caption} numberOfLines={1}>
           {caption}
         </Text>
@@ -308,14 +300,14 @@ function NumberRow({ label, value, min, onCommit }: { label: string; value: numb
   return (
     <View style={styles.cfgRow}>
       <Text style={styles.cfgLabel}>{label}</Text>
-      <TextInput
+      <CommitTextInput
         key={value}
         style={styles.cfgInput}
         defaultValue={String(Number(value.toFixed(3)))}
         keyboardType="numbers-and-punctuation"
         selectTextOnFocus
-        onEndEditing={(e) => {
-          const v = parseFloat(e.nativeEvent.text.replace(',', '.'));
+        onCommitText={(text) => {
+          const v = parseFloat(text.replace(',', '.'));
           if (!Number.isFinite(v) || v === value || (min !== undefined && v < min)) return;
           onCommit(v);
         }}
@@ -327,7 +319,6 @@ function NumberRow({ label, value, min, onCommit }: { label: string; value: numb
 
 const useStyles = themedStyles((colors) => ({
   panel: {
-    height: 300,
     width: WIDTH,
     backgroundColor: colors.surface,
     borderRadius: radius.round,

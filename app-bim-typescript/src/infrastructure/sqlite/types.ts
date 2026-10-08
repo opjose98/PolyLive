@@ -27,6 +27,8 @@ export interface MeasurementRow {
   capture_method: string;      // 'ble' | 'manual'
   values_json: string;         // JSON array de muestras
   average: number;             // promedio en metros
+  reference?: string;          // 'interior' | 'exterior' | 'axis' (v2)
+  applied_length?: number | null; // longitud de eje aplicada al muro (v2)
   is_deleted: number;
   created_at: string;
   updated_at: string;

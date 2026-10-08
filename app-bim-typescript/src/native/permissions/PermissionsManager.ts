@@ -20,17 +20,17 @@ import * as Location from 'expo-location';
 // Types
 // ---------------------------------------------------------------------------
 
-export type PermissionType = 'camera' | 'location' | 'bluetooth';
+type PermissionType = 'camera' | 'location' | 'bluetooth';
 
-export type PermissionStatus = 'granted' | 'denied' | 'undetermined' | 'restricted';
+type PermissionStatus = 'granted' | 'denied' | 'undetermined' | 'restricted';
 
-export interface PermissionState {
+interface PermissionState {
   readonly camera: PermissionStatus;
   readonly location: PermissionStatus;
   readonly bluetooth: PermissionStatus;
 }
 
-export interface PermissionRequestResult {
+interface PermissionRequestResult {
   readonly type: PermissionType;
   readonly status: PermissionStatus;
   readonly canAskAgain: boolean;

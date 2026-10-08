@@ -22,22 +22,22 @@ import { polygonArea, ensureClockwise } from './polygon-utils';
 // Resultado
 // ---------------------------------------------------------------------------
 
-export interface PolygonValid {
+interface PolygonValid {
   readonly valid: true;
   /** Vértices normalizados en orientación horaria (CW). */
   readonly vertices: Point2D[];
   readonly area: SquareMeters;
 }
 
-export interface PolygonInvalid {
+interface PolygonInvalid {
   readonly valid: false;
   /** Describe qué paso del pipeline falló. */
   readonly reason: string;
 }
 
-export type PolygonValidationResult = PolygonValid | PolygonInvalid;
+type PolygonValidationResult = PolygonValid | PolygonInvalid;
 
-export interface PolygonValidatorOptions {
+interface PolygonValidatorOptions {
   /** Área mínima aceptable en m². Por debajo se descarta como micro-recinto. */
   readonly minArea?: number;
   /** Distancia por debajo de la cual dos vértices se consideran el mismo. */

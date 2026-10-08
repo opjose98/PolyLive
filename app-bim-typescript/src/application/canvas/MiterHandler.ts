@@ -21,7 +21,7 @@ import { Point2D, Wall, MiterResult, Degrees, Meters, degrees, meters } from '..
 import { calculateMiter } from '../../domain/geometry/miter';
 
 /** Ángulo mínimo antes de emitir warning. */
-export const ACUTE_ANGLE_THRESHOLD: Degrees = degrees(10);
+const ACUTE_ANGLE_THRESHOLD: Degrees = degrees(10);
 
 export class MiterHandler {
   private tolerance: Meters;

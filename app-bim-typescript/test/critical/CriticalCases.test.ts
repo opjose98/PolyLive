@@ -22,7 +22,7 @@ import {
   Wall,
   Door,
   Room,
-  Column,
+  
   Window,
   roomId,
   wallId,
@@ -398,7 +398,7 @@ describe('Gaps de implementación corregidos (bugs 1–3)', () => {
     await store2.createObject(room);
 
     // Add a wall, a door and a window so we can verify they appear in the right arrays
-    const wallOut = await new CreateWallUseCase(store2, commandStack2, validation).execute({
+    const _wallOut = await new CreateWallUseCase(store2, commandStack2, validation).execute({
       roomId: rId,
       startPoint: { x: 0, y: 0 },
       endPoint: { x: 5, y: 0 },

@@ -25,6 +25,8 @@ import { themedStyles, useTheme } from '../design/theme';
 export interface BpcPill {
   readonly key: PropKey;
   readonly value: number;
+  /** Rótulo propio cuando el del catálogo no aplica (p. ej. «Diámetro» en una columna circular). */
+  readonly label?: string;
   readonly onCommit: (value: number) => void;
 }
 
@@ -34,7 +36,7 @@ export interface BpcAction {
   readonly onPress: () => void;
 }
 
-export interface BpcProps {
+interface BpcProps {
   context: BpcContext;
   pills: readonly BpcPill[];
   actions?: readonly BpcAction[];
@@ -143,13 +145,13 @@ function DragPill({ pill }: { pill: BpcPill }) {
         style={[styles.pill, dragging && styles.pillActive]}
         accessible
         accessibilityRole="adjustable"
-        accessibilityLabel={def.label}
+        accessibilityLabel={pill.label ?? def.label}
         accessibilityValue={{ min: def.min, max: def.max, now: shown, text: `${shown} ${def.unit}` }}
         accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
         onAccessibilityAction={(e) => pill.onCommit(nudgeProp(def, pill.value, e.nativeEvent.actionName === 'increment' ? 1 : -1))}
       >
         <Icon name="arrow-left-right" size={14} color={colors.accent} />
-        <Text style={styles.pillLabel}>{def.label}</Text>
+        <Text style={styles.pillLabel}>{pill.label ?? def.label}</Text>
         <Text style={styles.value}>
           {shown} {def.unit}
         </Text>

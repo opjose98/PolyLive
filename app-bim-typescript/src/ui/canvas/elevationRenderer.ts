@@ -19,22 +19,7 @@
 // =============================================================================
 
 import type { ICanvasRenderer } from '../../native/canvas/SkiaCanvasAdapter';
-import {
-  WallElevation,
-  WallOpening,
-  WallOpeningId,
-  baseAt,
-  effectiveLeftHeight,
-  effectiveRightHeight,
-  hasHeightProfile,
-  openingEnd,
-  openingTop,
-  openingCenterX,
-  openingCenterY,
-  umbral,
-  dintel,
-  openingTypeLabel,
-} from '../../domain/objects/wall-elevation';
+import { WallElevation, WallOpening, WallOpeningId, baseAt, effectiveLeftHeight, effectiveRightHeight, hasHeightProfile, openingEnd, openingTop, openingCenterX, openingCenterY, umbral, dintel, openingTypeLabel } from '../../domain/objects/wall-elevation';
 import type { ElevationSeverity, ElevationViewport } from '../../application/elevation/WallElevationService';
 import { CANVAS_PALETTES, CanvasPalette } from '../design/canvasThemes';
 import { drawSketch, SketchShape, withAlpha } from './sketch';
@@ -135,7 +120,7 @@ function drawFaceProgress({ r, scene, toScreen }: Ctx): void {
 }
 
 /** Contorno del muro en CSL: su perfil (base y tope de cada extremo). */
-export function wallOutline(elevation: WallElevation, wallLength: number): { x: number; y: number }[] {
+function wallOutline(elevation: WallElevation, wallLength: number): { x: number; y: number }[] {
   const lv = elevation.levels;
   return hasHeightProfile(lv)
     ? [
@@ -271,10 +256,12 @@ function drawOpening({ r, scene, pal, toScreen }: Ctx, opening: WallOpening): vo
 // 5. Umbral y dintel
 // ---------------------------------------------------------------------------
 
-function drawReferenceLines({ r, scene, pal, toScreen }: Ctx): void {
+function drawReferenceLines({ r, scene, pal, toScreen, openings }: Ctx): void {
   const lines: number[] = [];
-  const u = umbral(scene.elevation);
-  const d = dintel(scene.elevation);
+  // Umbral y dintel de los huecos VISIBLES: con un tipo filtrado, sus líneas quedaban.
+  const visible = { ...scene.elevation, openings };
+  const u = umbral(visible);
+  const d = dintel(visible);
   if (u != null && u > 0) lines.push(u);
   if (d != null) lines.push(d);
   r.setStrokeStyle(pal.opening);
