@@ -15,7 +15,7 @@ Fecha: 2026-10-07 · App: dev client Expo SDK 57 con Metro (rama `feat/mvp-audit
 | ➖ N/A | 1 |
 | **Total** | **184** |
 
-Hallazgos: **42** — P1 (datos o bloqueo) 4 · P2 (funciona mal) 13 · P3 (pulido) 22 · corregidos en esta ronda 3.
+Hallazgos: **42** — corregidos 30 · no reproducibles 3 · por verificar en el equipo 7 · decisión pendiente 2 · abiertos P1 0 / P2 0 / P3 0.
 
 Leyenda: ✅ OK · 🟡 Parcial · ❌ Falla · ⬜ No probado · ➖ No aplica. Prioridad: **P1** corrompe datos o bloquea, **P2** funciona mal, **P3** pulido.
 
@@ -36,6 +36,7 @@ Leyenda: ✅ OK · 🟡 Parcial · ❌ Falla · ⬜ No probado · ➖ No aplica.
 1. Ve capítulo por capítulo. Cada fila es una función con su prueba.
 2. La columna **Esta ronda** es lo que se vio; **Nota** dice qué falló y apunta al hallazgo `H-xx` del § 4.
 3. Marca **Tu prueba** (`[ ]` → `[x]`) cuando la repitas a mano; escribe diferencias en tus notas.
+4. **Esta ronda** es el resultado de la prueba del 2026-10-07 (antes de corregir). El estado ACTUAL de cada fallo está en el § 4: una fila ❌ cuyo hallazgo figura «Corregido» se debe volver a probar con la versión nueva.
 
 ## 3. Matriz por capítulo
 
@@ -282,54 +283,52 @@ Leyenda: ✅ OK · 🟡 Parcial · ❌ Falla · ⬜ No probado · ➖ No aplica.
 
 | ID | Prio | Ámbito | Hallazgo | Cómo reproducir | Esperado / obtenido | Filas |
 |---|:-:|---|---|---|---|---|
-| H-02 | P1 | Entrada de datos | Los campos numéricos no confirman al cerrar el teclado con Atrás (Niveles, propiedades) | Niveles → ⚙ → Agregar → editar la cota a 6 → Atrás → cerrar | Nivel 2 quedó en +2 m en vez de 6 m. Mismo patrón en todas las hojas con NumberField (solo la medida se arregló) | B21, D06, J02 |
-| H-21 | P1 | Muros · función | Cambiar un muro a 'Partición' deshace el recinto y su suelo sin avisar | Hoja del muro → Función → Partición | El recinto no debe desaparecer (o avisar) | D07 |
-| H-23 | P1 | Deshacer | Deshacer tras editar nombre/espesor/función no revierte esos campos (revierte el recinto) | Editar espesor → deshacer | Debe revertir la propiedad editada | D17 |
-| H-25 | P1 | Alzado · Cercha/Correa/Viga | Al arrastrar una cercha el muro y la ventana desaparecen y la vista queda vacía; no se crea la cercha | Alzado → Estructural → Cercha → arrastrar sobre el muro | Debe crearla y conservar la vista | E05, E11 |
-| H-11 | P2 | Niveles | La lista de configuración de niveles no se ordena por cota | Agregar Nivel 1 (3 m) y Nivel 2 (6 m) | Salen 3 m, 6 m, 0 m | B22 |
-| H-12 | P2 | Tableta · teclado | El teclado tapa el campo 'Nuevo operador' y su botón Crear | Pantalla de operador → tocar el campo | El campo debe subir sobre el teclado | A02 |
-| H-16 | P2 | Muros · restricciones | Con niveles definidos el tope de los muros nuevos queda en el último nivel (Nivel 2) | Crear 3 niveles y dibujar un muro | Debe quedar en altura libre o el nivel siguiente | C05 |
-| H-19 | P2 | Cámara | Al volver de la cámara la actividad se reinicia y la tablet queda a pantalla completa en vertical | Foto → obturador | Debe volver a la misma ventana y orientación | C21, J03 |
-| H-22 | P2 | Eliminar | Eliminar un muro es inmediato, sin confirmar (arrastra recinto y suelo); en cambio borrar observación sí confirma | Hoja del muro → Eliminar | Confirmar o mostrar 'Deshacer' en un aviso | D14 |
-| H-24 | P2 | Alzado · huecos | Se aceptan puertas más altas que el muro y huecos solapados | Alzado → Puerta en muro de 2,00 m; luego Vano encima | Debe limitar o avisar | E04 |
-| H-26 | P2 | Topografía · amarre | 'Amarrar' con el origen vacío no avisa y deja el amarre en 0 | Amarre → Origen conocido sin datos → Amarrar | Debe pedir N y E | F04 |
-| H-28 | P2 | Archivos | Algunos exportes (CSV de avance) piden carpeta de nuevo aunque ya se concedió | Avance → Reporte → Exportar CSV | Debe reutilizar la carpeta | G12, I10 |
-| H-31 | P2 | IFC del proyecto | Sin ubicación de cada espacio en el proyecto, todos los espacios quedan superpuestos en el origen | Dos espacios → IFC del proyecto | Debe pedir o desplazar los espacios (hoy requiere un amarre por espacio) | I02 |
-| H-32 | P2 | Exportar · pantalla | La pantalla IFC y DXF muestra el área bruta al eje (5,97) en vez de la neta (5,20); la tarjeta del espacio también | ☰ → IFC y DXF del recinto | Mostrar área neta, o ambas rotuladas | I03 |
-| H-34 | P2 | Menú ☰ | En la ventana angosta de tableta la lista no cabe y no se nota que desplaza; las entradas finales quedan fuera de vista | Abrir ☰ | Indicar desplazamiento o compactar | I11 |
-| H-35 | P2 | Pantallas del menú | La barra del editor tapa el encabezado ('Volver') de Galería, Exportar, Operador y Ajustes | ☰ → Galería de fotos | El encabezado debe verse y su botón Volver funcionar | J06 |
-| H-36 | P2 | Galería | Al volver al espacio tras ver una foto se abre sola de nuevo el visor | Galería → abrir foto → cerrar → Atrás | Debe volver al editor | J07 |
-| H-06 | P3 | Accesibilidad | El menú ☰ cerrado sigue exponiendo todas sus entradas al lector de pantalla | Con el menú cerrado, leer el árbol de accesibilidad | No debería | B07 |
-| H-07 | P3 | Tema | Alto contraste: cuadrícula azul muy gruesa que compite con el dibujo | ⋮ → Tema → Alto contraste | Debe verse sobria | B10 |
-| H-08 | P3 | Cajón ⋮ | El cajón ⋮ no incluye 'Zoom a selección' que sí está en la esquina | ⋮ → Zoom | Mismas 4 opciones | B11 |
-| H-09 | P3 | Cuadrícula | Líneas y Puntos pueden quedar activas a la vez | ⋮ → Cuadrícula → activar ambas | Debe ser excluyente o aclarar | B13 |
-| H-10 | P3 | Escala | Los dígitos del campo de escala salen recortados por arriba | ⋮ → Escala | Texto completo | B14 |
-| H-13 | P3 | Selectores | El botón ← del selector de Niveles cae sobre el gizmo de ejes | Abrir el selector de Niveles | No deben solaparse | B24 |
-| H-14 | P3 | FAB | Solo responde el círculo del icono; el rótulo de cada fila no | FAB → tocar el texto 'Muro' | Toda la fila debería responder | C01 |
-| H-15 | P3 | Muro | Punto a punto no encadena: cada muro son dos toques | Muro → Punto a punto | Esperado por el usuario: continuar desde el punto final | C02 |
-| H-17 | P3 | Columna | La pastilla de la columna circular dice 'Lado' en vez de 'Diámetro' | Columna → Circular | Etiqueta 'Diámetro' | C10 |
-| H-18 | P3 | Cota | Una cota creada por arrastre sale inclinada si los extremos se pegan a nodos distintos | Cota → arrastrar entre dos esquinas | Debería alinearse al eje del arrastre | C13 |
-| H-20 | P3 | Selección | Al tocar donde se superponen cota y puerta se elige siempre la cota | Tocar sobre una puerta con una cota encima | Priorizar el objeto de arquitectura o alternar | D02 |
-| H-27 | P3 | Topografía · filtros | La casilla de 'Mapa de fondo (pendiente de licencia)' queda cortada | Modo Topografía → Filtros | Casilla completa | F15 |
-| H-29 | P3 | Modos | Al reabrir un espacio abre en el modo anterior (la decisión de diseño era Levantamiento) | Estar en Avance → salir → entrar | Abrir en Levantamiento | G14 |
-| H-30 | P3 | Archivos | El acta de revisión se nombra con la fecha UTC (2026-10-08 a las 8 p. m. locales) | Exportar acta PDF | Fecha local | H09 |
-| H-33 | P3 | Textos | El diálogo de importar dice 'este teléfono' en una tablet | Importar un proyecto existente | Texto neutro ('este equipo') | I09 |
-| H-37 | P3 | Consola | Avisos de API obsoletas: SkPath.moveTo/lineTo/addCircle/addArc/close (Skia 2) y SafeAreaView | Mirar la consola de Metro | Sin avisos | J08 |
-| H-38 | P3 | Muro | Un toque doble en el mismo punto (muro de longitud cero) se ignora sin avisar | Muro → Punto a punto → mismo punto dos veces | Aviso 'muy corto' | D19 |
-| H-39 | P3 | Selección | Una columna seleccionada no se mueve arrastrando su cuerpo (mueve el plano) | Seleccionar la columna y arrastrar sobre ella | Debería moverse con vista previa; hoy solo con manejadores | D13 |
-| H-40 | P3 | Modos | Al cambiar de modo estando una hoja o filtro abierto el cambio puede no aplicarse y no avisa | Abrir Filtros y tocar un modo | Debe cerrar el panel y cambiar | G10, H13 |
-| H-41 | P3 | Alzado | La hoja de texto del alzado se titula 'Texto en el plano' | Alzado → Acotado → Texto | 'Texto en el alzado' | E06 |
-| H-42 | P3 | Alzado · filtros | Con el filtro 'Ventanas' apagado quedan visibles las guías azules de la ventana | Alzado → Filtros → apagar Ventanas | Deben ocultarse con el elemento | E09 |
-| H-43 | P3 | Tema alto contraste | El botón 'Guardar' deshabilitado queda durazno desvaído, poco legible | Alto contraste → Nuevo proyecto sin nombre | Debe verse deshabilitado pero legible | K01 |
+| H-10 | Verificar en equipo | Escala | Los dígitos del campo de escala salen recortados por arriba | ⋮ → Escala | Texto completo | B14 |
+| H-13 | Verificar en equipo | Selectores | El botón ← del selector de Niveles cae sobre el gizmo de ejes | Abrir el selector de Niveles | No deben solaparse | B24 |
+| H-19 | Verificar en equipo | Cámara | Al volver de la cámara la actividad se reinicia y la tablet queda a pantalla completa en vertical — La ventana angosta venía del cliente de desarrollo viejo (fijo en vertical); verificar con la build nueva. | Foto → obturador | Debe volver a la misma ventana y orientación | C21, J03 |
+| H-25 | Verificar en equipo | Alzado · Cercha/Correa/Viga | Al arrastrar una cercha el muro y la ventana desaparecen y la vista queda vacía; no se crea la cercha — Las 'X' eran correas (se dibujan así). Falta confirmar en el equipo el arrastre de la cercha. | Alzado → Estructural → Cercha → arrastrar sobre el muro | Debe crearla y conservar la vista | E05, E11 |
+| H-27 | Verificar en equipo | Topografía · filtros | La casilla de 'Mapa de fondo (pendiente de licencia)' queda cortada | Modo Topografía → Filtros | Casilla completa | F15 |
+| H-34 | Verificar en equipo | Menú ☰ | En la ventana angosta de tableta la lista no cabe y no se nota que desplaza; las entradas finales quedan fuera de vista — Barra de desplazamiento visible; el corte venía de la ventana angosta. | Abrir ☰ | Indicar desplazamiento o compactar | I11 |
+| H-40 | Verificar en equipo | Modos | Al cambiar de modo estando una hoja o filtro abierto el cambio puede no aplicarse y no avisa | Abrir Filtros y tocar un modo | Debe cerrar el panel y cambiar | G10, H13 |
+| H-15 | Decisión pendiente | Muro | Punto a punto no encadena: cada muro son dos toques — Un test documenta 'no encadena' como decisión de diseño: confirmar si se quiere encadenar. | Muro → Punto a punto | Esperado por el usuario: continuar desde el punto final | C02 |
+| H-18 | Decisión pendiente | Cota | Una cota creada por arrastre sale inclinada si los extremos se pegan a nodos distintos — Una cota entre nodos distintos sale alineada a esos nodos (cota alineada); confirmar si se prefiere horizontal/vertical. | Cota → arrastrar entre dos esquinas | Debería alinearse al eje del arrastre | C13 |
 | H-01 | Corregido | Medida | 'Guardar' de la medida aplicaba el valor anterior si el teclado se cerraba con Atrás | Medición láser → muro → Ingresar medida → teclear 3.9 → Atrás → Guardar | Debe aplicar 3.9; aplicaba 3.0 | C14, J02 |
+| H-02 | Corregido | Entrada de datos | Los campos numéricos no confirman al cerrar el teclado con Atrás (Niveles, propiedades) | Niveles → ⚙ → Agregar → editar la cota a 6 → Atrás → cerrar | Nivel 2 quedó en +2 m en vez de 6 m. Mismo patrón en todas las hojas con NumberField (solo la medida se arregló) | B21, D06, J02 |
 | H-03 | Corregido | Menú ☰ / hojas | Menú y hoja inferior quedaban dibujados abiertos al volver del selector de carpetas | ☰ → exportar → volver | Debe quedar cerrado | B04 |
+| H-06 | Corregido | Accesibilidad | El menú ☰ cerrado sigue exponiendo todas sus entradas al lector de pantalla | Con el menú cerrado, leer el árbol de accesibilidad | No debería | B07 |
+| H-07 | Corregido | Tema | Alto contraste: cuadrícula azul muy gruesa que compite con el dibujo | ⋮ → Tema → Alto contraste | Debe verse sobria | B10 |
+| H-08 | Corregido | Cajón ⋮ | El cajón ⋮ no incluye 'Zoom a selección' que sí está en la esquina | ⋮ → Zoom | Mismas 4 opciones | B11 |
+| H-09 | Corregido | Cuadrícula | Líneas y Puntos pueden quedar activas a la vez | ⋮ → Cuadrícula → activar ambas | Debe ser excluyente o aclarar | B13 |
+| H-11 | Corregido | Niveles | La lista de configuración de niveles no se ordena por cota | Agregar Nivel 1 (3 m) y Nivel 2 (6 m) | Salen 3 m, 6 m, 0 m | B22 |
+| H-12 | Corregido | Tableta · teclado | El teclado tapa el campo 'Nuevo operador' y su botón Crear | Pantalla de operador → tocar el campo | El campo debe subir sobre el teclado | A02 |
+| H-17 | Corregido | Columna | La pastilla de la columna circular dice 'Lado' en vez de 'Diámetro' | Columna → Circular | Etiqueta 'Diámetro' | C10 |
+| H-20 | Corregido | Selección | Al tocar donde se superponen cota y puerta se elige siempre la cota | Tocar sobre una puerta con una cota encima | Priorizar el objeto de arquitectura o alternar | D02 |
+| H-21 | Corregido | Muros · función | Cambiar un muro a 'Partición' deshace el recinto y su suelo sin avisar | Hoja del muro → Función → Partición | El recinto no debe desaparecer (o avisar) | D07 |
+| H-22 | Corregido | Eliminar | Eliminar un muro es inmediato, sin confirmar (arrastra recinto y suelo); en cambio borrar observación sí confirma | Hoja del muro → Eliminar | Confirmar o mostrar 'Deshacer' en un aviso | D14 |
+| H-23 | Corregido | Deshacer | Deshacer tras editar nombre/espesor/función no revierte esos campos (revierte el recinto) | Editar espesor → deshacer | Debe revertir la propiedad editada | D17 |
+| H-24 | Corregido | Alzado · huecos | Se aceptan puertas más altas que el muro y huecos solapados | Alzado → Puerta en muro de 2,00 m; luego Vano encima | Debe limitar o avisar | E04 |
+| H-28 | Corregido | Archivos | Algunos exportes (CSV de avance) piden carpeta de nuevo aunque ya se concedió | Avance → Reporte → Exportar CSV | Debe reutilizar la carpeta | G12, I10 |
+| H-29 | Corregido | Modos | Al reabrir un espacio abre en el modo anterior (la decisión de diseño era Levantamiento) | Estar en Avance → salir → entrar | Abrir en Levantamiento | G14 |
+| H-30 | Corregido | Archivos | El acta de revisión se nombra con la fecha UTC (2026-10-08 a las 8 p. m. locales) | Exportar acta PDF | Fecha local | H09 |
+| H-31 | Corregido | IFC del proyecto | Sin ubicación de cada espacio en el proyecto, todos los espacios quedan superpuestos en el origen | Dos espacios → IFC del proyecto | Debe pedir o desplazar los espacios (hoy requiere un amarre por espacio) | I02 |
+| H-32 | Corregido | Exportar · pantalla | La pantalla IFC y DXF muestra el área bruta al eje (5,97) en vez de la neta (5,20); la tarjeta del espacio también | ☰ → IFC y DXF del recinto | Mostrar área neta, o ambas rotuladas | I03 |
+| H-33 | Corregido | Textos | El diálogo de importar dice 'este teléfono' en una tablet | Importar un proyecto existente | Texto neutro ('este equipo') | I09 |
+| H-35 | Corregido | Pantallas del menú | La barra del editor tapa el encabezado ('Volver') de Galería, Exportar, Operador y Ajustes | ☰ → Galería de fotos | El encabezado debe verse y su botón Volver funcionar | J06 |
+| H-36 | Corregido | Galería | Al volver al espacio tras ver una foto se abre sola de nuevo el visor | Galería → abrir foto → cerrar → Atrás | Debe volver al editor | J07 |
+| H-37 | Corregido | Consola | Avisos de API obsoletas: SkPath.moveTo/lineTo/addCircle/addArc/close (Skia 2) y SafeAreaView | Mirar la consola de Metro | Sin avisos | J08 |
+| H-38 | Corregido | Muro | Un toque doble en el mismo punto (muro de longitud cero) se ignora sin avisar | Muro → Punto a punto → mismo punto dos veces | Aviso 'muy corto' | D19 |
+| H-39 | Corregido | Selección | Una columna seleccionada no se mueve arrastrando su cuerpo (mueve el plano) | Seleccionar la columna y arrastrar sobre ella | Debería moverse con vista previa; hoy solo con manejadores | D13 |
+| H-41 | Corregido | Alzado | La hoja de texto del alzado se titula 'Texto en el plano' | Alzado → Acotado → Texto | 'Texto en el alzado' | E06 |
+| H-42 | Corregido | Alzado · filtros | Con el filtro 'Ventanas' apagado quedan visibles las guías azules de la ventana | Alzado → Filtros → apagar Ventanas | Deben ocultarse con el elemento | E09 |
+| H-43 | Corregido | Tema alto contraste | El botón 'Guardar' deshabilitado queda durazno desvaído, poco legible | Alto contraste → Nuevo proyecto sin nombre | Debe verse deshabilitado pero legible | K01 |
 | H-44 | Corregido | Tema oscuro | Los rótulos del dibujo técnico salían como cajas blancas vacías (texto claro sobre fondo blanco fijo) | Tema oscuro → cota, texto, etiqueta, coordenada | Fondo que contraste con el texto (labelBackdrop) | K04 |
+| H-14 | No reproducible | FAB | Solo responde el círculo del icono; el rótulo de cada fila no — Revisando las trazas: el toque sobre el rótulo sí abre la categoría. | FAB → tocar el texto 'Muro' | Toda la fila debería responder | C01 |
+| H-16 | No reproducible | Muros · restricciones | Con niveles definidos el tope de los muros nuevos queda en el último nivel (Nivel 2) — Consecuencia de H-02: la cota de Nivel 2 quedó en 2 m (por debajo de Nivel 1). | Crear 3 niveles y dibujar un muro | Debe quedar en altura libre o el nivel siguiente | C05 |
+| H-26 | No reproducible | Topografía · amarre | 'Amarrar' con el origen vacío no avisa y deja el amarre en 0 — La validación existe ('Digita las coordenadas…'); fue una lectura errónea de la prueba. | Amarre → Origen conocido sin datos → Amarrar | Debe pedir N y E | F04 |
 
-### Orden sugerido para la ronda de correcciones
+### Ronda de correcciones (2026-10-08)
 
-1. **P1:** H-02 (campos numéricos no confirman con Atrás, afecta a Niveles y propiedades), H-21 (Partición deshace el recinto), H-23 (deshacer no revierte propiedades), H-25 (alzado desencuadrado y cercha que borra la vista).
-2. **P2:** niveles (H-11, H-16), cámara (H-19), borrado sin confirmar (H-22), huecos en alzado (H-24), amarre vacío (H-26), carpeta de exportes (H-28), rótulos en oscuro (H-44, ya corregido), IFC del proyecto con espacios superpuestos (H-31), área bruta/neta (H-32), pantallas del menú tapadas (H-35, H-36), menú ☰ en tableta (H-34), teclado sobre el campo de operador (H-12).
-3. **P3:** textos, etiquetas, accesibilidad, avisos de API obsoleta y pulido visual.
+Corregidos con test donde aplica (CommitTextInput, deshacer de `properties`, aviso de recinto abierto, altura de hueco ajustada, arrastre por el cuerpo, cantidades IFC). Quedan para la prueba en la tableta con la build nueva (rotación) los marcados «Verificar en equipo», y dos decisiones de producto (H-15, H-18).
 
 Nota: los ids H-04 y H-05 no se usaron (se descartaron al verificarlos).
 

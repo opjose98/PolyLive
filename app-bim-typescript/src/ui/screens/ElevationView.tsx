@@ -135,7 +135,6 @@ export function ElevationView(props: ElevationViewProps) {
     [faceShapesOf, faceView, st.viewport.scale],
   );
   const drafting2pt = !!drafting?.drawEnabled;
-  console.log('[QA-ELEV]', JSON.stringify({ tool: drafting?.tool, drafting2pt, faceView: !!faceView }));
 
   // --- Fotos de esta cara ---
   const facePhotos = useMemo(
