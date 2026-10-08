@@ -251,7 +251,14 @@ export function createWorkspaceStore(initial: Partial<WorkspaceData> = {}) {
       toggleFilter: (id) => set((p) => ({ filters: { ...p.filters, [id]: !p.filters[id] } })),
       toggleLayer: (id) => set((p) => ({ layers: { ...p.layers, [id]: !p.layers[id] } })),
       setCanvasTheme: (canvasTheme) => set({ canvasTheme }),
-      toggleGrid: (id) => set((p) => ({ grid: { ...p.grid, [id]: !p.grid[id] } })),
+      // Líneas y puntos son dos estilos de la MISMA cuadrícula: activar uno apaga el otro
+      // (juntos saturaban el lienzo). La rotación es independiente.
+      toggleGrid: (id) =>
+        set((p) => {
+          const on = !p.grid[id];
+          const other = id === 'lines' ? 'dots' : id === 'dots' ? 'lines' : null;
+          return { grid: { ...p.grid, [id]: on, ...(on && other ? { [other]: false } : {}) } };
+        }),
       toggleSnap: (id) => set((p) => ({ snap: { ...p.snap, [id]: !p.snap[id] } })),
       toggleScale: (id) => set((p) => ({ scale: { ...p.scale, [id]: !p.scale[id] } })),
       setScaleDenominator: (value) =>

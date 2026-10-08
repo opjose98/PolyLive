@@ -101,9 +101,11 @@ export const CANVAS_PALETTES: Readonly<Record<CanvasThemeId, CanvasPalette>> = {
   },
   contraste: {
     background: '#FFFFFF',
-    grid: '#0B5ED7',
+    // La cuadrícula sigue siendo nítida, pero por debajo del dibujo: antes era del
+    // mismo azul puro que los ejes y con trazo doble, y competía con los muros.
+    grid: '#BCD0F0',
     gridMajor: '#0B5ED7',
-    gridDot: '#0B5ED7',
+    gridDot: '#6F93D3',
     ink: '#000000',
     partition: '#000000',
     wallFill: '#000000',

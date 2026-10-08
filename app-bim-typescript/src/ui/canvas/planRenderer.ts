@@ -296,7 +296,7 @@ function drawGrid(r: ICanvasRenderer, scene: PlanScene, pal: CanvasPalette): voi
   const style = scene.gridStyle ?? { lines: true, dots: false };
 
   if (style.lines) {
-    r.setLineWidth(0.5 * pal.lineScale);
+    r.setLineWidth(0.5); // la cuadrícula fina no engrosa con el tema (alto contraste duplicaba su trazo)
     r.setStrokeStyle(pal.grid);
     for (let x = firstX; x < x1; x += stepPx) r.drawLine(x, y0, x, y1);
     for (let y = firstY; y < y1; y += stepPx) r.drawLine(x0, y, x1, y);

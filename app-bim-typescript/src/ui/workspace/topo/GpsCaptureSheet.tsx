@@ -21,6 +21,9 @@ import { themedStyles, useTheme } from '../../design/theme';
 
 const RING = 150;
 
+
+/** Pista del anillo de progreso (fija: no se rehace en cada render). */
+const RING_TRACK = Skia.Path.Circle(RING / 2, RING / 2, RING / 2 - 10);
 export function GpsCaptureSheet({
   open,
   seconds,
@@ -64,8 +67,7 @@ export function GpsCaptureSheet({
   const left = progress ? Math.max(0, Math.ceil((progress.totalMs - progress.elapsedMs) / 1000)) : seconds;
   const p = progress?.partial;
   const quality = p ? Math.max(p.spread, p.meanAccuracy) : null;
-  const arc = Skia.Path.Make();
-  arc.addArc({ x: 10, y: 10, width: RING - 20, height: RING - 20 }, -90, 360 * frac);
+  const arc = Skia.PathBuilder.Make().addArc({ x: 10, y: 10, width: RING - 20, height: RING - 20 }, -90, 360 * frac).detach();
 
   return (
     <BottomSheet
@@ -81,7 +83,7 @@ export function GpsCaptureSheet({
         <Text style={styles.sub}>Para {purpose}. Deja el celular quieto, en el punto, con vista al cielo.</Text>
         <View style={styles.ringWrap}>
           <Canvas style={styles.ring}>
-            <Path path={(() => { const b = Skia.Path.Make(); b.addCircle(RING / 2, RING / 2, RING / 2 - 10); return b; })()} color={colors.border} style="stroke" strokeWidth={8} />
+            <Path path={RING_TRACK} color={colors.border} style="stroke" strokeWidth={8} />
             <Path path={arc} color={colors.accentText} style="stroke" strokeWidth={8} strokeCap="round" />
           </Canvas>
           <View style={styles.ringText}>

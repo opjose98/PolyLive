@@ -19,7 +19,7 @@
 // =============================================================================
 
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { View, Text, SafeAreaView, ScrollView } from 'react-native';
+import { View, Text, ScrollView } from 'react-native';
 import { AppServices } from '../../application/AppServices';
 import { exportPlanDxf, exportRevitIfc } from '../workspace/exportActions';
 import { Room, RoomId, revitObjectId } from '../../domain/objects';
@@ -120,7 +120,7 @@ export function ExportScreen({ services, roomId, projectId, projectName = 'Proye
   // -----------------------------------------------------------------------
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
         {/* --- Estado del Recinto --- */}
         <View style={styles.card}>
@@ -202,7 +202,7 @@ export function ExportScreen({ services, roomId, projectId, projectName = 'Proye
           </View>
         ) : null}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 

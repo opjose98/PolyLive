@@ -34,14 +34,22 @@ export function ActionButton({
 }) {
   const styles = useStyles();
   const colors = useTheme();
-  const fg =
-    variant === 'primary' || variant === 'danger' ? colors.textOnAccent : variant === 'text' ? colors.accentText : colors.text;
+  const off = disabled && !loading;
+  // Deshabilitado: colores propios en vez de transparentar el botón. Con opacidad, el
+  // naranja sobre blanco del alto contraste quedaba durazno y el texto casi ilegible.
+  const fg = off
+    ? colors.textSecondary
+    : variant === 'primary' || variant === 'danger'
+      ? colors.textOnAccent
+      : variant === 'text'
+        ? colors.accentText
+        : colors.text;
   return (
     <Tappable
       onPress={onPress}
       disabled={disabled || loading}
       haptic={variant === 'danger' ? 'destroy' : 'tap'}
-      style={[styles.button, styles[variant], (disabled || loading) && styles.disabled]}
+      style={[styles.button, styles[variant], off ? variant !== 'text' && styles.disabled : loading && styles.loading]}
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ disabled: !!disabled }}
@@ -122,7 +130,8 @@ const useStyles = themedStyles((colors) => ({
   danger: { backgroundColor: colors.error },
   secondary: { backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.border },
   text: { backgroundColor: 'transparent', paddingHorizontal: spacing.sm },
-  disabled: { opacity: 0.45 },
+  disabled: { backgroundColor: colors.border, borderWidth: 1.5, borderColor: colors.border },
+  loading: { opacity: 0.7 },
   label: { ...type.bodyStrong },
   chip: {
     flexDirection: 'row',

@@ -18,7 +18,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { exportProjectPackage, importProjectPackageFlow, packagedLabel } from '../workspace/projectPackageActions';
 import { lastPackagedAt } from '../../infrastructure/package/projectPackage';
-import { View, Text, SafeAreaView, FlatList, TouchableOpacity, TextInput, Modal, RefreshControl, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, TextInput, Modal, RefreshControl, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 
 import { AppServices } from '../../application/AppServices';
 import { Project, ProjectSummary, BIM_DISCIPLINES, BimDiscipline } from '../../domain/objects/project';
@@ -129,15 +129,15 @@ export function ProjectsScreen({
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.center}>
+      <View style={styles.center}>
         <ActivityIndicator color={colors.accentText} />
         <Text style={styles.muted}>Cargando proyectos...</Text>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <View style={styles.header}>
         <View style={styles.headerText}>
           <Text style={styles.title}>Proyectos</Text>
@@ -245,7 +245,7 @@ export function ProjectsScreen({
           }
         }}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 

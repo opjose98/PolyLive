@@ -289,6 +289,10 @@ export class IFCSerializer {
         const rectangular = isRectangularProfile(profile);
         const name = (wall.properties.name as string | undefined) ?? `Muro ${i + 1}`;
         const material = wall.material ?? (wall.isStructural ? 'Muro portante' : 'Tabique');
+        // Huecos de puertas y ventanas de ESTE muro: el área lateral neta los descuenta.
+        const openingArea = [...doors, ...windows]
+          .filter((o) => (o.parentWallId as string) === (wall.id as string))
+          .reduce((a, o) => a + (o.width as number) * (o.height as number), 0);
 
         const placement = w.placementAt(
           P(storey),
@@ -325,7 +329,10 @@ export class IFCSerializer {
         const layerSet = w.materialLayerSet(material, thickness);
         w.associateMaterial(wall.id as string, [entity], rectangular ? w.layerSetUsage(layerSet, thickness) : layerSet);
 
-        w.propertySet(wall.id as string, 'Pset_WallCommon', entity, [['LoadBearing', { bool: wall.isStructural }]]);
+        w.propertySet(wall.id as string, 'Pset_WallCommon', entity, [
+          ['Reference', { identifier: name }],
+          ['LoadBearing', { bool: wall.isStructural }],
+        ]);
         w.propertySet(wall.id as string, REVIT_CONSTRAINTS_PSET, entity, [
           ['PolyLiveId', { identifier: wall.id as string }],
           ['BaseConstraint', { label: levelName(rc.baseLevelId) }],
@@ -345,7 +352,14 @@ export class IFCSerializer {
             ['Width', thickness],
             ['Height', profileTop(profile) - bottom],
           ],
-          areas: [['GrossSideArea', gross]],
+          areas: [
+            ['GrossSideArea', gross],
+            ['NetSideArea', Math.max(0, gross - openingArea)],
+          ],
+          volumes: [
+            ['GrossVolume', gross * thickness],
+            ['NetVolume', Math.max(0, gross - openingArea) * thickness],
+          ],
         });
 
         hosts.set(wall.id as string, { entity, placement, thickness, length, profile, storey });
@@ -440,7 +454,19 @@ export class IFCSerializer {
         );
         storey.elements.push(entity);
         products++;
-        w.propertySet(column.id as string, 'Pset_ColumnCommon', entity, [['LoadBearing', { bool: true }]]);
+        w.propertySet(column.id as string, 'Pset_ColumnCommon', entity, [
+          ['Reference', { identifier: name }],
+          ['LoadBearing', { bool: true }],
+        ]);
+        const dimX = column.dimensionX as number;
+        const sectionArea = column.isCircular ? (Math.PI * dimX * dimX) / 4 : dimX * (column.dimensionY as number);
+        const colHeight = Math.max(0.01, e.top - e.base);
+        w.quantities(column.id as string, 'Qto_ColumnBaseQuantities', entity, {
+          lengths: [['Length', colHeight]],
+          areas: [['CrossSectionArea', sectionArea]],
+          volumes: [['GrossVolume', sectionArea * colHeight]],
+        });
+        if (column.material) w.associateMaterial(column.id as string, [entity], w.material(column.material));
         const topKnown = v.topLevelId !== null && elevations.has(v.topLevelId);
         w.propertySet(column.id as string, REVIT_CONSTRAINTS_PSET, entity, [
           ['PolyLiveId', { identifier: column.id as string }],
@@ -544,6 +570,16 @@ export class IFCSerializer {
           ['DrawnIn', { label: m.view.kind === 'plan' ? 'Planta' : `Alzado ${m.view.side}` }],
           ...(m.role === 'purlin' ? ([['LengthAssumed', { bool: true }]] as [string, IfcValue][]) : []),
         ]);
+        const isBeam = m.role === 'beam';
+        w.propertySet(`member:${m.id}`, isBeam ? 'Pset_BeamCommon' : 'Pset_MemberCommon', entity, [
+          ['Reference', { identifier: m.name }],
+          ['LoadBearing', { bool: true }],
+        ]);
+        w.quantities(`member:${m.id}`, isBeam ? 'Qto_BeamBaseQuantities' : 'Qto_MemberBaseQuantities', entity, {
+          lengths: [['Length', len]],
+          areas: [['CrossSectionArea', m.width * m.depth]],
+          volumes: [['GrossVolume', m.width * m.depth * len]],
+        });
       }
       spacesWritten++;
     }

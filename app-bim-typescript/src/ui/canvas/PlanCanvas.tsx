@@ -124,11 +124,9 @@ const ROTATION_SNAP = (5 * Math.PI) / 180;
 /** Límites del contenido grabado, en metros. */
 const WORLD_BOUNDS = { x: -1e5, y: -1e5, width: 2e5, height: 2e5 };
 
-const RING_PATH = (() => {
-  const p = Skia.Path.Make();
-  p.addArc({ x: -RING_RADIUS, y: -RING_RADIUS, width: RING_RADIUS * 2, height: RING_RADIUS * 2 }, -90, 360);
-  return p;
-})();
+const RING_PATH = Skia.PathBuilder.Make()
+  .addArc({ x: -RING_RADIUS, y: -RING_RADIUS, width: RING_RADIUS * 2, height: RING_RADIUS * 2 }, -90, 360)
+  .detach();
 
 // ---------------------------------------------------------------------------
 // Rejilla en GPU

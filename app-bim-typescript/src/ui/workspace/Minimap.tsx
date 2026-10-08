@@ -63,9 +63,9 @@ export const Minimap = React.memo(function Minimap({
     const oy = (H - (Math.max(...ys) - minY) * k) / 2;
     const map = (p: Point2D) => ({ x: ox + (p.x - minX) * k, y: oy + (p.y - minY) * k });
 
-    const others = Skia.Path.Make();
-    const active = Skia.Path.Make();
-    const marker = Skia.Path.Make();
+    const others = Skia.PathBuilder.Make();
+    const active = Skia.PathBuilder.Make();
+    const marker = Skia.PathBuilder.Make();
     for (const w of walls) {
       const a = map(w.start);
       const b = map(w.end);
@@ -87,7 +87,7 @@ export const Minimap = React.memo(function Minimap({
       marker.lineTo(mx + nx * 11 + ux * 5, my + ny * 11 + uy * 5);
       marker.close();
     }
-    return { others, active, marker };
+    return { others: others.detach(), active: active.detach(), marker: marker.detach() };
   }, [walls, activeId, side]);
 
   if (!expanded) {

@@ -11,7 +11,7 @@
 // =============================================================================
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, SafeAreaView, FlatList, TouchableOpacity, Modal, RefreshControl, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, Modal, RefreshControl, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 
 import { AppServices } from '../../application/AppServices';
 import { SpaceDetail } from '../../application/projects/ProjectService';
@@ -153,17 +153,17 @@ export function ProjectWorkspaceScreen({
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.center}>
+      <View style={styles.center}>
         <ActivityIndicator color={colors.accentText} />
         <Text style={styles.muted}>Cargando espacios...</Text>
-      </SafeAreaView>
+      </View>
     );
   }
 
   const closedArea = spaces.reduce((sum, s) => sum + (s.areaM2 ?? 0), 0);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
@@ -290,7 +290,7 @@ export function ProjectWorkspaceScreen({
           </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 

@@ -12,7 +12,7 @@
 // =============================================================================
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { View, Text, SafeAreaView, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { AppServices } from '../../application/AppServices';
 import { ExpoBackupDatabaseUseCase } from '../../native/backup/ExpoBackupDatabaseUseCase';
 import { ExpoRestoreDatabaseUseCase, BackupEntry } from '../../native/backup/ExpoRestoreDatabaseUseCase';
@@ -158,7 +158,7 @@ export function SettingsScreen({
   const busy = creating || restoring;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
         {/* --- Copias de seguridad --- */}
         <View style={styles.card}>
@@ -243,7 +243,7 @@ export function SettingsScreen({
           <ReadonlyRow label="Nivel por defecto" value={services.defaultLevelId as string} />
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 

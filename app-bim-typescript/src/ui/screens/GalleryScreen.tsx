@@ -19,7 +19,7 @@
 // =============================================================================
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, FlatList, Image, TouchableOpacity, SafeAreaView, RefreshControl, Modal } from 'react-native';
+import { View, Text, FlatList, Image, TouchableOpacity, RefreshControl, Modal } from 'react-native';
 import { useLayout } from '../design/layout';
 import { themedStyles } from '../design/theme';
 import { ExpoFileSystem, type StoredPhoto } from '../../native/filesystem/ExpoFileSystem';
@@ -319,7 +319,7 @@ export function GalleryScreen({ services, roomId, objectId, photoId, operatorNam
   // -----------------------------------------------------------------------
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.count}>{photos.length} fotos</Text>
@@ -428,7 +428,7 @@ export function GalleryScreen({ services, roomId, objectId, photoId, operatorNam
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 

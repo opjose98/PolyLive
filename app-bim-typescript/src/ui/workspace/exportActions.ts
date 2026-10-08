@@ -255,8 +255,18 @@ export async function exportProjectIfc(
       toast(message, { kind: 'error' });
       return { ok: false, message };
     }
+    // Sin ubicación en el proyecto todos los espacios nacen en el mismo origen y se
+    // superponen en el modelo: se avisa cuáles faltan (se ubican en Topografía).
+    const unplaced = spaces.length > 1 ? spaces.filter((s) => !s.placement).length : 0;
+    if (unplaced) {
+      toast(`${unplaced} espacio(s) sin ubicar en el proyecto quedan superpuestos en el origen. Ubícalos con mojones en Topografía → Amarre → «Ubicar solo este espacio».`, {
+        kind: 'warning',
+        durationMs: 5000,
+      });
+    }
     const detail =
       `${out.spaces} espacio(s), ${lv.length || 1} nivel(es)` +
+      (unplaced ? `, ${unplaced} sin ubicar` : '') +
       summarize(memberCount, 'barra de dibujo', 'barras de dibujo') +
       (mapConversion ? ', georreferenciado' : '') +
       (out.skipped.length ? ` · omitidos: ${out.skipped.join(', ')}` : '');
