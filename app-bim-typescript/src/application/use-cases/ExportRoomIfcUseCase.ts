@@ -13,7 +13,6 @@ import {
   Column,
   Floor,
   RoomId,
-  RevitObjectId,
  Window } from '../../domain/objects';
 
 import { floorZoneId } from '../../domain/objects/floor';

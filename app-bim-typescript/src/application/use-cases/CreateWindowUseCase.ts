@@ -10,7 +10,6 @@ import {
   Wall,
   RoomId,
   WallId,
-  RevitObjectId,
   generateId,
   ObjectProperties,
  Window } from '../../domain/objects';
