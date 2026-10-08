@@ -4,22 +4,14 @@
 // =============================================================================
 
 import { Meters, ValidationWarning } from '../../domain/geometry/types';
-import {
-  revitObjectId,
-  IObjectStore,
-  Wall,
-  RoomId,
-  WallId,
-  generateId,
-  ObjectProperties,
- Window } from '../../domain/objects';
+import { revitObjectId, IObjectStore, Wall, RoomId, WallId, generateId, ObjectProperties, Window } from '../../domain/objects';
 
 import { CommandStack } from '../state/CommandStack';
 import { CreateWindowCommand } from '../commands/CreateWindowCommand';
 import { CommandId } from '../commands/Command';
 import { IValidationService, ValidationError } from './types';
 
-export interface CreateWindowInput {
+interface CreateWindowInput {
   roomId: RoomId;
   parentWallId: WallId;
   offsetAlongWall: Meters;
@@ -33,7 +25,7 @@ export interface CreateWindowInput {
   properties?: ObjectProperties;
 }
 
-export interface CreateWindowOutput {
+interface CreateWindowOutput {
   window: Window;
   warnings: ValidationWarning[];
   commandId: CommandId;

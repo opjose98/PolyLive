@@ -26,7 +26,7 @@ import { themedStyles, useTheme } from '../design/theme';
 // NumberField
 // ---------------------------------------------------------------------------
 
-export interface NumberFieldProps {
+interface NumberFieldProps {
   label: string;
   value: number;
   /** Sufijo de unidad mostrado a la derecha ('m', 'm²', '°'...). */
@@ -130,7 +130,7 @@ export function NumberField({
 // TextField
 // ---------------------------------------------------------------------------
 
-export interface TextFieldProps {
+interface TextFieldProps {
   label: string;
   value: string;
   placeholder?: string;
@@ -199,7 +199,7 @@ export function TextField({
 // SegmentedField — elección entre pocas opciones
 // ---------------------------------------------------------------------------
 
-export interface SegmentedFieldProps<T extends string> {
+interface SegmentedFieldProps<T extends string> {
   label: string;
   value: T;
   options: readonly { value: T; label: string }[];

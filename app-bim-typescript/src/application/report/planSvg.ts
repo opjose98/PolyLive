@@ -10,21 +10,21 @@
 
 import type { Point2D } from '../../domain/geometry/types';
 
-export interface SvgWall {
+interface SvgWall {
   readonly start: Point2D;
   readonly end: Point2D;
   readonly thickness: number;
   readonly existing?: boolean;
 }
 
-export interface SvgZone {
+interface SvgZone {
   readonly polygon: readonly Point2D[];
   readonly label: string;
   readonly sublabel?: string;
   readonly at: Point2D;
 }
 
-export interface SvgLayer {
+interface SvgLayer {
   readonly color: string;
   readonly opacity: number;
   readonly runs: readonly { x: number; y: number; w: number; h: number }[];
@@ -36,7 +36,7 @@ export type SvgMark =
   | { readonly kind: 'text'; readonly at: Point2D; readonly text: string; readonly color: string }
   | { readonly kind: 'pin'; readonly at: Point2D; readonly label: string; readonly color: string };
 
-export interface PlanSvgInput {
+interface PlanSvgInput {
   readonly walls: readonly SvgWall[];
   readonly zones?: readonly SvgZone[];
   readonly layers?: readonly SvgLayer[];

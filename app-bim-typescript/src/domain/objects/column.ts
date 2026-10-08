@@ -5,18 +5,11 @@
 // =============================================================================
 
 import { Point2D, Meters, meters } from '../geometry/types';
-import {
-  RevitObjectBase,
-  RevitObjectId,
-  RoomId,
-  WallId,
-  ObjectProperties,
-  AuditPhotoId,
-} from './base';
+import { RevitObjectBase, RevitObjectId, RoomId, WallId, ObjectProperties, AuditPhotoId } from './base';
 import type { VerticalExtent } from './vertical';
 
 /** Forma de la sección transversal de una columna. */
-export type ColumnSectionShape = 'circular' | 'rectangular';
+type ColumnSectionShape = 'circular' | 'rectangular';
 
 /**
  * Una columna es un elemento vertical, cilíndrico o prismático,

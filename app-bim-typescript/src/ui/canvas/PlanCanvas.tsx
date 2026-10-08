@@ -45,16 +45,7 @@ import { StyleSheet, View } from 'react-native';
 import { Canvas, Circle, Fill, Group, Path, Picture, Shader, Skia, createPicture } from '@shopify/react-native-skia';
 import type { SkCanvas } from '@shopify/react-native-skia';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import {
-  cancelAnimation,
-  runOnJS,
-  useDerivedValue,
-  useSharedValue,
-  Easing,
-  withDelay,
-  withSequence,
-  withTiming,
-} from 'react-native-reanimated';
+import { cancelAnimation, runOnJS, useDerivedValue, useSharedValue, Easing, withDelay, withSequence, withTiming } from 'react-native-reanimated';
 import { SkiaCanvasAdapter } from '../../native/canvas/SkiaCanvasAdapter';
 import type { CanvasTransform } from '../../domain/geometry/types';
 import { MAX_SCALE, MIN_SCALE } from '../../application/canvas/types';
@@ -70,12 +61,12 @@ import { haptic } from '../design/haptics';
 // Props
 // ---------------------------------------------------------------------------
 
-export type PlanCanvasScene = Omit<
+type PlanCanvasScene = Omit<
   PlanScene,
   'width' | 'height' | 'transform' | 'palette' | 'gridOverscanPx' | 'showGrid' | 'gridStyle'
 >;
 
-export interface PlanCanvasProps {
+interface PlanCanvasProps {
   width: number;
   height: number;
   scene: PlanCanvasScene;
@@ -700,4 +691,3 @@ const styles = StyleSheet.create({
   container: { overflow: 'hidden' },
 });
 
-export default PlanCanvas;

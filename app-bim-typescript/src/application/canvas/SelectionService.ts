@@ -50,7 +50,7 @@ export interface Handle {
 // Entrada del hit-test
 // ---------------------------------------------------------------------------
 
-export interface HitTestInput {
+interface HitTestInput {
   /** Punto tocado, en coordenadas MUNDO (metros). */
   readonly worldPoint: Point2D;
   /** Todos los objetos visibles del Recinto (ya filtrados de borrados). */

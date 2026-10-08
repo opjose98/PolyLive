@@ -51,7 +51,7 @@ export interface SpacePlacement {
   readonly rotation: number;
 }
 
-export const IDENTITY_PLACEMENT: SpacePlacement = { x: 0, y: 0, rotation: 0 };
+const IDENTITY_PLACEMENT: SpacePlacement = { x: 0, y: 0, rotation: 0 };
 export const DEFAULT_GPS_SECONDS = 30;
 
 export function placementOf(geo: Georeference | null, spaceId: string): SpacePlacement {
@@ -86,7 +86,7 @@ export function spaceToProject(pl: SpacePlacement, pModel: Point2D): Point2D {
   return { x: pl.x + l.x * c - l.y * s, y: pl.y + l.x * s + l.y * c };
 }
 
-export function projectToSpace(pl: SpacePlacement, pProject: Point2D): Point2D {
+function projectToSpace(pl: SpacePlacement, pProject: Point2D): Point2D {
   const dx = pProject.x - pl.x;
   const dy = pProject.y - pl.y;
   const c = Math.cos(pl.rotation);
@@ -136,14 +136,14 @@ export function amarreByPointAndAzimuth(localPoint: Point2D, grid: GridPoint, az
   };
 }
 
-export interface ControlPair {
+interface ControlPair {
   readonly id: string;
   /** Posición en el proyecto (local, Y arriba). */
   readonly local: Point2D;
   readonly grid: GridPoint;
 }
 
-export interface FitResult {
+interface FitResult {
   readonly origin: GridPoint;
   readonly rotation: number;
   readonly scale: number;

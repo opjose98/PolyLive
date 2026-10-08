@@ -21,7 +21,7 @@ import { elevation, sizes } from '../design/tokens';
 import { spring } from '../design/motion';
 import { themedStyles } from '../design/theme';
 
-export interface SideDrawerProps {
+interface SideDrawerProps {
   open: boolean;
   onClose: () => void;
   side: 'left' | 'right';

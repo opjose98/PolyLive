@@ -26,7 +26,7 @@
 // romper la mitad del sistema en una migración de datos.
 // =============================================================================
 
-import { Meters, meters, SquareMeters, squareMeters } from '../geometry/types';
+import { SquareMeters, squareMeters } from '../geometry/types';
 
 // ---------------------------------------------------------------------------
 // Tipos
@@ -337,7 +337,7 @@ export function openingTypeLabel(type: OpeningType): string {
  * guarda en SQLite es un contrato con las filas ya escritas: si el dominio
  * cambia un nombre de campo, esta capa es la que tiene que absorberlo.
  */
-export interface SerializedLevels {
+interface SerializedLevels {
   base?: number;
   coronacion: number;
   leftHeight?: number | null;
@@ -393,6 +393,4 @@ export function deserializeOpenings(json: string): WallOpening[] {
   }));
 }
 
-// Reexportado por comodidad de los llamadores que trabajan en Meters.
-export { meters, squareMeters };
-export type { Meters, SquareMeters };
+export type { SquareMeters };

@@ -88,7 +88,6 @@ export type DxfDraftEntity =
   | { readonly kind: 'polyline'; readonly layer: string; readonly points: readonly Point2D[]; readonly closed: boolean }
   | { readonly kind: 'text'; readonly layer: string; readonly at: Point2D; readonly text: string; readonly height: number; readonly center?: boolean };
 
-
 export interface DXFExportData {
   /** Nombre que va al encabezado y al nombre de archivo. */
   readonly title: string;
@@ -712,7 +711,7 @@ export class DXFSerializer {
 // Funciones auxiliares (exportadas para poder probarlas)
 // ---------------------------------------------------------------------------
 
-export interface DXFBounds {
+interface DXFBounds {
   minX: number;
   minY: number;
   maxX: number;

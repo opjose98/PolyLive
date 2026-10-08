@@ -60,7 +60,7 @@ export function anchorOf(m: Markup): Point2D {
 }
 
 /** Puntos de una marca (para encuadrar y para tocarla). */
-export function markupPoints(m: Markup): Point2D[] {
+function markupPoints(m: Markup): Point2D[] {
   if (m.kind === 'freehand') return [...m.points];
   if (m.kind === 'text') return [m.at];
   return [m.a, m.b];
@@ -95,7 +95,7 @@ export function distanceToMarkup(p: Point2D, m: Markup): number {
   return Math.min(...c.map((q, i) => seg(q, c[(i + 1) % 4])));
 }
 
-export interface ReviewCounts {
+interface ReviewCounts {
   readonly open: number;
   readonly resolved: number;
 }

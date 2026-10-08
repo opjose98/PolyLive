@@ -18,7 +18,7 @@ import { Tappable } from './Tappable';
 import { Icon } from './Icon';
 import { themedStyles, useTheme } from '../design/theme';
 
-export interface FloatWindowProps {
+interface FloatWindowProps {
   id: string;
   title: string;
   /** Posición absoluta dentro del lienzo (top/right/bottom/left, width). */

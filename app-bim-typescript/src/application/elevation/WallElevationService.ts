@@ -28,38 +28,9 @@ import { ObjectStore } from '../../infrastructure/sqlite/ObjectStore';
 import { Wall } from '../../domain/objects/wall';
 import { Door } from '../../domain/objects/door';
 import { Window } from '../../domain/objects/window';
-import {
-  RevitObjectId,
-  RoomId,
-  revitObjectId,
-  wallId as toWallId,
-  generateId,
-} from '../../domain/objects/base';
+import { RevitObjectId, RoomId, revitObjectId, wallId as toWallId, generateId } from '../../domain/objects/base';
 import { meters, squareMeters } from '../../domain/geometry/types';
-import {
-  WallElevation,
-  WallOpening,
-  WallOpeningId,
-  OpeningType,
-  VerticalLevels,
-  wallOpeningId,
-  defaultElevation,
-  openingEnd,
-  openingTop,
-  openingCenterX,
-  heightAt,
-  hasHeightProfile,
-  effectiveLeftHeight,
-  effectiveRightHeight,
-  computeQuantification,
-  WallQuantification,
-  OPENING_DEFAULTS,
-  openingTypeLabel,
-  serializeLevels,
-  serializeOpenings,
-  deserializeLevels,
-  deserializeOpenings,
-} from '../../domain/objects/wall-elevation';
+import { WallElevation, WallOpening, WallOpeningId, OpeningType, VerticalLevels, wallOpeningId, defaultElevation, openingEnd, openingTop, openingCenterX, heightAt, effectiveLeftHeight, effectiveRightHeight, computeQuantification, WallQuantification, OPENING_DEFAULTS, openingTypeLabel, serializeLevels, serializeOpenings, deserializeLevels, deserializeOpenings } from '../../domain/objects/wall-elevation';
 import { AppError, AppErrorCode } from '../../shared/errors/AppError';
 
 const EPSILON = 1e-6;
@@ -70,7 +41,7 @@ const EPSILON = 1e-6;
 
 export type ElevationSeverity = 'ok' | 'warning' | 'error';
 
-export interface ElevationValidation {
+interface ElevationValidation {
   readonly severity: ElevationSeverity;
   readonly message?: string;
   /** Hueco al que apunta el problema, si es de uno concreto. */
@@ -713,17 +684,3 @@ export class WallElevationService {
   }
 }
 
-// Reexports para que la UI no tenga que importar del dominio y del servicio.
-export {
-  hasHeightProfile,
-  effectiveLeftHeight,
-  effectiveRightHeight,
-  heightAt,
-  openingEnd,
-  openingTop,
-  openingCenterX,
-  openingTypeLabel,
-  computeQuantification,
-  OPENING_DEFAULTS,
-};
-export type { WallElevation, WallOpening, WallOpeningId, OpeningType, VerticalLevels, WallQuantification };

@@ -4,19 +4,11 @@
 // =============================================================================
 
 import { Meters, meters } from '../../domain/geometry/types';
-import {
-  measurementId,
-  IObjectStore,
-  WallId,
-  RoomId,
-  MeasurementId,
-  Measurement,
-  generateId,
-} from '../../domain/objects';
+import { measurementId, IObjectStore, WallId, RoomId, MeasurementId, Measurement, generateId } from '../../domain/objects';
 import { IBLEManager } from './types';
 import type { MeasurementKind } from '../../domain/objects/measurement';
 
-export interface CaptureMeasurementInput {
+interface CaptureMeasurementInput {
   roomId: RoomId;
   wallId: WallId;
   method: 'ble' | 'manual';
@@ -41,7 +33,7 @@ export interface CaptureMeasurementInput {
   reference?: MeasurementKind;
 }
 
-export interface CaptureMeasurementOutput {
+interface CaptureMeasurementOutput {
   measurementId: MeasurementId;
   average: Meters;
   samples: number[];

@@ -33,7 +33,7 @@ import { themedStyles } from '../design/theme';
 // Props y estado
 // ---------------------------------------------------------------------------
 
-export interface ExportScreenProps {
+interface ExportScreenProps {
   services: AppServices;
   roomId: RoomId;
   /** Proyecto del recinto: sus niveles y fases van al IFC. */
@@ -56,7 +56,6 @@ export function ExportScreen({ services, roomId, projectId, projectName = 'Proye
   const styles = useStyles();
   const [room, setRoom] = useState<Room | null>(null);
   const [status, setStatus] = useState<ExportStatus>({ phase: 'idle' });
-
 
   const loadRoom = useCallback(async () => {
     try {
@@ -250,4 +249,3 @@ const useStyles = themedStyles((colors) => ({
   },
 }));
 
-export default ExportScreen;

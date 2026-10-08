@@ -16,7 +16,7 @@ import { sizes, spacing } from '../design/tokens';
 import { type } from '../design/typography';
 import { themedStyles } from '../design/theme';
 
-export interface WorkspaceStatusBarProps {
+interface WorkspaceStatusBarProps {
   project: string;
   space: string;
   canUndo: boolean;
@@ -62,7 +62,7 @@ export const WorkspaceStatusBar = React.memo(function WorkspaceStatusBar({ proje
   );
 });
 
-export const STATUS_BAR_HEIGHT = 24 + sizes.statusBarRow + spacing.xs;
+const STATUS_BAR_HEIGHT = 24 + sizes.statusBarRow + spacing.xs;
 
 const useStyles = themedStyles((colors) => ({
   bar: {

@@ -9,7 +9,7 @@
 
 import { diagnostics } from './diagnostics';
 
-export class CorruptRowError extends Error {
+class CorruptRowError extends Error {
   constructor(
     readonly table: string,
     readonly rowId: string,

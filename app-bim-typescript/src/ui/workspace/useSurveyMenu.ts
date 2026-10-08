@@ -22,7 +22,7 @@ import { exportProjectPackage } from './projectPackageActions';
 
 export type MenuScreen = 'gallery' | 'export' | 'settings' | 'profile';
 
-export interface SurveyMenuInput {
+interface SurveyMenuInput {
   readonly services: AppServices;
   readonly editor: EditorController;
   readonly rooms: readonly DetectedRoom[];

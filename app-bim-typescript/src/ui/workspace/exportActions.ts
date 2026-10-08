@@ -31,7 +31,7 @@ import { Wall } from '../../domain/objects/wall';
 import { Column } from '../../domain/objects/column';
 import { workspaceStore } from '../../state/workspaceStore';
 
-export interface ExportContext {
+interface ExportContext {
   readonly roomId: RoomId;
   readonly projectId?: string;
   readonly projectName: string;
@@ -39,7 +39,7 @@ export interface ExportContext {
   readonly author?: string;
 }
 
-export type ExportOutcome =
+type ExportOutcome =
   | { readonly ok: true; readonly folder: string; readonly detail?: string }
   | { readonly ok: false; readonly message: string | null };
 

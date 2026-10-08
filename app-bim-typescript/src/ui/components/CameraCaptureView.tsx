@@ -16,7 +16,7 @@ import { CameraView } from 'expo-camera';
 import { ExpoPhotoCapture, PhotoResult } from '../../native/camera/ExpoPhotoCapture';
 import { alertDialog } from '../primitives';
 
-export interface CameraCaptureViewProps {
+interface CameraCaptureViewProps {
   capture: ExpoPhotoCapture;
   onCapture: (photo: PhotoResult) => void | Promise<void>;
   onClose: () => void;
@@ -141,4 +141,3 @@ const styles = StyleSheet.create({
   },
 });
 
-export default CameraCaptureView;

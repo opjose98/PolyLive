@@ -25,7 +25,7 @@ const SIZE = 72;
 const C = SIZE / 2;
 const LEN = 24;
 
-export const AXIS_COLORS = { x: '#E53935', y: '#43A047', z: '#1E88E5', north: '#D32F2F' } as const;
+const AXIS_COLORS = { x: '#E53935', y: '#43A047', z: '#1E88E5', north: '#D32F2F' } as const;
 
 function arrow(dx: number, dy: number, len = LEN) {
   const p = Skia.Path.Make();
@@ -43,7 +43,7 @@ function arrow(dx: number, dy: number, len = LEN) {
   return p;
 }
 
-export interface AxisGizmoProps {
+interface AxisGizmoProps {
   readonly kind: 'plan' | 'elevation';
   /** Giro de la vista en planta (rad, horario en pantalla). */
   readonly rotation?: number;

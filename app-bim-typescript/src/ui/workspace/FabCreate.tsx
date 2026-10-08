@@ -32,7 +32,7 @@ interface MiniItem {
   onPress: () => void;
 }
 
-export interface FabCreateProps {
+interface FabCreateProps {
   /** Se llama cuando una herramienta queda activa (con su forma, si tiene). */
   onToolActivated: (tool: ActiveTool) => void;
 }

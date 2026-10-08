@@ -3,22 +3,17 @@
 // Basado en: DeleteObjectUseCase.md (Obsidian 02-Aplicación/use-cases)
 // =============================================================================
 
-import {
-  IObjectStore,
-  RevitObjectId,
-  Wall,
-  Door,
- Window } from '../../domain/objects';
+import { IObjectStore, RevitObjectId, Wall, Door, Window } from '../../domain/objects';
 import { CommandStack } from '../state/CommandStack';
 import { DeleteObjectCommand } from '../commands/DeleteObjectCommand';
 import { CommandId } from '../commands/Command';
 
-export interface DeleteObjectInput {
+interface DeleteObjectInput {
   objectId: RevitObjectId;
   cascade?: boolean; // default: true
 }
 
-export interface DeleteObjectOutput {
+interface DeleteObjectOutput {
   deletedCount: number;
   commandId: CommandId;
 }

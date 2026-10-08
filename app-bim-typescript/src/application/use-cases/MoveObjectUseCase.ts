@@ -5,14 +5,7 @@
 
 import { Point2D } from '../../domain/geometry/types';
 import { translateShape } from '../../domain/geometry/shapes';
-import {
-  IObjectStore,
-  RevitObjectBase,
-  RevitObjectId,
-  Wall,
-  Column,
-  Door,
- Window } from '../../domain/objects';
+import { IObjectStore, RevitObjectBase, RevitObjectId, Wall, Column, Door, Window } from '../../domain/objects';
 import { CommandStack } from '../state/CommandStack';
 import { MoveObjectCommand, MoveSnapshot } from '../commands/MoveObjectCommand';
 import { CommandId } from '../commands/Command';
@@ -24,7 +17,7 @@ export interface MoveObjectInput {
   newPosition?: Point2D;
 }
 
-export interface MoveObjectOutput {
+interface MoveObjectOutput {
   object: RevitObjectBase;
   affectedVanos: RevitObjectId[];
   commandId: CommandId;

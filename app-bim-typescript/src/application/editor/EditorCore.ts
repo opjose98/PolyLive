@@ -55,20 +55,7 @@ import { interiorPoint, netGeometry } from '../../domain/objects/zone';
 import { reconcileZones } from '../topology/reconcileZones';
 import type { ZoneEdit } from '../../infrastructure/sqlite/ZoneStore';
 import { LEVEL_PROP, PHASE_PROP } from '../../domain/objects/marker';
-import {
-  LevelElevations,
-  VerticalExtent,
-  WallProfile,
-  WallVertical,
-  columnVerticalOf,
-  hostLevelOf,
-  
-  
-  profileSpans,
-  resolveExtent,
-  resolveWallProfile,
-  wallVerticalOf,
-} from '../../domain/objects/vertical';
+import { LevelElevations, VerticalExtent, WallProfile, WallVertical, columnVerticalOf, hostLevelOf, profileSpans, resolveExtent, resolveWallProfile, wallVerticalOf } from '../../domain/objects/vertical';
 import { projectPointToWall, isVanoWithinWall } from '../../domain/geometry/projections';
 import { AppError } from '../../shared/errors/AppError';
 import { CanvasManager } from '../canvas/CanvasManager';
@@ -98,7 +85,7 @@ export interface PhotoMarkerView {
 export type EditorTool = 'select' | 'wall' | 'door' | 'window' | 'column' | 'floor' | 'opening' | 'measure' | 'photo';
 
 /** Valores por defecto de los objetos que el editor crea. Editables en Ajustes. */
-export interface EditorDefaults {
+interface EditorDefaults {
   wallThickness: Meters;
   wallHeight: Meters;
   doorWidth: Meters;
@@ -126,8 +113,8 @@ export const DEFAULT_EDITOR_DEFAULTS: EditorDefaults = {
 };
 
 /** Formas de creación (nivel 3 del FAB): cómo se dibuja cada herramienta. */
-export type WallCreationMethod = 'drag' | 'points';
-export type ColumnCreationMethod = 'rectangular' | 'circular';
+type WallCreationMethod = 'drag' | 'points';
+type ColumnCreationMethod = 'rectangular' | 'circular';
 export interface CreationMethods {
   readonly wall: WallCreationMethod;
   readonly column: ColumnCreationMethod;
@@ -168,7 +155,7 @@ export interface DetectedRoom {
  * Alcance de nivel o fase. Un id desconocido (borrado, o un objeto levantado
  * antes de que existieran niveles) se lee como la base.
  */
-export interface MarkerScope {
+interface MarkerScope {
   readonly active: string;
   readonly base: string;
   readonly all: ReadonlySet<string>;
@@ -186,10 +173,10 @@ export interface LevelScope extends MarkerScope {
  * un muro o una columna aparece en la planta de todo nivel cuyo plano de corte
  * atraviesa, no solo en la de su base.
  */
-export const CUT_PLANE_HEIGHT = 1.2;
+const CUT_PLANE_HEIGHT = 1.2;
 
 /** Restricciones con que nacen los muros y columnas (el selector de base y tope). */
-export interface CreationVertical {
+interface CreationVertical {
   readonly wall: WallVertical | null;
   readonly column: VerticalExtent | null;
 }
@@ -254,7 +241,7 @@ export interface EditorState {
   readonly notice: { kind: 'info' | 'error' | 'success'; message: string } | null;
 }
 
-export type EditorListener = (state: EditorState) => void;
+type EditorListener = (state: EditorState) => void;
 
 /** Lo común a todo destino de arrastre: plan de uniones (si el muro tiene) y muros arrastrados. */
 export interface DragJoints {

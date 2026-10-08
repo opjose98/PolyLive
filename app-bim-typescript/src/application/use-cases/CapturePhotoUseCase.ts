@@ -4,20 +4,13 @@
 // =============================================================================
 
 import { sealPhoto } from '../../domain/evidence/seal';
-import {
-  auditPhotoId,
-  IObjectStore,
-  RoomId,
-  AuditPhotoId,
-  AuditPhoto,
-  generateId,
-} from '../../domain/objects';
+import { auditPhotoId, IObjectStore, RoomId, AuditPhotoId, AuditPhoto, generateId } from '../../domain/objects';
 import type { PhotoMetadata } from '../../domain/objects/audit-photo';
 import { CommandStack } from '../state/CommandStack';
 import { CapturePhotoCommand, PhotoLifecycle } from '../commands/CapturePhotoCommand';
 import { CommandId } from '../commands/Command';
 
-export interface CapturePhotoInput {
+interface CapturePhotoInput {
   roomId: RoomId;
   /** `Uint8Array`, no `Buffer` — ver el comentario en domain/objects/audit-photo.ts. */
   photoData: Uint8Array;
@@ -47,7 +40,7 @@ export interface CapturePhotoInput {
   metadata?: Partial<PhotoMetadata>;
 }
 
-export interface CapturePhotoOutput {
+interface CapturePhotoOutput {
   photoId: AuditPhotoId;
   commandId: CommandId;
 }

@@ -60,8 +60,8 @@ export const DEFAULT_DISCIPLINE: BimDiscipline = 'Arquitectura';
 // Códigos BIM
 // ---------------------------------------------------------------------------
 
-export const BIM_CODE_PREFIX_PROJECT = 'BIM';
-export const BIM_CODE_PREFIX_SPACE = 'SPC';
+const BIM_CODE_PREFIX_PROJECT = 'BIM';
+const BIM_CODE_PREFIX_SPACE = 'SPC';
 
 /**
  * Formato aceptado: 2–5 letras mayúsculas seguidas de 1–6 dígitos.

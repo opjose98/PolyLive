@@ -15,7 +15,7 @@ import { radius, sizes, spacing } from '../design/tokens';
 import { type } from '../design/typography';
 import { themedStyles, useTheme } from '../design/theme';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'text';
+type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'text';
 
 export function ActionButton({
   label,

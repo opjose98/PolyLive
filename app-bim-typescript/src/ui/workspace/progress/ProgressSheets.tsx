@@ -17,7 +17,7 @@ import type { Progress } from './useProgress';
 
 const PALETTE = [...new Set([...DEFAULT_ACTIVITIES.map((a) => a.color), ...ACTIVITY_COLORS])];
 
-export interface ProgressSheetsProps {
+interface ProgressSheetsProps {
   progress: Progress;
   projectName: string;
   spaceName: string;

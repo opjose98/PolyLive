@@ -23,30 +23,8 @@ import { Window } from '../../domain/objects/window';
 import { ElevationSnapshot, ElevationSnapshotCommand, VanoSnapshot } from '../commands/ElevationSnapshotCommand';
 import { revitObjectId } from '../../domain/objects/base';
 import { LEVEL_PROP, ProjectMarker } from '../../domain/objects/marker';
-import {
-  LevelElevations,
-  WallProfile,
-  WallVertical,
-  profileBottom,
-  profileHeight,
-  profileProblem,
-  resolveWallProfile,
-  wallVerticalOf,
-} from '../../domain/objects/vertical';
-import {
-  OpeningType,
-  WallElevation,
-  WallOpening,
-  WallOpeningId,
-  WallQuantification,
-  computeQuantification,
-  effectiveLeftHeight,
-  effectiveRightHeight,
-  levelsFromProfile,
-  openingEnd,
-  openingTop,
-  OPENING_DEFAULTS,
-} from '../../domain/objects/wall-elevation';
+import { LevelElevations, WallProfile, WallVertical, profileBottom, profileHeight, profileProblem, resolveWallProfile, wallVerticalOf } from '../../domain/objects/vertical';
+import { OpeningType, WallElevation, WallOpening, WallOpeningId, WallQuantification, computeQuantification, effectiveLeftHeight, effectiveRightHeight, levelsFromProfile, openingEnd, openingTop, OPENING_DEFAULTS } from '../../domain/objects/wall-elevation';
 import { AppError } from '../../shared/errors/AppError';
 import type { AppServices } from '../AppServices';
 import { ElevationSeverity, ElevationViewport, snapXSmart, snapYSmart } from './WallElevationService';
@@ -82,7 +60,7 @@ export interface ElevationEditorState {
   readonly notice: { kind: 'info' | 'error' | 'success'; message: string } | null;
 }
 
-export type ElevationListener = (s: ElevationEditorState) => void;
+type ElevationListener = (s: ElevationEditorState) => void;
 
 const MIN_SCALE = 10;
 const MAX_SCALE = 1200;

@@ -11,7 +11,7 @@ import { generateId, IObjectStore } from '../../domain/objects';
 
 export type CommandId = string & { readonly __brand: 'CommandId' };
 
-export function commandId(value: string): CommandId {
+function commandId(value: string): CommandId {
   return value as CommandId;
 }
 

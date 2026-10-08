@@ -28,7 +28,7 @@ import { themedStyles } from '../design/theme';
 // Props
 // ---------------------------------------------------------------------------
 
-export interface PhotoViewerProps {
+interface PhotoViewerProps {
   visible: boolean;
   /** Ruta local del archivo JPEG. */
   uri: string | null;
@@ -300,4 +300,3 @@ const useStyles = themedStyles((colors) => ({
   },
 }));
 
-export default PhotoViewer;

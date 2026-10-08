@@ -21,18 +21,7 @@ import { Text, TextInput, View } from 'react-native';
 import { useLayout } from '../design/layout';
 import Animated, { FadeIn, FadeOut, ZoomIn, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import {
-  ConstraintEdit,
-  ConstraintEnd,
-  ConstraintLevel,
-  applyToEdit,
-  baseIndex,
-  currentExtent,
-  infinityIndex,
-  moveBase,
-  moveTop,
-  topIndex,
-} from '../../application/workspace/constraintModel';
+import { ConstraintEdit, ConstraintEnd, ConstraintLevel, applyToEdit, baseIndex, currentExtent, infinityIndex, moveBase, moveTop, topIndex } from '../../application/workspace/constraintModel';
 import { VerticalExtent } from '../../domain/objects/vertical';
 import { workspaceStore } from '../../state/workspaceStore';
 import { FloatWindow, Icon, IconButton, Tappable } from '../primitives';
@@ -42,9 +31,9 @@ import { spring } from '../design/motion';
 import { haptic } from '../design/haptics';
 import { themedStyles, useTheme } from '../design/theme';
 
-export const CONSTRAINT_WINDOW_ID = 'constraintCfg';
+const CONSTRAINT_WINDOW_ID = 'constraintCfg';
 
-export interface ConstraintSelectorProps {
+interface ConstraintSelectorProps {
   /** Niveles del proyecto, de menor a mayor cota. */
   readonly levels: readonly ConstraintLevel[];
   readonly edit: ConstraintEdit;

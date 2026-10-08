@@ -3,6 +3,7 @@
 // Basado en: CapturePhotoUseCase.md (Obsidian 02-Aplicación/use-cases)
 // =============================================================================
 
+import type { EvidenceSeal } from '../evidence/seal';
 import { AuditPhotoId, RoomId, RevitObjectId } from './base';
 import { Point2D } from '../geometry/types';
 
@@ -64,7 +65,7 @@ export interface PhotoMetadata {
   /** Operador que la tomó, para trazabilidad. */
   operator?: string;
   /** Sello de evidencia (integridad + autor declarado), al capturar. */
-  seal?: import('../evidence/seal').EvidenceSeal;
+  seal?: EvidenceSeal;
   [key: string]: unknown;
 }
 

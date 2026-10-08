@@ -4,21 +4,14 @@
 // =============================================================================
 
 import { ValidationWarning } from '../../domain/geometry/types';
-import {
-  IObjectStore,
-  RevitObjectBase,
-  RevitObjectId,
-  Wall,
-  Column,
-  Door,
- Window } from '../../domain/objects';
+import { IObjectStore, RevitObjectBase, RevitObjectId, Wall, Column, Door, Window } from '../../domain/objects';
 
 import { CommandStack } from '../state/CommandStack';
 import { UpdateObjectPropertyCommand } from '../commands/UpdateObjectPropertyCommand';
 import { CommandId } from '../commands/Command';
 import { IValidationService, ValidationError, ValidationResult } from './types';
 
-export interface UpdateObjectPropertyInput {
+interface UpdateObjectPropertyInput {
   objectId: RevitObjectId;
   property: string;
   newValue: unknown;
@@ -29,7 +22,7 @@ export interface UpdateObjectPropertyInput {
   also?: Readonly<Record<string, unknown>>;
 }
 
-export interface UpdateObjectPropertyOutput {
+interface UpdateObjectPropertyOutput {
   object: RevitObjectBase;
   warnings: ValidationWarning[];
   commandId: CommandId;

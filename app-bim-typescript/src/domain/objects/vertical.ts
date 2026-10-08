@@ -52,7 +52,7 @@ export interface WallProfile {
 }
 
 /** Altura mínima de un elemento: por debajo, la restricción está mal puesta. */
-export const MIN_VERTICAL_HEIGHT = 0.1;
+const MIN_VERTICAL_HEIGHT = 0.1;
 
 const EPS = 1e-6;
 
@@ -99,7 +99,7 @@ export function isUniformWall(v: WallVertical): boolean {
 // Resolución a cotas
 // ---------------------------------------------------------------------------
 
-export function levelElevation(levels: LevelElevations, id: string): number {
+function levelElevation(levels: LevelElevations, id: string): number {
   return levels.get(id) ?? 0;
 }
 
@@ -151,7 +151,7 @@ export function profileProblem(p: WallProfile): string | null {
  * son la caja envolvente (base más baja, tope más alto): Revit guarda el muro
  * así y el perfil recorta dentro de ella.
  */
-export interface RevitWallConstraints {
+interface RevitWallConstraints {
   readonly baseLevelId: string;
   readonly baseOffset: number;
   readonly topLevelId: string | null;

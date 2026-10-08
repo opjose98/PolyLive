@@ -8,7 +8,7 @@ import { Wall } from '../objects/wall';
 let _edgeCounter = 0;
 
 /** Tipo geométrico de la arista. */
-export type EdgeGeometryType = 'line' | 'arc';
+type EdgeGeometryType = 'line' | 'arc';
 
 /**
  * Rol semántico BIM de la arista.
@@ -18,7 +18,7 @@ export type EdgeGeometryType = 'line' | 'arc';
  * a detectar recintos, que es justo lo que distingue un tabique de un muro
  * portante en el levantamiento.
  */
-export type EdgeObjectType = 'wall' | 'partition';
+type EdgeObjectType = 'wall' | 'partition';
 
 /**
  * Arista del grafo, sin referencia directa a objetos nodo (solo IDs).

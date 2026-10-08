@@ -21,7 +21,7 @@ export function willAskForFolder(): boolean {
   return Platform.OS === 'android' && rememberedDir === null;
 }
 
-export type SaveResult =
+type SaveResult =
   | { readonly ok: true; readonly uri: string; readonly folderLabel: string }
   | { readonly ok: false; readonly reason: 'cancelled' | 'unsupported' | 'failed'; readonly detail?: string };
 

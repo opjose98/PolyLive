@@ -16,7 +16,7 @@ import { elevation, radius, spacing } from '../design/tokens';
 import { duration, spring } from '../design/motion';
 import { themedStyles } from '../design/theme';
 
-export interface BottomSheetProps {
+interface BottomSheetProps {
   open: boolean;
   onClose: () => void;
   /** Alto de la hoja como fracción de la pantalla. */

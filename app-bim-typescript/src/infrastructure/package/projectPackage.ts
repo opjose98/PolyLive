@@ -20,9 +20,9 @@ import { strFromU8, strToU8, unzipSync, zipSync, Zippable } from 'fflate';
 import type { IDatabase } from '../sqlite/database';
 import { LATEST_SCHEMA_VERSION } from '../sqlite/migrations';
 
-export const PACKAGE_FORMAT = 'polylive-project';
-export const PACKAGE_FORMAT_VERSION = 1;
-export const PACKAGE_EXTENSION = 'polylive';
+const PACKAGE_FORMAT = 'polylive-project';
+const PACKAGE_FORMAT_VERSION = 1;
+const PACKAGE_EXTENSION = 'polylive';
 
 /** Una tabla del paquete: de dónde salen sus filas (por proyecto o por espacio). */
 interface TableSpec {
@@ -51,7 +51,7 @@ const TABLES: readonly TableSpec[] = [
   { table: 'draft_items', where: 'space_id', scope: 'space' },
 ];
 
-export interface PackageManifest {
+interface PackageManifest {
   readonly format: typeof PACKAGE_FORMAT;
   readonly formatVersion: number;
   readonly schemaVersion: number;
@@ -63,7 +63,7 @@ export interface PackageManifest {
   readonly photos: number;
 }
 
-export interface ProjectPackage {
+interface ProjectPackage {
   readonly manifest: PackageManifest;
   readonly tables: Readonly<Record<string, readonly Record<string, unknown>[]>>;
   /** Imagen de cada foto por id. */

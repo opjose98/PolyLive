@@ -7,7 +7,7 @@ import { Command } from './Command';
 import { IObjectStore, RevitObjectId } from '../../domain/objects';
 
 /** Un campo cambiado, con su valor anterior para deshacer. */
-export interface PropertyChange {
+interface PropertyChange {
   readonly property: string;
   readonly oldValue: unknown;
   readonly newValue: unknown;

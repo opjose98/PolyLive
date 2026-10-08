@@ -22,7 +22,7 @@ import { Operator, operatorId } from '../../domain/objects/operator';
 import { generateId } from '../../domain/objects';
 import { alertDialog } from '../primitives';
 
-export interface OperatorSelectorScreenProps {
+interface OperatorSelectorScreenProps {
   store: ObjectStore;
   onSelect: (operator: Operator) => void;
 }
@@ -178,4 +178,3 @@ const useStyles = themedStyles((colors) => ({
   },
 }));
 
-export default OperatorSelectorScreen;

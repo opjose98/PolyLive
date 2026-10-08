@@ -25,7 +25,7 @@ export interface StoredPhoto {
   readonly createdAt: number;     // timestamp
 }
 
-export interface FileSystemInfo {
+interface FileSystemInfo {
   readonly totalSpace: number;    // bytes
   readonly freeSpace: number;     // bytes
   readonly photoCount: number;

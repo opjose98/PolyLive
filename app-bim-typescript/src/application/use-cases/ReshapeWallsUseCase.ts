@@ -9,9 +9,9 @@ import { ReshapeWallsCommand, WallEndsSnapshot, writeEnds } from '../commands/Re
 import { AppError, AppErrorCode } from '../../shared/errors/AppError';
 
 /** Longitud mínima que puede quedarle a un muro arrastrado por una unión. */
-export const MIN_RESHAPED_LENGTH = 0.05;
+const MIN_RESHAPED_LENGTH = 0.05;
 
-export interface ReshapeWallsInput {
+interface ReshapeWallsInput {
   readonly changes: readonly WallEndsChange[];
 }
 

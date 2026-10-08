@@ -18,7 +18,7 @@ import { Window } from '../../domain/objects/window';
 import type { IFCSerializer, ProjectSerializeInput, SpaceContent } from '../../infrastructure/export/ifc/IFCSerializer';
 import type { IfcMemberInput, IfcZoneInput } from '../../infrastructure/export/ifc/types';
 
-export interface ProjectSpaceInput {
+interface ProjectSpaceInput {
   readonly roomId: RoomId;
   readonly placement?: SpaceContent['placement'];
   readonly zones?: readonly IfcZoneInput[];
@@ -26,9 +26,9 @@ export interface ProjectSpaceInput {
   readonly members?: readonly IfcMemberInput[];
 }
 
-export type ExportProjectIfcInput = Omit<ProjectSerializeInput, 'spaces'> & { readonly spaces: readonly ProjectSpaceInput[] };
+type ExportProjectIfcInput = Omit<ProjectSerializeInput, 'spaces'> & { readonly spaces: readonly ProjectSpaceInput[] };
 
-export interface ExportProjectIfcOutput {
+interface ExportProjectIfcOutput {
   readonly ifcContent: string;
   readonly spaces: number;
   readonly skipped: readonly string[];

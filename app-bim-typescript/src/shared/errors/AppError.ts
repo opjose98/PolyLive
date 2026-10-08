@@ -27,7 +27,6 @@ export enum AppErrorCode {
   PERSISTENCE_ERROR = 'PERSISTENCE_ERROR',
   USE_CASE_ROLLBACK = 'USE_CASE_ROLLBACK',
   PERMISSION_DENIED = 'PERMISSION_DENIED',
-  DEVICE_ERROR = 'DEVICE_ERROR',
   EXPORT_FAILED = 'EXPORT_FAILED',
   BACKUP_FAILED = 'BACKUP_FAILED',
   RESTORE_FAILED = 'RESTORE_FAILED',
@@ -37,9 +36,9 @@ export enum AppErrorCode {
 }
 
 /** Contexto adicional serializable — nunca debe contener datos sensibles. */
-export type AppErrorContext = Record<string, unknown>;
+type AppErrorContext = Record<string, unknown>;
 
-export interface AppErrorParams {
+interface AppErrorParams {
   code: AppErrorCode;
   /** Mensaje en español, seguro para mostrar directamente en la UI. */
   userMessage: string;

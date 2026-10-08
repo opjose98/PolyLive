@@ -18,17 +18,7 @@
 
 import { ProjectStore } from '../../infrastructure/sqlite/ProjectStore';
 import { ObjectStore } from '../../infrastructure/sqlite/ObjectStore';
-import {
-  Project,
-  ProjectSpace,
-  ProjectId,
-  ProjectSummary,
-  BimDiscipline,
-  DEFAULT_DISCIPLINE,
-  projectId as toProjectId,
-  normalizeBimCode,
-  isValidBimCode,
-} from '../../domain/objects/project';
+import { Project, ProjectSpace, ProjectId, ProjectSummary, BimDiscipline, DEFAULT_DISCIPLINE, projectId as toProjectId, normalizeBimCode, isValidBimCode } from '../../domain/objects/project';
 import { Room } from '../../domain/objects/room';
 import { LevelId, RoomId, generateId, revitObjectId, roomId as toRoomId } from '../../domain/objects/base';
 import { AppError, AppErrorCode } from '../../shared/errors/AppError';
@@ -37,7 +27,7 @@ import { AppError, AppErrorCode } from '../../shared/errors/AppError';
 // Entrada / salida
 // ---------------------------------------------------------------------------
 
-export interface CreateProjectInput {
+interface CreateProjectInput {
   name: string;
   /** Si se omite, se genera el primer código libre (BIM001, BIM002...). */
   bimCode?: string;
@@ -46,7 +36,7 @@ export interface CreateProjectInput {
   author?: string;
 }
 
-export interface CreateSpaceInput {
+interface CreateSpaceInput {
   projectId: ProjectId;
   name: string;
   /** Si se omite, se genera el primer código libre del proyecto (SPC001...). */

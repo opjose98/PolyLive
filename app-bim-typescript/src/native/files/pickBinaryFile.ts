@@ -6,7 +6,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { base64ToUint8Array } from '../../shared/encoding/base64';
 
-export interface PickedFile {
+interface PickedFile {
   readonly name: string;
   readonly bytes: Uint8Array;
 }

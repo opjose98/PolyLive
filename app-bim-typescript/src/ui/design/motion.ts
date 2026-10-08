@@ -7,7 +7,7 @@
 // por separado esté bien.
 // =============================================================================
 
-import { Easing, WithSpringConfig } from 'react-native-reanimated';
+import { WithSpringConfig } from 'react-native-reanimated';
 
 // En obra la interfaz tiene que responder YA: transiciones cortas, nada que
 // haga esperar para seguir dibujando.
@@ -16,12 +16,6 @@ export const duration = {
   fast: 140,
   base: 200,
   slow: 300,
-} as const;
-
-export const easing = {
-  standard: Easing.bezier(0.2, 0, 0, 1),
-  enter: Easing.bezier(0, 0, 0, 1),
-  exit: Easing.bezier(0.3, 0, 1, 1),
 } as const;
 
 export const spring: Readonly<Record<'snappy' | 'gentle' | 'bouncy', WithSpringConfig>> = {

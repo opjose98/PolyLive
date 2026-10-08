@@ -26,7 +26,7 @@ import { RevitObjectId } from '../../domain/objects/base';
 // ---------------------------------------------------------------------------
 
 /** Recinto candidato. NO es un `Room` persistido: es una propuesta. */
-export interface RoomSuggestion {
+interface RoomSuggestion {
   /** Vértices normalizados en orientación horaria (CW). */
   readonly polygon: Point2D[];
   readonly area: SquareMeters;
@@ -35,7 +35,7 @@ export interface RoomSuggestion {
   readonly boundaryWallIds: RevitObjectId[];
 }
 
-export interface DetectRoomsInput {
+interface DetectRoomsInput {
   readonly walls: readonly Wall[];
   /** Tolerancia de fusión de nodos en metros. Por defecto 0.05 (5 cm). */
   readonly snapTolerance?: number;
@@ -43,7 +43,7 @@ export interface DetectRoomsInput {
   readonly minArea?: number;
 }
 
-export interface DetectRoomsOutput {
+interface DetectRoomsOutput {
   readonly suggestions: RoomSuggestion[];
   /** Ciclos hallados pero descartados, con el motivo. Útil para diagnóstico. */
   readonly rejected: { reason: string }[];

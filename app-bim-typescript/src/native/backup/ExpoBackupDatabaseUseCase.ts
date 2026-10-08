@@ -41,7 +41,7 @@ import { AppError, AppErrorCode } from '../../shared/errors/AppError';
 const BACKUP_PREFIX = 'polylive-backup-';
 const BACKUP_EXT = '.db';
 
-export interface ExpoBackupDatabaseInput {
+interface ExpoBackupDatabaseInput {
   /**
    * Base de datos ABIERTA a respaldar.
    *
@@ -60,7 +60,7 @@ export interface ExpoBackupDatabaseInput {
   minIntervalMs?: number;
 }
 
-export interface ExpoBackupDatabaseOutput {
+interface ExpoBackupDatabaseOutput {
   backupPath: string;
   prunedPaths: string[];
   /** true si no se respaldó porque había uno reciente (`backupPath` es ese). */

@@ -17,7 +17,7 @@ import { Tappable } from './Tappable';
 import { Icon } from './Icon';
 import { themedStyles, useTheme } from '../design/theme';
 
-export interface AccordionProps {
+interface AccordionProps {
   title: string;
   icon?: string;
   defaultOpen?: boolean;

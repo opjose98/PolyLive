@@ -20,9 +20,9 @@ import type { DetectedRoom } from '../../application/editor/EditorController';
 import type { ClosureCheck } from '../../domain/topology/closure';
 
 /** Usos frecuentes en vivienda y oficina: un toque en vez de escribir. */
-export const ZONE_USES = ['Sala', 'Comedor', 'Cocina', 'Dormitorio', 'Baño', 'Estudio', 'Oficina', 'Circulación', 'Depósito', 'Patio'];
+const ZONE_USES = ['Sala', 'Comedor', 'Cocina', 'Dormitorio', 'Baño', 'Estudio', 'Oficina', 'Circulación', 'Depósito', 'Patio'];
 
-export interface ZoneSheetProps {
+interface ZoneSheetProps {
   zone: DetectedRoom;
   levelName?: string;
   editable: boolean;

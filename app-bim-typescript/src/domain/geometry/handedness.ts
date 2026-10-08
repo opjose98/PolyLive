@@ -29,8 +29,6 @@ export function toLocal(p: Point2D): Point2D {
   return { x: p.x, y: -p.y };
 }
 
-export const fromLocal = toLocal;
-
 function mirrorShape(shape: Shape): Shape {
   switch (shape.kind) {
     case 'line':

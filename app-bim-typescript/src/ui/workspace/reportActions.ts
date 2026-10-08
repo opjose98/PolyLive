@@ -5,7 +5,7 @@
 import { saveBase64ToUserFolder, saveTextToUserFolder } from '../../native/export/saveToUserFolder';
 import { folderHint } from './folderHint';
 import * as FileSystem from 'expo-file-system/legacy';
-import { shareExistingFile, shareFile } from '../../native/export/shareFile';
+import { shareExistingFile } from '../../native/export/shareFile';
 import { htmlToPdf } from '../../native/export/printPdf';
 import { toast } from '../primitives';
 import { haptic } from '../design/haptics';
@@ -68,12 +68,5 @@ export function sharePdf(html: string, dialogTitle: string, filename?: string): 
       await FileSystem.copyAsync({ from: pdf.uri, to: uri });
     }
     if (!(await shareExistingFile(uri, 'application/pdf', dialogTitle))) toast('Compartir no está disponible', { kind: 'error' });
-  });
-}
-
-export function shareCsv(filename: string, csv: string): Promise<void> {
-  return guard('CSV', async () => {
-    const r = await shareFile(filename, '﻿' + csv, { mimeType: 'text/csv' });
-    if (!r.ok) toast('Compartir no está disponible', { kind: 'error' });
   });
 }

@@ -24,7 +24,7 @@ export interface EvidenceSeal {
   readonly sealedAt: string;
 }
 
-export interface SealFields {
+interface SealFields {
   readonly bimCode?: string;
   readonly operator?: string;
   readonly timestamp: number;

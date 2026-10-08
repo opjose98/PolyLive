@@ -18,7 +18,7 @@ import type { ExpoFileSystem } from '../../native/filesystem/ExpoFileSystem';
 import type { ExpoGpsProvider } from '../../native/location/ExpoGpsProvider';
 import { base64ToUint8Array } from '../../shared/encoding/base64';
 
-export interface SaveFieldPhotoInput {
+interface SaveFieldPhotoInput {
   readonly services: AppServices;
   readonly fs: ExpoFileSystem;
   readonly roomId: RoomId;

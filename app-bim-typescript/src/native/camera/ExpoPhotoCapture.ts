@@ -27,13 +27,13 @@ export interface PhotoResult {
   readonly timestamp: number;
 }
 
-export interface PhotoCaptureConfig {
+interface PhotoCaptureConfig {
   readonly quality: number;         // 0.0 - 1.0 (default: 0.8)
   readonly includeBase64: boolean;  // default: true
   readonly includeExif: boolean;    // default: true
 }
 
-export type PermissionStatus = 'granted' | 'denied' | 'undetermined';
+type PermissionStatus = 'granted' | 'denied' | 'undetermined';
 
 // ---------------------------------------------------------------------------
 // Default configuration

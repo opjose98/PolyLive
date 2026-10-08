@@ -26,7 +26,7 @@ import { CANVAS_PALETTES } from '../design/canvasThemes';
 import { LONG_PRESS_MS } from '../design/motion';
 import { haptic } from '../design/haptics';
 
-export interface ElevationCanvasProps {
+interface ElevationCanvasProps {
   readonly scene: ElevationScene;
   onTap(x: number, y: number): void;
   onDoubleTap(): void;

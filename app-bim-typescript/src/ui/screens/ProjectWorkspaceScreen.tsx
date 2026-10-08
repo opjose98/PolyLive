@@ -11,19 +11,7 @@
 // =============================================================================
 
 import React, { useCallback, useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  SafeAreaView,
-  FlatList,
-  TouchableOpacity,
-  Modal,
-  RefreshControl,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-} from 'react-native';
+import { View, Text, SafeAreaView, FlatList, TouchableOpacity, Modal, RefreshControl, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 
 import { AppServices } from '../../application/AppServices';
 import { SpaceDetail } from '../../application/projects/ProjectService';
@@ -41,7 +29,7 @@ import { themedStyles, useTheme } from '../design/theme';
 // Props
 // ---------------------------------------------------------------------------
 
-export interface ProjectWorkspaceScreenProps {
+interface ProjectWorkspaceScreenProps {
   services: AppServices;
   project: Project;
   onOpenSpace: (roomId: RoomId) => void;
@@ -570,4 +558,3 @@ const useStyles = themedStyles((colors) => ({
   },
 }));
 
-export default ProjectWorkspaceScreen;

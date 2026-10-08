@@ -2,26 +2,18 @@
 // index.ts — Barrel exports para application/use-cases
 // =============================================================================
 
-export { CreateWallUseCase, CreateWallInput, CreateWallOutput } from './CreateWallUseCase';
-export { CreateColumnUseCase, CreateColumnInput, CreateColumnOutput } from './CreateColumnUseCase';
-export { CreateDoorUseCase, CreateDoorInput, CreateDoorOutput } from './CreateDoorUseCase';
-export { CreateWindowUseCase, CreateWindowInput, CreateWindowOutput } from './CreateWindowUseCase';
-export { UpdateObjectPropertyUseCase, UpdateObjectPropertyInput, UpdateObjectPropertyOutput } from './UpdateObjectPropertyUseCase';
-export { MoveObjectUseCase, MoveObjectInput, MoveObjectOutput } from './MoveObjectUseCase';
-export { DeleteObjectUseCase, DeleteObjectInput, DeleteObjectOutput } from './DeleteObjectUseCase';
+export { CreateWallUseCase } from './CreateWallUseCase';
+export { CreateColumnUseCase } from './CreateColumnUseCase';
+export { CreateDoorUseCase } from './CreateDoorUseCase';
+export { CreateWindowUseCase } from './CreateWindowUseCase';
+export { UpdateObjectPropertyUseCase } from './UpdateObjectPropertyUseCase';
+export { MoveObjectUseCase } from './MoveObjectUseCase';
+export { DeleteObjectUseCase } from './DeleteObjectUseCase';
 // Detección automática de recintos (motor portado de LevON). El editor la usa
 // en cada recarga para mantener la geometría del Recinto (syncRoomGeometry).
-export {
-  DetectRoomsUseCase,
-  DetectRoomsInput,
-  DetectRoomsOutput,
-  RoomSuggestion,
-} from './DetectRoomsUseCase';
-export { CaptureMeasurementUseCase, CaptureMeasurementInput, CaptureMeasurementOutput } from './CaptureMeasurementUseCase';
-export { CapturePhotoUseCase, CapturePhotoInput, CapturePhotoOutput } from './CapturePhotoUseCase';
-export { LinkPhotoToObjectUseCase, LinkPhotoToObjectInput, LinkPhotoToObjectOutput } from './LinkPhotoToObjectUseCase';
-export { ExportRoomIfcUseCase, ExportRoomIfcInput, ExportRoomIfcOutput } from './ExportRoomIfcUseCase';
-export { ExportRoomDxfUseCase, ExportRoomDxfInput, ExportRoomDxfOutput } from './ExportRoomDxfUseCase';
+export { DetectRoomsUseCase } from './DetectRoomsUseCase';
+export { CaptureMeasurementUseCase } from './CaptureMeasurementUseCase';
+export { CapturePhotoUseCase } from './CapturePhotoUseCase';
+export { LinkPhotoToObjectUseCase } from './LinkPhotoToObjectUseCase';
+export { ExportRoomIfcUseCase } from './ExportRoomIfcUseCase';
 
-// Tipos compartidos
-export { ValidationError, IValidationService, IBLEManager, IIFCSerializer, ValidationResult } from './types';

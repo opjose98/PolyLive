@@ -39,7 +39,7 @@ type Pick = null | { kind: 'mojon' } | { kind: 'stand'; common: SetupCommon } | 
 type Form = null | { mode: 'name'; point?: Point2D; gps?: GpsAverage } | { mode: 'typed' };
 type GpsFor = null | { kind: 'benchmark' } | { kind: 'stand'; common: SetupCommon; point: Point2D };
 
-export interface TopographyInput {
+interface TopographyInput {
   services: AppServices;
   projectId?: string;
   spaceId: string;

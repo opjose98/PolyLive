@@ -59,7 +59,7 @@ const GAP = 4;
 // Props
 // ---------------------------------------------------------------------------
 
-export interface GalleryScreenProps {
+interface GalleryScreenProps {
   services: AppServices;
   roomId: RoomId;
   /** Solo las fotos vinculadas a este objeto BIM (desde sus propiedades). */
@@ -557,4 +557,3 @@ const useStyles = themedStyles((colors) => ({
   },
 }));
 
-export default GalleryScreen;

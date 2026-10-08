@@ -100,7 +100,7 @@ function ifcValue(v: IfcValue): string {
 // Escritor
 // ---------------------------------------------------------------------------
 
-export interface Vec2 {
+interface Vec2 {
   readonly x: number;
   readonly y: number;
 }
@@ -360,4 +360,4 @@ export class StepWriter {
   }
 }
 
-export { ref, refs, bool };
+export { ref };

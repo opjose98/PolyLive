@@ -115,11 +115,11 @@ export function supportArea(s: Support): number {
 // ---------------------------------------------------------------------------
 
 /** Celda de la malla (m): 2 cm, el trazo se ve continuo y el error de borde es de ±1 cm. */
-export const DEFAULT_CELL = 0.02;
+const DEFAULT_CELL = 0.02;
 /** Tope de celdas por soporte: si se pasa, la celda crece (un muro de 100 m² a 5 cm son 40 000). */
 const MAX_CELLS = 400_000;
 
-export interface Grid {
+interface Grid {
   readonly x0: number;
   readonly y0: number;
   readonly cell: number;

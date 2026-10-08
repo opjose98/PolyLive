@@ -22,7 +22,7 @@
 import type { Point2D } from '../geometry/types';
 import { JOINT_TOLERANCE, JointWall, endsAt, planMeasureMove } from './joints';
 
-export type MeasureReference = 'interior' | 'exterior' | 'axis';
+type MeasureReference = 'interior' | 'exterior' | 'axis';
 export type Side = 1 | -1;
 
 export interface FaceWall extends JointWall {
@@ -71,7 +71,7 @@ function cutsWithFaces(w: FaceWall, s: Side, other: FaceWall): [number, number] 
  * cercana del vecino; con un vecino del otro lado (esquina exterior) se ALARGA
  * hasta su cara lejana; en un extremo libre termina en el extremo del eje.
  */
-export function faceSpan(w: FaceWall, s: Side, walls: readonly FaceWall[], tol = JOINT_TOLERANCE): { u0: number; u1: number } {
+function faceSpan(w: FaceWall, s: Side, walls: readonly FaceWall[], tol = JOINT_TOLERANCE): { u0: number; u1: number } {
   const f = frame(w);
   const byId = new Map(walls.map((x) => [x.id, x]));
   const neighbours = (node: Point2D): { wall: FaceWall; side: Side | 0 }[] => {

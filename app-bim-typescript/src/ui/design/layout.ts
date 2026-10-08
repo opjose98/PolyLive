@@ -10,13 +10,13 @@
 import { useWindowDimensions } from 'react-native';
 
 /** Lado corto desde el que se considera tableta (dp, criterio de Android). */
-export const TABLET_MIN_SIDE = 600;
+const TABLET_MIN_SIDE = 600;
 /** Ancho máximo de una hoja inferior: más ancha no se lee mejor. */
 export const SHEET_MAX_WIDTH = 640;
 /** Ancho objetivo de una miniatura de la galería (dp). */
 const THUMB_TARGET = 120;
 
-export interface LayoutClass {
+interface LayoutClass {
   readonly width: number;
   readonly height: number;
   readonly landscape: boolean;

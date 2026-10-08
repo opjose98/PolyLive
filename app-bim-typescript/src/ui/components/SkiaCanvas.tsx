@@ -26,7 +26,7 @@ import { SkiaCanvasAdapter, ICanvasRenderer } from '../../native/canvas/SkiaCanv
 // Props
 // ---------------------------------------------------------------------------
 
-export interface SkiaCanvasProps {
+interface SkiaCanvasProps {
   width: number;
   height: number;
   onReady?: (renderer: ICanvasRenderer) => void;
@@ -89,4 +89,3 @@ const styles = StyleSheet.create({
   },
 });
 
-export default SkiaCanvas;

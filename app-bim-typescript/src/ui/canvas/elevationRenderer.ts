@@ -19,22 +19,7 @@
 // =============================================================================
 
 import type { ICanvasRenderer } from '../../native/canvas/SkiaCanvasAdapter';
-import {
-  WallElevation,
-  WallOpening,
-  WallOpeningId,
-  baseAt,
-  effectiveLeftHeight,
-  effectiveRightHeight,
-  hasHeightProfile,
-  openingEnd,
-  openingTop,
-  openingCenterX,
-  openingCenterY,
-  umbral,
-  dintel,
-  openingTypeLabel,
-} from '../../domain/objects/wall-elevation';
+import { WallElevation, WallOpening, WallOpeningId, baseAt, effectiveLeftHeight, effectiveRightHeight, hasHeightProfile, openingEnd, openingTop, openingCenterX, openingCenterY, umbral, dintel, openingTypeLabel } from '../../domain/objects/wall-elevation';
 import type { ElevationSeverity, ElevationViewport } from '../../application/elevation/WallElevationService';
 import { CANVAS_PALETTES, CanvasPalette } from '../design/canvasThemes';
 import { drawSketch, SketchShape, withAlpha } from './sketch';
@@ -135,7 +120,7 @@ function drawFaceProgress({ r, scene, toScreen }: Ctx): void {
 }
 
 /** Contorno del muro en CSL: su perfil (base y tope de cada extremo). */
-export function wallOutline(elevation: WallElevation, wallLength: number): { x: number; y: number }[] {
+function wallOutline(elevation: WallElevation, wallLength: number): { x: number; y: number }[] {
   const lv = elevation.levels;
   return hasHeightProfile(lv)
     ? [

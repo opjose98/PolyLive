@@ -65,7 +65,7 @@ export async function startDiagnosticsLog(): Promise<void> {
 }
 
 /** Texto del diagnóstico: cabecera del dispositivo + entradas (más antiguas primero). */
-export function diagnosticsText(meta: { app: string; schema: number; operator?: string }): string {
+function diagnosticsText(meta: { app: string; schema: number; operator?: string }): string {
   const all = [...history, ...diagnostics.entries()].slice(-KEEP);
   const head = [
     `PolyLive BIM ${meta.app} · esquema v${meta.schema}`,

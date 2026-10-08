@@ -4,16 +4,7 @@
 // =============================================================================
 
 import { Meters, ValidationWarning } from '../../domain/geometry/types';
-import {
-  revitObjectId,
-  IObjectStore,
-  Door,
-  Wall,
-  RoomId,
-  WallId,
-  generateId,
-  ObjectProperties,
-} from '../../domain/objects';
+import { revitObjectId, IObjectStore, Door, Wall, RoomId, WallId, generateId, ObjectProperties } from '../../domain/objects';
 import { CommandStack } from '../state/CommandStack';
 import { CreateDoorCommand } from '../commands/CreateDoorCommand';
 import { CommandId } from '../commands/Command';
@@ -32,7 +23,7 @@ export interface CreateDoorInput {
   properties?: ObjectProperties;
 }
 
-export interface CreateDoorOutput {
+interface CreateDoorOutput {
   door: Door;
   warnings: ValidationWarning[];
   commandId: CommandId;

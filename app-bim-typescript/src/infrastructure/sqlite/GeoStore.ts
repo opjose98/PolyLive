@@ -57,7 +57,7 @@ const toProjectBenchmark = (r: LinkRow): ProjectBenchmark => ({
   localZ: r.local_z !== null ? Number(r.local_z) : null,
 });
 
-export interface NewBenchmark {
+interface NewBenchmark {
   name: string;
   description?: string;
   latLon: LatLon | null;

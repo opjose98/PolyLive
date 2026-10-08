@@ -34,7 +34,7 @@ export interface BpcAction {
   readonly onPress: () => void;
 }
 
-export interface BpcProps {
+interface BpcProps {
   context: BpcContext;
   pills: readonly BpcPill[];
   actions?: readonly BpcAction[];

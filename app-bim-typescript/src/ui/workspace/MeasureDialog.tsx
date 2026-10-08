@@ -16,7 +16,7 @@ import { themedStyles } from '../design/theme';
 import { radius, spacing } from '../design/tokens';
 import { type } from '../design/typography';
 
-export interface MeasureDialogProps {
+interface MeasureDialogProps {
   open: boolean;
   /** Longitudes actuales del muro elegido (para ver qué se corrige). */
   faces: { axis: number; interior: number | null; exterior: number | null } | null;

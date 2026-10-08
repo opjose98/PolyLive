@@ -51,7 +51,7 @@ import type { ReviewView } from '../../domain/review/review';
 const TOUCH_TOL = sizes.canvasTouchTolerance;
 const cm = (m: number) => Math.round(m * 100);
 
-export interface ElevationViewProps {
+interface ElevationViewProps {
   readonly editor: ElevationEditor;
   readonly width: number;
   readonly height: number;

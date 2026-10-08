@@ -42,13 +42,7 @@ import { MainMenu } from '../workspace/MainMenu';
 import { RangeSelectors } from '../workspace/RangeSelector';
 import { DEFAULT_EDITOR_DEFAULTS, EditorController, EditorState } from '../../application/editor/EditorController';
 import { ConstraintSelector } from '../workspace/ConstraintSelector';
-import {
-  ConstraintEdit,
-  ConstraintLevel,
-  defaultExtent,
-  describeExtent,
-  sortLevels,
-} from '../../application/workspace/constraintModel';
+import { ConstraintEdit, ConstraintLevel, defaultExtent, describeExtent, sortLevels } from '../../application/workspace/constraintModel';
 import { isUniformWall, sameExtent } from '../../domain/objects/vertical';
 import { useProjectLevels } from '../workspace/useProjectLevels';
 import { createLiveSource, draggedIds, isDragging, sameStructure } from '../canvas/liveOverlay';
@@ -106,7 +100,7 @@ const CANVAS_TOUCH_TOLERANCE_PX = sizes.canvasTouchTolerance;
 // Props
 // ---------------------------------------------------------------------------
 
-export interface SurveyScreenProps {
+interface SurveyScreenProps {
   services: AppServices;
   roomId: RoomId;
   /** Abre la galería filtrada por el objeto indicado. */
@@ -1459,4 +1453,3 @@ const useStyles = themedStyles((colors) => ({
   dialogActions: { flexDirection: 'row', gap: spacing.sm },
 }));
 
-export default SurveyScreen;

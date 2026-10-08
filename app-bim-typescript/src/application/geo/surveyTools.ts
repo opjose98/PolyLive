@@ -36,7 +36,7 @@ export interface InverseResult {
   readonly grade: number | null;
 }
 
-export function azimuthOf(dE: number, dN: number): number {
+function azimuthOf(dE: number, dN: number): number {
   const a = (Math.atan2(dE, dN) * 180) / Math.PI;
   return a < 0 ? a + 360 : a;
 }
@@ -108,7 +108,7 @@ export function gridPolygonMetrics(points: readonly GridPoint[]): { area: number
 // Replanteo
 // ---------------------------------------------------------------------------
 
-export interface StakeoutResult extends InverseResult {
+interface StakeoutResult extends InverseResult {
   /** Indicación para el operador: "3,20 m al Norte · 1,05 m al Este". */
   readonly instruction: string;
   /** Llegó (dentro de la tolerancia). */
@@ -130,7 +130,7 @@ export function stakeout(current: GridPoint, target: GridPoint, tolerance = 0.5)
 // Cuadrícula de coordenadas
 // ---------------------------------------------------------------------------
 
-export interface GridLine {
+interface GridLine {
   /** 'E' = línea de Este constante (va de sur a norte); 'N' = de Norte constante. */
   readonly kind: 'E' | 'N';
   readonly value: number;
@@ -189,7 +189,7 @@ export function coordinateGrid(
 /** Orden de columnas: P (punto), N, E, Z, D (descripción). PNEZD es el formato habitual. */
 export type PointOrder = 'PNEZD' | 'PENZD';
 
-export interface ImportedPoint {
+interface ImportedPoint {
   readonly name: string;
   readonly n: number;
   readonly e: number;
@@ -199,7 +199,7 @@ export interface ImportedPoint {
   readonly line: number;
 }
 
-export interface CsvParseResult {
+interface CsvParseResult {
   readonly points: ImportedPoint[];
   readonly errors: { line: number; message: string }[];
   readonly separator: string;
@@ -301,7 +301,7 @@ export function toKml(
 // IFC georreferenciado (IfcMapConversion)
 // ---------------------------------------------------------------------------
 
-export interface MapConversion {
+interface MapConversion {
   /** Nombre EPSG del sistema proyectado (p. ej. "EPSG:9377"). */
   readonly crsName: string;
   readonly crsDescription: string;

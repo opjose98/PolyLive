@@ -158,7 +158,7 @@ const STROKE = { cut: 2, medium: 1.2, thin: 0.75 } as const;
 /** Paso de la trama de mampostería (px). */
 const HATCH_PX = 6;
 
-export type WallRendering = 'solid' | 'hatch' | 'outline';
+type WallRendering = 'solid' | 'hatch' | 'outline';
 
 /**
  * Cómo se rellena un muro cortado. El material escrito manda (concreto,

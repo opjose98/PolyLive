@@ -15,10 +15,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, SafeAreaView, ScrollView, TouchableOpacity } from 'react-native';
 import { AppServices } from '../../application/AppServices';
 import { ExpoBackupDatabaseUseCase } from '../../native/backup/ExpoBackupDatabaseUseCase';
-import {
-  ExpoRestoreDatabaseUseCase,
-  BackupEntry,
-} from '../../native/backup/ExpoRestoreDatabaseUseCase';
+import { ExpoRestoreDatabaseUseCase, BackupEntry } from '../../native/backup/ExpoRestoreDatabaseUseCase';
 import { AppError } from '../../shared/errors/AppError';
 import { loadAppPrefs, saveAppPrefs } from '../../native/prefs/prefsFile';
 import { shareDiagnostics } from '../../native/diagnostics/diagnosticsLog';
@@ -34,7 +31,7 @@ import { themedStyles } from '../design/theme';
 // Props
 // ---------------------------------------------------------------------------
 
-export interface SettingsScreenProps {
+interface SettingsScreenProps {
   services: AppServices;
   /** Nombre lógico de la base abierta — lo necesita la restauración. */
   dbName: string;
@@ -328,4 +325,3 @@ const useStyles = themedStyles((colors) => ({
   },
 }));
 
-export default SettingsScreen;

@@ -10,7 +10,7 @@
 
 import type { Point2D } from '../geometry/types';
 
-export interface Diagonal {
+interface Diagonal {
   readonly a: Point2D;
   readonly b: Point2D;
   readonly length: number;

@@ -15,7 +15,7 @@ import { haptic } from '../../design/haptics';
 import { safeName, saveCsv, savePdf, sharePdf } from '../reportActions';
 import type { Review } from './useReview';
 
-export interface ReviewSheetsProps {
+interface ReviewSheetsProps {
   review: Review;
   projectName: string;
   spaceName: string;

@@ -22,7 +22,7 @@ import { themedStyles } from '../design/theme';
 
 /** Opciones que el motor todavía no implementa: se muestran y lo explican. */
 
-export interface CornerToolsProps {
+interface CornerToolsProps {
   onZoom: (action: ZoomAction) => void;
 }
 

@@ -13,7 +13,6 @@
 // =============================================================================
 
 import { Point2D, Meters, SquareMeters, meters, squareMeters } from './types';
-import { ArcShape, approximateArc } from './shapes';
 
 // ---------------------------------------------------------------------------
 // Área
@@ -137,8 +136,6 @@ export function isPointInPolygon(point: Point2D, vertices: readonly Point2D[]): 
 }
 
 /** Aproxima un arco como polilínea. Reexportado para tener la API poligonal junta. */
-export { approximateArc };
-export type { ArcShape };
 
 // ---------------------------------------------------------------------------
 // Internos

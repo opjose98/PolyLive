@@ -18,28 +18,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { exportProjectPackage, importProjectPackageFlow, packagedLabel } from '../workspace/projectPackageActions';
 import { lastPackagedAt } from '../../infrastructure/package/projectPackage';
-import {
-  View,
-  Text,
-  SafeAreaView,
-  FlatList,
-  TouchableOpacity,
-  TextInput,
-  Modal,
-  RefreshControl,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-} from 'react-native';
+import { View, Text, SafeAreaView, FlatList, TouchableOpacity, TextInput, Modal, RefreshControl, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 
 import { AppServices } from '../../application/AppServices';
-import {
-  Project,
-  ProjectSummary,
-  BIM_DISCIPLINES,
-  BimDiscipline,
-} from '../../domain/objects/project';
+import { Project, ProjectSummary, BIM_DISCIPLINES, BimDiscipline } from '../../domain/objects/project';
 import type { Operator } from '../../domain/objects/operator';
 import { AppError } from '../../shared/errors/AppError';
 import { ActionButton, alertDialog } from '../primitives';
@@ -52,7 +34,7 @@ import { themedStyles, useTheme } from '../design/theme';
 // Props
 // ---------------------------------------------------------------------------
 
-export interface ProjectsScreenProps {
+interface ProjectsScreenProps {
   services: AppServices;
   operator: Operator;
   onOpenProject: (project: Project) => void;
@@ -685,4 +667,3 @@ const useStyles = themedStyles((colors) => ({
   },
 }));
 
-export default ProjectsScreen;

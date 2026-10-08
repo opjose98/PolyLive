@@ -22,7 +22,7 @@ import { Column } from '../../domain/objects/column';
 import type { WallElevation } from '../../domain/objects/wall-elevation';
 import { DXFSerializer, DXFExportData } from '../../infrastructure/export/dxf/DXFSerializer';
 
-export interface ExportRoomDxfInput {
+interface ExportRoomDxfInput {
   roomId: RoomId;
   /** Nombre del dibujo. Por defecto, el nombre del Recinto. */
   title?: string;
@@ -39,7 +39,7 @@ export interface ExportRoomDxfInput {
   drafting?: DXFExportData['drafting'];
 }
 
-export interface ExportRoomDxfOutput {
+interface ExportRoomDxfOutput {
   dxfContent: string;
   /** Cifras para que la UI diga QUÉ se exportó, no solo que se exportó. */
   stats: {

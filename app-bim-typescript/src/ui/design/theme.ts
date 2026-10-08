@@ -173,7 +173,7 @@ export function chromeColors(theme: CanvasThemeId, mode: WorkModeId): ChromeColo
 const canvasCache = new Map<string, CanvasPalette>();
 
 /** Paleta del lienzo del tema, con el trazo, la selección y el snap en el color del modo. */
-export function canvasPaletteFor(theme: CanvasThemeId, mode: WorkModeId): CanvasPalette {
+function canvasPaletteFor(theme: CanvasThemeId, mode: WorkModeId): CanvasPalette {
   const key = `${theme}:${mode}`;
   let p = canvasCache.get(key);
   if (!p) {

@@ -20,19 +20,7 @@ import { RevitObjectBase } from '../../../domain/objects/base';
 import { LEVEL_PROP, PHASE_PROP } from '../../../domain/objects/marker';
 import { floorZoneId } from '../../../domain/objects/floor';
 import { columnForExport, toLocal, wallForExport } from '../../../domain/geometry/handedness';
-import {
-  LevelElevations,
-  VerticalExtent,
-  WallProfile,
-  columnVerticalOf,
-  isRectangularProfile,
-  profileBottom,
-  profileTop,
-  resolveExtent,
-  resolveWallProfile,
-  revitConstraints,
-  wallVerticalOf,
-} from '../../../domain/objects/vertical';
+import { LevelElevations, VerticalExtent, WallProfile, columnVerticalOf, isRectangularProfile, profileBottom, profileTop, resolveExtent, resolveWallProfile, revitConstraints, wallVerticalOf } from '../../../domain/objects/vertical';
 import { SerializeInput, GateValidationResult, IfcLevelInput } from './types';
 import { IfcValue, StepWriter, ref, stepReal, stepString } from './step-writer';
 import { stableGuid } from './guid-generator';
@@ -41,7 +29,7 @@ import { validate8Criteria } from './compatibility-gate';
 /**
  * Resultado de la serialización IFC.
  */
-export interface SerializeResult {
+interface SerializeResult {
   /** Contenido STEP completo, listo para escribir a archivo .ifc */
   readonly content: string;
   /** Resultado de la validación Compatibility Gate */
@@ -62,7 +50,7 @@ export type SpaceContent = Pick<
 /** El proyecto: datos comunes (niveles, fases, georreferencia) y sus espacios. */
 export type ProjectSerializeInput = Omit<SerializeInput, keyof SpaceContent> & { readonly spaces: readonly SpaceContent[] };
 
-export interface ProjectSerializeResult extends SerializeResult {
+interface ProjectSerializeResult extends SerializeResult {
   /** Espacios escritos y omitidos (por no pasar la validación). */
   readonly spaces: number;
   readonly skipped: readonly { readonly name: string; readonly validation: GateValidationResult }[];

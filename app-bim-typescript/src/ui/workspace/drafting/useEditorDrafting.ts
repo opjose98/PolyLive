@@ -53,7 +53,7 @@ function tagText(o: unknown): string | null {
   return null;
 }
 
-export interface EditorDraftingInput {
+interface EditorDraftingInput {
   readonly services: AppServices;
   readonly editor: EditorController;
   readonly spaceId: string;

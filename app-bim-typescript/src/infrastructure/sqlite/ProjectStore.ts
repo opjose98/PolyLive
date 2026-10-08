@@ -12,24 +12,14 @@
 // =============================================================================
 
 import { IDatabase } from './database';
-import {
-  Project,
-  ProjectSpace,
-  ProjectId,
-  ProjectSummary,
-  BimDiscipline,
-  projectId as toProjectId,
-  normalizeBimCode,
-  generateProjectCode,
-  generateSpaceCode,
-} from '../../domain/objects/project';
+import { Project, ProjectSpace, ProjectId, ProjectSummary, BimDiscipline, projectId as toProjectId, normalizeBimCode, generateProjectCode, generateSpaceCode } from '../../domain/objects/project';
 import { AppError, AppErrorCode } from '../../shared/errors/AppError';
 
 // ---------------------------------------------------------------------------
 // Filas
 // ---------------------------------------------------------------------------
 
-export interface ProjectRow {
+interface ProjectRow {
   id: string;
   bim_code: string;
   name: string;
@@ -41,7 +31,7 @@ export interface ProjectRow {
   updated_at: string;
 }
 
-export interface ProjectSpaceRow {
+interface ProjectSpaceRow {
   project_id: string;
   room_id: string;
   bim_code: string;

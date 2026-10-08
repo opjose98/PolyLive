@@ -22,13 +22,11 @@ import { DRAFT_DXF_LAYERS, DxfDraftEntity } from '../../infrastructure/export/dx
 
 import type { IfcMemberInput } from '../../infrastructure/export/ifc/types';
 
-export type { DxfDraftEntity, IfcMemberInput };
-
 // ---------------------------------------------------------------------------
 // DXF
 // ---------------------------------------------------------------------------
 
-export interface DraftDxfContext {
+interface DraftDxfContext {
   /** Escala del plano (1:N): fija el alto de los textos en metros. */
   readonly denominator: number;
   /** Rótulo de una coordenada (N/E reales o X/Y locales). */

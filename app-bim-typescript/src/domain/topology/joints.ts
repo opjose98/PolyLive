@@ -26,7 +26,7 @@ export interface JointWall {
   readonly end: Point2D;
 }
 
-export type WallEnd = 'start' | 'end';
+type WallEnd = 'start' | 'end';
 
 /** Nueva posición de los extremos de un muro (solo los que cambian). */
 export interface WallEndsChange {
@@ -190,19 +190,6 @@ export function planWallTranslate(
     followTees(walls, w, c.start ?? w.start, c.end ?? w.end, plan, moving, tol);
   }
   return plan.changes();
-}
-
-/** Aplica un plan a la lista de muros (para vistas previas y tests). */
-export function applyEndsChanges<W extends JointWall>(
-  walls: readonly W[],
-  changes: readonly WallEndsChange[],
-  rebuild: (w: W, start: Point2D, end: Point2D) => W,
-): W[] {
-  const byId = new Map(changes.map((c) => [c.id, c]));
-  return walls.map((w) => {
-    const c = byId.get(w.id);
-    return c ? rebuild(w, c.start ?? w.start, c.end ?? w.end) : w;
-  });
 }
 
 /** Muros del plan que quedarían más cortos que `min` (el cambio se rechaza entero). */
