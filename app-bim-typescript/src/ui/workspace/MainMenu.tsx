@@ -56,7 +56,8 @@ export const MainMenu = React.memo(function MainMenu({
           </Text>
         </View>
       </View>
-      <ScrollView contentContainerStyle={styles.list}>
+      {/* Barra visible: en pantallas bajas no se notaba que la lista continúa. */}
+      <ScrollView contentContainerStyle={styles.list} persistentScrollbar>
         {items.map((it) => (
           <React.Fragment key={it.label}>
             {it.section ? <Text style={styles.section}>{it.section}</Text> : null}

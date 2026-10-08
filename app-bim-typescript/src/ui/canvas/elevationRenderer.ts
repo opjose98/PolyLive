@@ -256,10 +256,12 @@ function drawOpening({ r, scene, pal, toScreen }: Ctx, opening: WallOpening): vo
 // 5. Umbral y dintel
 // ---------------------------------------------------------------------------
 
-function drawReferenceLines({ r, scene, pal, toScreen }: Ctx): void {
+function drawReferenceLines({ r, scene, pal, toScreen, openings }: Ctx): void {
   const lines: number[] = [];
-  const u = umbral(scene.elevation);
-  const d = dintel(scene.elevation);
+  // Umbral y dintel de los huecos VISIBLES: con un tipo filtrado, sus líneas quedaban.
+  const visible = { ...scene.elevation, openings };
+  const u = umbral(visible);
+  const d = dintel(visible);
   if (u != null && u > 0) lines.push(u);
   if (d != null) lines.push(d);
   r.setStrokeStyle(pal.opening);

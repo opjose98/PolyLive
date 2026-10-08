@@ -104,6 +104,7 @@ export const ConfigDrawer = React.memo(function ConfigDrawer({ top, info, zoomPe
             <Action icon="fit-to-screen-outline" label="Encuadre" onPress={() => onZoom('zoomFit')} />
             <Action icon="magnify-minus-outline" label="Alejar" onPress={() => onZoom('zoomOut')} />
             <Action icon="magnify-plus-outline" label="Acercar" onPress={() => onZoom('zoomIn')} />
+            <Action icon="selection-drag" label="Selección" onPress={() => onZoom('zoomSelection')} />
           </View>
         </Accordion>
 

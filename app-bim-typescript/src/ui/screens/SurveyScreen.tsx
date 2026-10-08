@@ -135,6 +135,9 @@ import { record } from '../../shared/diagnostics';
 // Componente
 // ---------------------------------------------------------------------------
 
+/** Fracción de la tolerancia de toque que cuenta como "justo encima" de un objeto BIM. */
+const STRICT_HIT_RATIO = 0.4;
+
 /** Nombre del tipo de objeto para los avisos (el `type` del dominio está en inglés). */
 const OBJECT_LABEL: Readonly<Record<string, string>> = {
   Wall: 'Muro',
@@ -183,6 +186,15 @@ export function SurveyScreen({
   );
 
   const [state, setState] = useState<EditorState>(() => editor.getState());
+
+  // Cada espacio abre en Levantamiento, en planta y sin herramienta (decisión de
+  // diseño: el modo no se arrastra de un espacio a otro).
+  useEffect(() => {
+    const ws = workspaceStore.getState();
+    ws.clearTool();
+    ws.closePanels();
+    if (ws.workMode !== 'levantamiento') ws.setWorkMode('levantamiento');
+  }, [roomId]);
   const [panelOpen, setPanelOpen] = useState(false);
   const [zoneSheetOpen, setZoneSheetOpen] = useState(false);
   const [manualMeasureOpen, setManualMeasureOpen] = useState(false);
@@ -632,7 +644,11 @@ export function SurveyScreen({
           return;
         }
       }
-      if (drafting.planTap(x, y)) return;
+      // Un toque JUSTO sobre un objeto BIM (puerta, muro, columna) lo elige aunque haya
+      // una cota encima; si no, va al dibujo técnico. Antes ganaba siempre la cota.
+      const onObject = editor.objectAt(x, y, CANVAS_TOUCH_TOLERANCE_PX * STRICT_HIT_RATIO) !== null;
+      if (!onObject && drafting.planTap(x, y)) return;
+      if (onObject && drafting.state.selectedId) drafting.ctl.select(null);
       const before = editor.getState().selectedId;
       void editor.handleTap(x, y, CANVAS_TOUCH_TOLERANCE_PX).then(() => {
         const after = editor.getState().selectedId;
