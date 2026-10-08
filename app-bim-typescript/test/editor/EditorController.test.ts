@@ -502,6 +502,20 @@ describe('EditorController', () => {
       expect(column.position.y).toBeCloseTo(1.5);
     });
 
+    it('una columna seleccionada se arrastra agarrando su cuerpo, no solo el centro', async () => {
+      editor.setTool('column');
+      await editor.handleTap(px(2), px(1.5), TOL_PX);
+      editor.setTool('select');
+      await editor.handleTap(px(2), px(1.5), TOL_PX);
+      const before = editor.getState().objects.find((o): o is Column => o instanceof Column)!;
+      const edge = (before.dimensionX as number) * 0.45; // dentro del cuerpo, lejos del centro
+      // Tolerancia chica: el toque NO alcanza el manejador central, solo el cuerpo.
+      expect(editor.beginDrag(px(2 + edge), px(1.5), 5)).toBe(true);
+      await editor.endDrag(px(3 + edge), px(1.5));
+      const column = editor.getState().objects.find((o): o is Column => o instanceof Column)!;
+      expect(column.position.x).toBeCloseTo(3);
+    });
+
     it('beginDrag devuelve false lejos de todo handle, para que la vista panee', async () => {
       editor.setTool('column');
       await editor.handleTap(px(2), px(1.5), TOL_PX);

@@ -192,6 +192,11 @@ export abstract class EditorCreation extends EditorGestures {
     if (Math.hypot(end.x - start.x, end.y - start.y) < MIN_WALL_LENGTH) {
       if (this.state.creation.wall === 'drag') {
         this.notify('info', 'Muro demasiado corto: arrastra al menos 10 cm.');
+      } else {
+        // Punto a punto: el segundo toque cayó sobre el primero. Se conserva el inicio
+        // y se avisa (antes se perdía el primer punto en silencio).
+        this.patch({ wallDraft: { start, end: null, snappedToNode: false } });
+        this.notify('info', 'El segundo punto está sobre el primero: toca el final del muro.');
       }
       return;
     }

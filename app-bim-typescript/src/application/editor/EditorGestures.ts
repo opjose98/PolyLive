@@ -11,6 +11,8 @@
 import { RevitObjectBase } from '../../domain/objects/base';
 import { Wall } from '../../domain/objects/wall';
 import { Column } from '../../domain/objects/column';
+import { Door } from '../../domain/objects/door';
+import { Window } from '../../domain/objects/window';
 
 import { lineShape } from '../../domain/geometry/shapes';
 import { touchToleranceMeters } from '../canvas/SelectionService';
@@ -84,7 +86,15 @@ export abstract class EditorGestures extends EditorCore {
 
     const world = this.screenToWorld(screenX, screenY);
     const tol = touchToleranceMeters(touchTolerancePx, this.state.transform.scale);
-    const handle = this.selection.hitTestHandle({ worldPoint: world, selectedObject: sel, thresholdMeters: tol });
+    // Un manejador, o el cuerpo de un objeto pequeño seleccionado (columna, puerta,
+    // ventana: se mueve por su centro). Antes una columna solo se arrastraba acertando
+    // su punto central. En un muro, arrastrar su cuerpo sigue moviendo el plano.
+    const small = sel instanceof Column || sel instanceof Door || sel instanceof Window;
+    const handle =
+      this.selection.hitTestHandle({ worldPoint: world, selectedObject: sel, thresholdMeters: tol }) ??
+      (small && this.objectAt(screenX, screenY, touchTolerancePx)?.id === sel.id
+        ? (this.selection.handlesFor(sel).find((h) => h.kind === 'center') ?? null)
+        : null);
     if (!handle) return false;
 
     this.dragOrigin = world;
