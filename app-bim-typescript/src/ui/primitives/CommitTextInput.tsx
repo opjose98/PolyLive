@@ -19,7 +19,7 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import { Keyboard, TextInput, TextInputProps } from 'react-native';
 
-export interface CommitTextInputProps extends Omit<TextInputProps, 'onEndEditing' | 'onSubmitEditing'> {
+interface CommitTextInputProps extends Omit<TextInputProps, 'onEndEditing' | 'onSubmitEditing'> {
   /** Texto confirmado (blur, "hecho", teclado oculto o desmontaje). */
   onCommitText: (text: string) => void;
 }

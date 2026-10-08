@@ -68,6 +68,7 @@ interface ExpoBackupDatabaseOutput {
 }
 
 /** Fecha de un respaldo por su nombre (`polylive-backup-2026-10-06T16-40-00-000Z-xxxx.db`). */
+/** @public (lo usa el test con el módulo simulado) */
 export function backupTime(filename: string): number | null {
   const m = /^polylive-backup-(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z/.exec(filename);
   return m ? Date.parse(`${m[1]}T${m[2]}:${m[3]}:${m[4]}.${m[5]}Z`) : null;
