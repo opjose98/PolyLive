@@ -1,6 +1,6 @@
 # 25 — Matriz de pruebas de campo (ronda 1) · tableta Lenovo TB370FU
 
-Fecha: 2026-10-07 · App: dev client Expo SDK 57 con Metro (rama `feat/mvp-auditoria`, commit `5cc602e` + cambios locales) · Equipo: Lenovo TB370FU (1840 × 2944, Android) en la ventana angosta de tableta y a pantalla completa vertical · Proyecto de prueba `P2` (tablet limpia, operador `QA`).
+Fecha: 2026-10-07 · App: dev client Expo SDK 57 con Metro (rama `feat/mvp-auditoria`, commit `dae07ee`) · Equipo: Lenovo TB370FU (1840 × 2944, Android) en la ventana angosta de tableta y a pantalla completa vertical · Proyecto de prueba `P2` (tablet limpia, operador `QA`). Incluye la ronda en tema Oscuro y Alto contraste (capítulo K).
 
 **Para qué sirve:** una sola tabla con todas las herramientas, botones, menús y funciones de la app, ordenadas por capítulo y modo, con el paso a paso, lo esperado, el resultado de esta ronda y la nota/hallazgo. Úsala como lista de comprobación para repetir las pruebas a mano (casilla *Tu prueba*) y como lista de trabajo para la siguiente ronda de correcciones (§ 4).
 
@@ -8,22 +8,23 @@ Fecha: 2026-10-07 · App: dev client Expo SDK 57 con Metro (rama `feat/mvp-audit
 
 | Estado | Filas |
 |---|---:|
-| ✅ Ok | 114 |
-| 🟡 Parcial | 21 |
-| ❌ Falla | 17 |
-| ⬜ No probado | 16 |
+| ✅ Ok | 125 |
+| 🟡 Parcial | 22 |
+| ❌ Falla | 18 |
+| ⬜ No probado | 18 |
 | ➖ N/A | 1 |
-| **Total** | **169** |
+| **Total** | **184** |
 
-Hallazgos: **40** — P1 (datos o bloqueo) 4 · P2 (funciona mal) 13 · P3 (pulido) 21 · corregidos en esta ronda 2.
+Hallazgos: **42** — P1 (datos o bloqueo) 4 · P2 (funciona mal) 13 · P3 (pulido) 22 · corregidos en esta ronda 3.
 
 Leyenda: ✅ OK · 🟡 Parcial · ❌ Falla · ⬜ No probado · ➖ No aplica. Prioridad: **P1** corrompe datos o bloquea, **P2** funciona mal, **P3** pulido.
 
 ### Qué NO se pudo probar (y por qué)
 
 - **Gestos de dos dedos** (rotación del lienzo, pinch, snaps de giro): `adb` no simula multitáctil. Probar a mano (B17–B19, F17).
+- **Pantallas de aplicación en alto contraste y oscuro** (Exportar, Ajustes, Perfil, Importar, Galería/cámara en AC): K13, K15.
 - **Giro físico de la tableta** a horizontal real: no se cambió ningún ajuste del sistema. Probar a mano (J01).
-- **Alzado, herramientas y pincel sobre la cara del muro**: el alzado se abre desencuadrado (H-25) y cambiar de modo lo pierde; repetir tras corregir (E06–E09, E13, G09, H12).
+- **Alzado**: foto en la cara, pincel de Avance sobre la cara y marcas de Revisión (E07, G09, H12); el alzado se abre desencuadrado (H-25) y las hojas de detalles se superponen. Repetir tras corregir.
 - **Hojas que se desplazan** (recinto, detalles del alzado): tras desplazarlas los toques automáticos caen en otra hoja; quedan para tu prueba a mano (D09, D11, E07, G09, H12).
 - **Amarre por GPS / por mojones, actividades de avance, PDF de avance, disciplinas del proyecto**: no se alcanzaron en el tiempo de esta ronda (F05, F06, G04, G10, G13, A09).
 - **Mapa de fondo**: pendiente de licencia (decisión de producto).
@@ -153,7 +154,7 @@ Leyenda: ✅ OK · 🟡 Parcial · ❌ Falla · ⬜ No probado · ➖ No aplica.
 | E03 | Levantamiento | Alzado: Detalles → Cuantificación y alturas | Abrir Detalles | Bruta / huecos / neta; alturas por extremo | ✅ | 3,99 − 1,20 = 2,79 m² | [ ] |
 | E04 | Levantamiento | Alzado: Puerta / Vano / Ventana (tocar el muro) | FAB → Arquitectónico | Crea el hueco con su ancho | 🟡 | Se crea, pero acepta una puerta de 2,10 m en un muro de 2,00 m y huecos solapados (H-24) | [ ] |
 | E05 | Levantamiento | Alzado: Cercha / Correa / Viga | FAB → Estructural; arrastrar | Crea el elemento | ❌ | Cercha: al arrastrar se mueve la cámara y queda una cercha de 0,00 m suelta; con toques no se crea nada (H-25) | [ ] |
-| E06 | Levantamiento | Alzado: Cota / Texto / Etiqueta / Coordenada / Línea / Polígono | FAB → Acotado / Dibujo | Crea sobre el alzado | 🟡 | Cota y Línea se activan; Texto abre su hoja ('Texto en el plano' en el alzado). Con Cercha el arrastre mueve la cámara (H-25); el resto repetir tras corregir | [ ] |
+| E06 | Levantamiento | Alzado: Cota / Texto / Etiqueta / Coordenada / Línea / Polígono | FAB → Acotado / Dibujo | Crea sobre el alzado | 🟡 | Cota y Línea se activan; Texto abre su hoja titulada 'Texto en el plano' en el alzado (H-41); con Cercha el arrastre mueve la cámara (H-25); el resto repetir tras corregir | [ ] |
 | E07 | Levantamiento | Alzado: Foto en la cara del muro | FAB → Auditoría → Foto | Foto anclada a la cara | ⬜ | Repetir a mano: Auditoría → Foto en el alzado (la cámara se probó en planta) | [ ] |
 | E08 | Levantamiento | Alzado: mini-mapa (ocultar / mostrar) | Tocar 'Ocultar mini-mapa' | Oculta y muestra | ✅ | Ocultar / Mostrar mini-mapa alterna | [ ] |
 | E09 | Levantamiento | Alzado: Filtros (Vanos, Puertas, Ventanas, Vigas, Cotas, Fotos) | Apagar cada uno | Oculta su capa | 🟡 | Los 6 filtros existen y 'Ventanas' oculta el cuerpo de la ventana, pero deja visibles sus guías azules (H-42) | [ ] |
@@ -200,7 +201,7 @@ Leyenda: ✅ OK · 🟡 Parcial · ❌ Falla · ⬜ No probado · ➖ No aplica.
 | G07 | Avance | Rectángulo | Avance → Rectángulo; arrastrar | Pinta un rectángulo | ✅ | Rectángulo pinta el rectángulo arrastrado sobre el suelo; fuera del suelo avisa 'Pinta sobre un suelo' | [ ] |
 | G08 | Avance | Relleno | Avance → Relleno; tocar el suelo | Pinta todo el suelo | ✅ | 5,19 m² de 5,20 (100 % del soporte) | [ ] |
 | G09 | Avance | Pincel sobre cara de muro (alzado A/B) | En alzado, Avance → Pincel | Pinta la cara recortada sin vanos | ⬜ | Repetir a mano: pincel sobre la cara A/B (el alzado de Avance solo mostró el pincel activo) | [ ] |
-| G10 | Avance | Cortes anteriores (tenues) y Filtros de Avance | Filtros → Cortes anteriores | Muestra el corte previo | ⬜ | Pendiente: el cambio de modo no llegó a Avance en la última tanda | [ ] |
+| G10 | Avance | Cortes anteriores (tenues) y Filtros de Avance | Filtros → Cortes anteriores | Muestra el corte previo | ⬜ | Pendiente: el cambio de modo con un panel abierto no se aplicó y no avisa (H-40); repetir cerrando el panel antes | [ ] |
 | G11 | Avance | Reporte: cantidades por actividad | Reporte | '5.19 m² en el corte / acumulado' | ✅ |  | [ ] |
 | G12 | Avance | Exportar CSV de avance | Reporte → Exportar CSV | Archivo CSV | ✅ | Pide carpeta de nuevo (H-28) | [ ] |
 | G13 | Avance | Exportar PDF y Compartir PDF de avance | Reporte → PDF / Compartir | PDF con vistas coloreadas | ⬜ | Pendiente: Exportar PDF y Compartir PDF de avance | [ ] |
@@ -222,7 +223,7 @@ Leyenda: ✅ OK · 🟡 Parcial · ❌ Falla · ⬜ No probado · ➖ No aplica.
 | H10 | Revisión | Exportar CSV de observaciones | Observaciones → Exportar CSV | CSV | ✅ |  | [ ] |
 | H11 | Revisión | Compartir acta | Observaciones → Compartir acta | Abre el selector del sistema con el PDF | ✅ |  | [ ] |
 | H12 | Revisión | Marcas en alzado | En alzado, Revisión | Observaciones en la cara del muro | ⬜ | Repetir a mano: la hoja de Detalles y la cámara desencuadrada impidieron dibujar una marca en el alzado | [ ] |
-| H13 | Revisión | Filtros: Comentarios abiertos / Resueltos / Cotas | Alternar | Muestra u oculta | ✅ | Filtros de Revisión: 'Comentarios abiertos', 'Resueltos', 'Cotas' | [ ] |
+| H13 | Revisión | Filtros: Comentarios abiertos / Resueltos / Cotas | Alternar | Muestra u oculta | ✅ | Filtros de Revisión: 'Comentarios abiertos', 'Resueltos', 'Cotas'; cambiar de modo con el panel abierto no se aplica (H-40) | [ ] |
 | H14 | Revisión | La marca de una observación resuelta desaparece del plano | Resolver y mirar el plano | Con 'Resueltos' apagado no se ve | ✅ | Coherente con el filtro | [ ] |
 
 ### I · Entregables y archivos
@@ -256,6 +257,26 @@ Leyenda: ✅ OK · 🟡 Parcial · ❌ Falla · ⬜ No probado · ➖ No aplica.
 | J09 | — | Pantalla Ajustes: crear copia, restaurar, enviar diagnóstico, versión, esquema | Probar cada botón | Funciona | ✅ | Copia creada (2 copias); diagnóstico abre el selector con el .txt | [ ] |
 | J10 | — | Perfil de operador y cambiar de operador | ☰ → Operador | Guardar deshabilitado sin cambios | ✅ |  | [ ] |
 | J11 | — | Importar el proyecto sobreescribe y conserva las fotos | Importar | Datos restaurados | ✅ |  | [ ] |
+
+### K · Temas (Oscuro y Alto contraste)
+
+| ID | Modo | Función | Pasos | Esperado | Esta ronda | Nota | Tu prueba |
+|---|---|---|---|---|:-:|---|:-:|
+| K01 | Todos | Apps: operador, Proyectos, formulario Nuevo proyecto, diálogos | Cambiar el tema (⋮ → Tema) y mirar la superficie | Texto y botones legibles | 🟡 | Oscuro OK · Alto contraste PARCIAL. AC: 'Guardar' deshabilitado queda durazno desvaído (H-43) | [ ] |
+| K02 | Todos | Menú ☰ y cajón ⋮: lista y secciones | Cambiar el tema (⋮ → Tema) y mirar la superficie | Legible | ✅ | Oscuro OK · Alto contraste OK. | [ ] |
+| K03 | Todos | Planta: muros, columnas, suelo, recinto, fotos | Cambiar el tema (⋮ → Tema) y mirar la superficie | Distinguibles del fondo | ✅ | Oscuro OK · Alto contraste OK. | [ ] |
+| K04 | Todos | Planta: rótulos del dibujo técnico (cotas, texto, etiqueta, coordenada, área) | Cambiar el tema (⋮ → Tema) y mirar la superficie | Texto legible sobre su fondo | ✅ | Oscuro OK · Alto contraste OK. Oscuro: salían como cajas blancas vacías (H-44); corregido con labelBackdrop + test y verificado en la tablet | [ ] |
+| K05 | Todos | Planta: cuadrícula | Cambiar el tema (⋮ → Tema) y mirar la superficie | Sobria, no compite con el dibujo | ❌ | Oscuro OK · Alto contraste FALLA. AC: cuadrícula azul gruesa + puntos saturan el dibujo (H-07) | [ ] |
+| K06 | Todos | Cromo: FAB, selector de modo, Filtros, Capas | Cambiar el tema (⋮ → Tema) y mirar la superficie | Legible | ✅ | Oscuro OK · Alto contraste OK. | [ ] |
+| K07 | Todos | Selectores: Niveles / Fases y ventana de niveles | Cambiar el tema (⋮ → Tema) y mirar la superficie | Legible | ✅ | Oscuro OK · Alto contraste OK. | [ ] |
+| K08 | Todos | Hojas: muro, recinto, observación, lista de observaciones | Cambiar el tema (⋮ → Tema) y mirar la superficie | Legible | ✅ | Oscuro OK · Alto contraste OK. | [ ] |
+| K09 | Todos | Topografía: mojones y rótulos N/E | Cambiar el tema (⋮ → Tema) y mirar la superficie | Legible | ✅ | Oscuro OK · Alto contraste OK. | [ ] |
+| K10 | Todos | Avance: suelo pintado | Cambiar el tema (⋮ → Tema) y mirar la superficie | Color distinguible | ✅ | Oscuro OK · Alto contraste OK. | [ ] |
+| K11 | Todos | Revisión: flecha y hoja de observación | Cambiar el tema (⋮ → Tema) y mirar la superficie | Legible | ✅ | Oscuro OK · Alto contraste OK. | [ ] |
+| K12 | Todos | Alzado: muro, ventana, mini-mapa, líneas de nivel | Cambiar el tema (⋮ → Tema) y mirar la superficie | Legible | ✅ | Oscuro OK · Alto contraste OK. AC: guías azules más gruesas | [ ] |
+| K13 | Todos | Galería y cámara: miniaturas y visor | Cambiar el tema (⋮ → Tema) y mirar la superficie | Legible | ⬜ | Oscuro OK · Alto contraste NP. AC sin revisar | [ ] |
+| K14 | Todos | Persistencia: el tema se conserva tras recargar | Cambiar el tema (⋮ → Tema) y mirar la superficie | Se conserva | ✅ | Oscuro OK · Alto contraste OK. | [ ] |
+| K15 | Todos | Pantallas Exportar, Ajustes, Perfil, Importar: revisión visual | Cambiar el tema (⋮ → Tema) y mirar la superficie | Legible | ⬜ | Oscuro NP · Alto contraste NP. Sin revisar en ningún tema | [ ] |
 
 ## 4. Hallazgos (lista de trabajo para la ronda de correcciones)
 
@@ -299,41 +320,21 @@ Leyenda: ✅ OK · 🟡 Parcial · ❌ Falla · ⬜ No probado · ➖ No aplica.
 | H-40 | P3 | Modos | Al cambiar de modo estando una hoja o filtro abierto el cambio puede no aplicarse y no avisa | Abrir Filtros y tocar un modo | Debe cerrar el panel y cambiar | G10, H13 |
 | H-41 | P3 | Alzado | La hoja de texto del alzado se titula 'Texto en el plano' | Alzado → Acotado → Texto | 'Texto en el alzado' | E06 |
 | H-42 | P3 | Alzado · filtros | Con el filtro 'Ventanas' apagado quedan visibles las guías azules de la ventana | Alzado → Filtros → apagar Ventanas | Deben ocultarse con el elemento | E09 |
+| H-43 | P3 | Tema alto contraste | El botón 'Guardar' deshabilitado queda durazno desvaído, poco legible | Alto contraste → Nuevo proyecto sin nombre | Debe verse deshabilitado pero legible | K01 |
 | H-01 | Corregido | Medida | 'Guardar' de la medida aplicaba el valor anterior si el teclado se cerraba con Atrás | Medición láser → muro → Ingresar medida → teclear 3.9 → Atrás → Guardar | Debe aplicar 3.9; aplicaba 3.0 | C14, J02 |
 | H-03 | Corregido | Menú ☰ / hojas | Menú y hoja inferior quedaban dibujados abiertos al volver del selector de carpetas | ☰ → exportar → volver | Debe quedar cerrado | B04 |
+| H-44 | Corregido | Tema oscuro | Los rótulos del dibujo técnico salían como cajas blancas vacías (texto claro sobre fondo blanco fijo) | Tema oscuro → cota, texto, etiqueta, coordenada | Fondo que contraste con el texto (labelBackdrop) | K04 |
 
 ### Orden sugerido para la ronda de correcciones
 
 1. **P1:** H-02 (campos numéricos no confirman con Atrás, afecta a Niveles y propiedades), H-21 (Partición deshace el recinto), H-23 (deshacer no revierte propiedades), H-25 (alzado desencuadrado y cercha que borra la vista).
-2. **P2:** niveles (H-11, H-16), cámara (H-19), borrado sin confirmar (H-22), huecos en alzado (H-24), amarre vacío (H-26), carpeta de exportes (H-28), IFC del proyecto con espacios superpuestos (H-31), área bruta/neta (H-32), pantallas del menú tapadas (H-35, H-36), menú ☰ en tableta (H-34), teclado sobre el campo de operador (H-12).
+2. **P2:** niveles (H-11, H-16), cámara (H-19), borrado sin confirmar (H-22), huecos en alzado (H-24), amarre vacío (H-26), carpeta de exportes (H-28), rótulos en oscuro (H-44, ya corregido), IFC del proyecto con espacios superpuestos (H-31), área bruta/neta (H-32), pantallas del menú tapadas (H-35, H-36), menú ☰ en tableta (H-34), teclado sobre el campo de operador (H-12).
 3. **P3:** textos, etiquetas, accesibilidad, avisos de API obsoleta y pulido visual.
+
+Nota: los ids H-04 y H-05 no se usaron (se descartaron al verificarlos).
 
 ## 5. Datos de la prueba
 
 - Archivos exportados en la tableta (`/sdcard/PolyLive-QA/`) y validados en el PC: IFC del espacio (ifcopenshell, 15 geometrías), IFC del proyecto con 2 espacios (1 `IfcProject`, 8 muros, 2 `IfcSpace`), DXF (ezdxf, 11 capas), paquete `.polylive` (esquema 3), plano PDF, registro fotográfico PDF, acta de revisión PDF/CSV, CSV de áreas y de avance.
 - Entorno: Metro por `adb reverse` con un reenviador IPv4→IPv6 (Metro escucha solo en `::1` en este equipo).
 
-
-## 6. Complemento: ronda visual en tema Oscuro y Alto contraste (2026-10-07)
-
-Mismo equipo y proyecto. Se recorrió cada pantalla y modo en cada tema (✅ legible / ❌ falla). Claro ya estaba cubierto en las secciones 3–4.
-
-| ID | Superficie | Oscuro | Alto contraste | Nota |
-|---|---|:-:|:-:|---|
-| T01 | Pantalla de operador, Proyectos, formulario Nuevo proyecto, diálogos | ✅ | 🟡 | AC: el botón 'Guardar' deshabilitado queda durazno desvaído (H-43) |
-| T02 | Menú ☰ y cajón ⋮ | ✅ | ✅ | |
-| T03 | Planta: muros, columnas, suelo, recinto, fotos | ✅ | ✅ | |
-| T04 | Rótulos del dibujo técnico (cotas, texto, etiqueta, coordenada, área) | ❌→✅ | ✅ | Oscuro: salían como cajas blancas sin texto (H-44); corregido con `labelBackdrop` (+ test) y verificado en la tablet |
-| T05 | Cuadrícula | ✅ | ❌ | AC: cuadrícula azul gruesa más puntos saturan el dibujo (H-07) |
-| T06 | FAB, selector de modo, Filtros, Capas | ✅ | ✅ | |
-| T07 | Selectores de Niveles/Fases y ventana de niveles | ✅ | ✅ | |
-| T08 | Hojas de muro, recinto, observación, lista de observaciones | ✅ | ✅ | |
-| T09 | Modo Topografía (mojones, rótulos N/E) | ✅ | ✅ | |
-| T10 | Modo Avance (suelo pintado) | ✅ | ✅ | |
-| T11 | Modo Revisión (flecha, hoja) | ✅ | ✅ | |
-| T12 | Alzado (muro, ventana, mini-mapa, líneas de nivel) | ✅ | ✅ | AC: guías azules de la ventana más gruesas, legibles |
-| T13 | Galería y cámara | ✅ | ⬜ | AC sin revisar |
-| T14 | Persistencia del tema tras recargar | ✅ | ✅ | |
-| T15 | Pantallas Exportar, Ajustes, Perfil, Importar | ⬜ | ⬜ | Sin revisar en ambos temas |
-
-Hallazgos nuevos: **H-43** (P3) 'Guardar' deshabilitado poco legible en alto contraste; **H-44** (P2, corregido) rótulos invisibles en oscuro.
