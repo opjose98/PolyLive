@@ -14,6 +14,8 @@
 // su propia capa (Topografía: mojones y coordenadas).
 // =============================================================================
 
+import type { MenuScreen } from '../workspace/useSurveyMenu';
+import { record } from '../../shared/diagnostics';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Dimensions, Modal, BackHandler } from 'react-native';
 
@@ -128,8 +130,6 @@ interface SurveyScreenProps {
 
 /** Pantallas que se abren desde el menú ☰, por encima del levantamiento. */
 export type { MenuScreen } from '../workspace/useSurveyMenu';
-import type { MenuScreen } from '../workspace/useSurveyMenu';
-import { record } from '../../shared/diagnostics';
 
 // ---------------------------------------------------------------------------
 // Componente
@@ -648,14 +648,14 @@ export function SurveyScreen({
       // una cota encima; si no, va al dibujo técnico. Antes ganaba siempre la cota.
       const onObject = editor.objectAt(x, y, CANVAS_TOUCH_TOLERANCE_PX * STRICT_HIT_RATIO) !== null;
       if (!onObject && drafting.planTap(x, y)) return;
-      if (onObject && drafting.state.selectedId) drafting.ctl.select(null);
+      if (onObject && drafting.ctl.getState().selectedId) drafting.ctl.select(null);
       const before = editor.getState().selectedId;
       void editor.handleTap(x, y, CANVAS_TOUCH_TOLERANCE_PX).then(() => {
         const after = editor.getState().selectedId;
         if (editor.getState().tool === 'select' && after && after !== before) haptic.select();
       });
     },
-    [editor, topo.handleTap, topoTools.handleTap, progress.handleTap, review.plan, drafting.planTap, drafting.tool, onOpenPhoto],
+    [editor, topo.handleTap, topoTools.handleTap, progress.handleTap, review.plan, drafting.planTap, drafting.tool, drafting.ctl, onOpenPhoto],
   );
 
   // Propiedades (con edición y borrado) solo donde se edita el modelo: en los

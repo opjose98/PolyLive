@@ -13,8 +13,7 @@
 // - Coordenadas en píxeles de pantalla (ya transformadas por CanvasManager)
 // =============================================================================
 
-import type { SkCanvas, SkPaint } from '@shopify/react-native-skia';
-import { Skia, PaintStyle, PointMode, StrokeCap, StrokeJoin, matchFont, type SkPath } from '@shopify/react-native-skia';
+import { Skia, PaintStyle, PointMode, StrokeCap, StrokeJoin, matchFont, type SkCanvas, type SkPaint, type SkPath } from '@shopify/react-native-skia';
 
 // ---------------------------------------------------------------------------
 // Interfaz genérica que el dominio/aplicación consume

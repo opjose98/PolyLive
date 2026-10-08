@@ -311,7 +311,8 @@ export function GalleryScreen({ services, roomId, objectId, photoId, operatorNam
         </Text>
       </TouchableOpacity>
     ),
-    [handleLongPress, auditPhotos, thumbSize],
+    // `styles` cambia con el tema: sin él, las miniaturas conservaban los colores del tema anterior.
+    [handleLongPress, auditPhotos, thumbSize, styles],
   );
 
   // -----------------------------------------------------------------------
