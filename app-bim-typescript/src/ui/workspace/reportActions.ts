@@ -32,7 +32,7 @@ async function guard(label: string, fn: () => Promise<void>): Promise<void> {
 
 export function saveCsv(filename: string, csv: string): Promise<void> {
   return guard('CSV', async () => {
-    folderHint();
+    await folderHint();
     // BOM: Excel reconoce las tildes.
     const r = await saveTextToUserFolder(filename, '﻿' + csv);
     if (r.ok) {
@@ -46,7 +46,7 @@ export function savePdf(filename: string, html: string): Promise<void> {
   return guard('PDF', async () => {
     toast('Generando PDF…', { kind: 'info', durationMs: 1200 });
     const pdf = await htmlToPdf(html);
-    folderHint();
+    await folderHint();
     const r = await saveBase64ToUserFolder(filename, pdf.base64, 'application/pdf');
     if (r.ok) {
       haptic.commit();

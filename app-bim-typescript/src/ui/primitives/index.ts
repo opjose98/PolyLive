@@ -18,3 +18,4 @@ export { IconButton } from './IconButton';
 export { ActionButton, Chip, Card } from './Button';
 export { alertDialog, confirm, DialogHost } from './Dialog';
 export { ScreenShell } from './ScreenShell';
+export { CommitTextInput } from './CommitTextInput';

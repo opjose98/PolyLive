@@ -13,6 +13,7 @@
 // solo el estado de los toques y lo que se dibuja.
 // =============================================================================
 
+import { localStamp } from '../../../shared/dates';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useStore } from 'zustand';
 import type { Point2D } from '../../../domain/geometry/types';
@@ -261,13 +262,13 @@ export function useTopoTools({ services, projectId, spaceId, projectName, editor
   }, [topo, editor, gridOf]);
 
   const save = useCallback(async (filename: string, content: string, label: string) => {
-    folderHint();
+    await folderHint();
     const r = await saveTextToUserFolder(filename, content);
     if (r.ok) toast(`${label} guardado en ${r.folderLabel}`, { kind: 'success' });
     else if (r.reason !== 'cancelled') toast(`No se pudo guardar el ${label}`, { kind: 'error' });
   }, []);
 
-  const stamp = () => new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
+  const stamp = () => localStamp().replace('-', '');
   const base = `${projectName.replace(/[^A-Za-z0-9]+/g, '-')}-${stamp()}`;
 
   const exportCsv = useCallback(() => void save(`${base}-puntos.csv`, pointsToCsv(exportRows()), 'CSV'), [save, base, exportRows]);

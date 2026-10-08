@@ -468,9 +468,8 @@ export abstract class EditorCreation extends EditorGestures {
 
       this.patch({ selectedId: null });
       await this.reload();
-      this.notify('success', result.deletedCount > 1
-        ? `Eliminados ${result.deletedCount} objetos (incluye vanos dependientes).`
-        : 'Objeto eliminado.');
+      // El aviso "eliminado · Deshacer" lo da la vista; aquí solo lo que ella no sabe.
+      if (result.deletedCount > 1) this.notify('info', `Se eliminaron también ${result.deletedCount - 1} vano(s) del muro.`);
     } catch (err) {
       this.fail(err, 'No se pudo eliminar el objeto.');
     } finally {
@@ -478,20 +477,33 @@ export abstract class EditorCreation extends EditorGestures {
     }
   }
 
-  async updateSelectedProperty(property: string, newValue: unknown): Promise<void> {
+  /** `also`: otras propiedades que cambian en el MISMO paso de deshacer. */
+  async updateSelectedProperty(property: string, newValue: unknown, also?: Record<string, unknown>): Promise<void> {
     const sel = this.selected;
     if (!sel) return;
 
     this.patch({ busy: true });
     try {
+      const roomsBefore = this.state.rooms.filter((r) => r.id);
       const result = await this.services.useCases.updateObjectProperty.execute({
         objectId: sel.id,
         property,
         newValue,
+        also,
       });
       await this.reload();
       if (result.warnings.length > 0) {
         this.notify('info', result.warnings.map((w) => w.message).join(' · '));
+      } else {
+        // Un recinto que deja de cerrarse por esta edición (p. ej. un muro pasado a
+        // partición: solo los portantes cierran recintos) se avisa; antes desaparecía
+        // en silencio junto con su suelo.
+        const lost = roomsBefore.filter((r) => !this.state.rooms.some((n) => n.id === r.id));
+        if (lost.length) {
+          const names = lost.map((r) => r.name ?? 'Recinto').join(', ');
+          const why = property === 'isStructural' && newValue === false ? ' (solo los muros portantes cierran recintos)' : '';
+          this.notify('info', `${names} dejó de estar cerrado${why}. Deshacer lo recupera.`);
+        }
       }
     } catch (err) {
       this.fail(err, 'No se pudo actualizar la propiedad.');

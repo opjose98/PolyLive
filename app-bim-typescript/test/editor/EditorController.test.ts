@@ -436,6 +436,39 @@ describe('EditorController', () => {
       expect(reread.thickness).toBeCloseTo(0.25);
     });
 
+    it('deshacer revierte cada propiedad editada, en orden (nombre, espesor, función)', async () => {
+      await drawRectangle();
+      editor.setTool('select');
+      await editor.handleTap(px(2), px(0), TOL_PX);
+      const id = editor.getState().selectedId!;
+
+      const before = (await services.store.readObject(id)) as Wall;
+      await editor.updateSelectedProperty('properties', { ...before.properties, name: 'M-izq' });
+      await editor.updateSelectedProperty('thickness', meters(0.2));
+      await editor.updateSelectedProperty('isStructural', false);
+
+      await editor.undo();
+      let w = (await services.store.readObject(id)) as Wall;
+      expect(w.isStructural).toBe(true);
+      expect(Number(w.thickness)).toBeCloseTo(0.2);
+      await editor.undo();
+      w = (await services.store.readObject(id)) as Wall;
+      expect(Number(w.thickness)).toBeCloseTo(0.15);
+      await editor.undo();
+      w = (await services.store.readObject(id)) as Wall;
+      expect(w.properties.name).not.toBe('M-izq');
+    });
+
+    it('pasar un muro a partición avisa que el recinto deja de estar cerrado', async () => {
+      await drawRectangle();
+      expect(editor.getState().rooms).toHaveLength(1);
+      editor.setTool('select');
+      await editor.handleTap(px(2), px(0), TOL_PX);
+      await editor.updateSelectedProperty('isStructural', false);
+      expect(editor.getState().rooms).toHaveLength(0);
+      expect(editor.getState().notice?.message).toMatch(/dejó de estar cerrado \(solo los muros portantes/);
+    });
+
     it('un valor inválido deja el objeto intacto y publica un error legible', async () => {
       await drawRectangle();
       editor.setTool('select');

@@ -17,14 +17,14 @@
 // =============================================================================
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Text, TextInput, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useLayout } from '../design/layout';
 import Animated, { FadeIn, FadeOut, ZoomIn, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { ConstraintEdit, ConstraintEnd, ConstraintLevel, applyToEdit, baseIndex, currentExtent, infinityIndex, moveBase, moveTop, topIndex } from '../../application/workspace/constraintModel';
 import { VerticalExtent } from '../../domain/objects/vertical';
 import { workspaceStore } from '../../state/workspaceStore';
-import { FloatWindow, Icon, IconButton, Tappable } from '../primitives';
+import { CommitTextInput, FloatWindow, Icon, IconButton, Tappable } from '../primitives';
 import { elevation, radius, spacing } from '../design/tokens';
 import { type } from '../design/typography';
 import { spring } from '../design/motion';
@@ -300,14 +300,14 @@ function NumberRow({ label, value, min, onCommit }: { label: string; value: numb
   return (
     <View style={styles.cfgRow}>
       <Text style={styles.cfgLabel}>{label}</Text>
-      <TextInput
+      <CommitTextInput
         key={value}
         style={styles.cfgInput}
         defaultValue={String(Number(value.toFixed(3)))}
         keyboardType="numbers-and-punctuation"
         selectTextOnFocus
-        onEndEditing={(e) => {
-          const v = parseFloat(e.nativeEvent.text.replace(',', '.'));
+        onCommitText={(text) => {
+          const v = parseFloat(text.replace(',', '.'));
           if (!Number.isFinite(v) || v === value || (min !== undefined && v < min)) return;
           onCommit(v);
         }}

@@ -17,6 +17,7 @@
 // autointersecciones). Las mismas celdas sirven para dibujar.
 // =============================================================================
 
+import { localDate } from '../../shared/dates';
 import type { Point2D } from '../geometry/types';
 import { isPointInPolygon, polygonArea } from '../geometry/polygon-utils';
 
@@ -60,8 +61,7 @@ export interface ProgressCut {
 
 /** Fecha local AAAA-MM-DD. */
 export function todayIso(now = new Date()): string {
-  const two = (n: number) => String(n).padStart(2, '0');
-  return `${now.getFullYear()}-${two(now.getMonth() + 1)}-${two(now.getDate())}`;
+  return localDate(now);
 }
 
 // ---------------------------------------------------------------------------

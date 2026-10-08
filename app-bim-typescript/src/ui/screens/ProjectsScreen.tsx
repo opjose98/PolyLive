@@ -302,7 +302,7 @@ function ProjectCard({
         <Text style={styles.cardStat}>
           {spaceCount} {spaceCount === 1 ? 'espacio' : 'espacios'}
         </Text>
-        <Text style={styles.cardStat}>{totalAreaM2.toFixed(2)} m² cerrados</Text>
+        <Text style={styles.cardStat}>{totalAreaM2.toFixed(2)} m² netos</Text>
         {openSpaceCount > 0 ? (
           <Text style={[styles.cardStat, styles.cardStatWarning]}>{openSpaceCount} sin cerrar</Text>
         ) : null}

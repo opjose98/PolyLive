@@ -382,6 +382,24 @@ describe('WallElevationService', () => {
     expect(created.sillHeight).toBeCloseTo(0);
   });
 
+  it('una puerta por defecto (2,10 m) en un muro de 2,00 m nace ajustada a 2,00 m', async () => {
+    const base = await service.getElevation(wall);
+    await service.saveElevation({ ...base, levels: { ...base.levels, coronacion: 2, leftHeight: 2, rightHeight: 2 } });
+    const elevation = await service.getElevation(wall);
+    const { opening, validation } = await service.addOpening(elevation, wall, { type: 'door', xOffset: 1 });
+    expect(opening.height).toBeCloseTo(2, 3);
+    expect(validation.severity).not.toBe('warning');
+  });
+
+  it('una altura dada por el operador no se ajusta (se avisa si sobresale)', async () => {
+    const base = await service.getElevation(wall);
+    await service.saveElevation({ ...base, levels: { ...base.levels, coronacion: 2, leftHeight: 2, rightHeight: 2 } });
+    const elevation = await service.getElevation(wall);
+    const { opening, validation } = await service.addOpening(elevation, wall, { type: 'door', xOffset: 1, height: 2.4 });
+    expect(opening.height).toBeCloseTo(2.4, 3);
+    expect(validation.severity).toBe('warning');
+  });
+
   it('una puerta crea su Door en planta, con el mismo offset y dimensiones', async () => {
     // Es la costura entre los dos modelos: sin esto, un hueco colocado en
     // elevación no aparecería en la planta ni se exportaría a IFC.
@@ -642,4 +660,5 @@ describe('WallElevationService', () => {
     expect(Number(total.openingArea)).toBeCloseTo(1.89, 2);
     expect(Number(total.netArea)).toBeCloseTo(19.6 - 1.89, 1);
   });
+
 });

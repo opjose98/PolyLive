@@ -31,7 +31,7 @@ export async function exportProjectPackage(services: AppServices, projectId: str
     toast('Preparando el paquete del proyecto…', { kind: 'info', durationMs: 1500 });
     const pkg = await readProjectPackage(services.db, projectId, operator);
     const zip = zipPackage(pkg);
-    folderHint();
+    await folderHint();
     const saved = await saveBase64ToUserFolder(packageFilename(pkg.manifest), uint8ArrayToBase64(zip), 'application/octet-stream');
     if (!saved.ok) {
       if (saved.reason !== 'cancelled') toast(`No se pudo guardar el paquete${saved.detail ? `: ${saved.detail}` : ''}`, { kind: 'error' });
@@ -61,7 +61,7 @@ export async function importProjectPackageFlow(services: AppServices): Promise<s
       const ok = await new Promise<boolean>((resolve) =>
         alertDialog(
           'Reemplazar proyecto',
-          `"${project.name}" ya está en este teléfono. Al importar se reemplaza por la versión del paquete (${new Date(pkg.manifest.exportedAt).toLocaleString()}). Lo hecho después en este teléfono se pierde.`,
+          `"${project.name}" ya está en este equipo. Al importar se reemplaza por la versión del paquete (${new Date(pkg.manifest.exportedAt).toLocaleString()}). Lo hecho después en este teléfono se pierde.`,
           [
             { text: 'Cancelar', style: 'cancel', onPress: () => resolve(false) },
             { text: 'Reemplazar', style: 'destructive', onPress: () => resolve(true) },

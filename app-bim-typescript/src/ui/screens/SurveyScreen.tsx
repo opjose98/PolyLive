@@ -118,6 +118,12 @@ interface SurveyScreenProps {
   onExitProject?: () => void;
   /** Abre una pantalla del menú ☰ (galería, exportar, ajustes...). */
   onNavigate?: (screen: MenuScreen) => void;
+  /**
+   * Hay una pantalla del menú encima: el botón Atrás es suyo. Sin esto, el
+   * manejador del editor (que se vuelve a registrar al cambiar su estado)
+   * ganaba y Atrás en la Galería sacaba del espacio.
+   */
+  covered?: boolean;
 }
 
 /** Pantallas que se abren desde el menú ☰, por encima del levantamiento. */
@@ -128,6 +134,16 @@ import { record } from '../../shared/diagnostics';
 // ---------------------------------------------------------------------------
 // Componente
 // ---------------------------------------------------------------------------
+
+/** Nombre del tipo de objeto para los avisos (el `type` del dominio está en inglés). */
+const OBJECT_LABEL: Readonly<Record<string, string>> = {
+  Wall: 'Muro',
+  Column: 'Columna',
+  Door: 'Puerta',
+  Window: 'Ventana',
+  Floor: 'Suelo',
+  Opening: 'Vano',
+};
 
 export function SurveyScreen({
   services,
@@ -141,7 +157,10 @@ export function SurveyScreen({
   onExit,
   onExitProject,
   onNavigate,
+  covered = false,
 }: SurveyScreenProps) {
+  const coveredRef = useRef(covered);
+  coveredRef.current = covered;
   // Tamaño INICIAL (solo para la primera cámara): al girar el equipo el lienzo se
   // vuelve a medir con onLayout; si el editor dependiera del tamaño de la ventana,
   // girar lo recrearía y se perderían la selección y el deshacer.
@@ -453,6 +472,7 @@ export function SurveyScreen({
   useEffect(() => {
     if (elevWallId) return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (coveredRef.current) return false; // lo atiende la pantalla del menú
       // Lo abierto se cierra antes de salir del espacio: hojas, textos y flujos de cada modo.
       if (review.state.pendingText) {
         review.ctl.cancelText();
@@ -657,7 +677,7 @@ export function SurveyScreen({
   const handleDragCancel = useCallback(() => editor.cancelDrag(), [editor]);
 
   const handleDelete = useCallback(() => {
-    const label = editor.selected?.type ?? 'Objeto';
+    const label = OBJECT_LABEL[editor.selected?.type ?? ''] ?? 'Objeto';
     setPanelOpen(false);
     haptic.destroy();
     void editor.deleteSelected().then(() =>
@@ -915,8 +935,8 @@ export function SurveyScreen({
       const m = meters(valueCm / 100);
       if (sel instanceof Wall && key === 'thickness') await editor.updateSelectedProperty('thickness', m);
       else if (sel instanceof Column && key === 'side') {
-        await editor.updateSelectedProperty('dimensionX', m);
-        if (!sel.isCircular) await editor.updateSelectedProperty('dimensionY', m);
+        // Un solo paso de deshacer: antes eran dos (X y luego Y).
+        await editor.updateSelectedProperty('dimensionX', m, sel.isCircular ? undefined : { dimensionY: m });
       } else if ((sel instanceof Door || sel instanceof Window) && key === 'width') {
         await editor.updateSelectedProperty('width', m);
       }
@@ -924,17 +944,24 @@ export function SurveyScreen({
     [editor],
   );
 
+  // «Lado» de una columna circular es su diámetro: el rótulo lo dice.
+  const circular =
+    (bpcContext.kind === 'tool' && activeTool?.methodId === 'circular') ||
+    (bpcContext.kind === 'selection' && editor.selected instanceof Column && editor.selected.isCircular);
+  const pillLabel = (key: PropKey) => (key === 'side' && circular ? 'Diámetro' : undefined);
   const bpcPills: BpcPill[] =
     bpcContext.kind === 'tool'
       ? (Object.entries(bpcContext.tool.props) as [PropKey, number][]).map(([key, value]) => ({
           key,
           value,
+          label: pillLabel(key),
           onCommit: (v) => workspaceStore.getState().setToolProp(key, v),
         }))
       : bpcContext.kind === 'selection' && editable
         ? (Object.entries(bpcContext.selection.props) as [PropKey, number][]).map(([key, value]) => ({
             key,
             value,
+            label: pillLabel(key),
             onCommit: (v) => void commitSelectionProp(key, v),
           }))
         : [];

@@ -349,7 +349,7 @@ function SpaceCard({
           </View>
 
           <Text style={styles.cardMeta}>
-            {areaM2 != null ? `${areaM2.toFixed(2)} m² · cerrado` : 'Sin cerrar'}
+            {areaM2 != null ? `${areaM2.toFixed(2)} m² netos · cerrado` : 'Sin cerrar'}
           </Text>
           <Text style={styles.cardMeta}>
             {objectCount} {objectCount === 1 ? 'elemento' : 'elementos'}

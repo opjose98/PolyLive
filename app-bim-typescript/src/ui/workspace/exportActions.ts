@@ -9,6 +9,7 @@
 // app, donde el operador no podía encontrar el archivo.
 // =============================================================================
 
+import { localStamp } from '../../shared/dates';
 import type { AppServices } from '../../application/AppServices';
 import { ValidationError } from '../../application/use-cases/types';
 import type { RoomId } from '../../domain/objects/base';
@@ -52,9 +53,7 @@ const slug = (s: string) =>
 
 /** Nombre con fecha y hora LOCAL (la que reconoce el operador al buscarlo). */
 export function exportFilename(ctx: ExportContext, ext: string, now = new Date()): string {
-  const two = (n: number) => String(n).padStart(2, '0');
-  const stamp = `${now.getFullYear()}${two(now.getMonth() + 1)}${two(now.getDate())}-${two(now.getHours())}${two(now.getMinutes())}`;
-  return `${slug(ctx.projectName)}-${slug(ctx.spaceName)}-${stamp}.${ext}`;
+  return `${slug(ctx.projectName)}-${slug(ctx.spaceName)}-${localStamp(now)}.${ext}`;
 }
 
 function failureMessage(err: unknown, fallback: string): string {
@@ -64,7 +63,7 @@ function failureMessage(err: unknown, fallback: string): string {
 }
 
 async function save(ctx: ExportContext, ext: string, content: string, detail?: string): Promise<ExportOutcome> {
-  folderHint();
+  await folderHint();
   const saved = await saveTextToUserFolder(exportFilename(ctx, ext), content);
   if (saved.ok) {
     haptic.commit();

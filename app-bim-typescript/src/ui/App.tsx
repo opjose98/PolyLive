@@ -356,12 +356,17 @@ export default function App() {
         projectName={project.name}
         projectCode={project.bimCode}
         operatorName={operator.name}
-        onExit={() => setActiveRoomId(null)}
+        onExit={() => {
+          closeScreen();
+          setActiveRoomId(null);
+        }}
         onExitProject={() => {
+          closeScreen();
           setActiveRoomId(null);
           setProject(null);
         }}
         onNavigate={setScreen}
+        covered={screen != null}
         onOpenPhotos={(objectId) => openGallery({ objectId })}
         onOpenPhoto={(photoId) => openGallery({ photoId })}
       />

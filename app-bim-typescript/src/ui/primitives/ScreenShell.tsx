@@ -10,6 +10,7 @@
 
 import React, { useEffect } from 'react';
 import { BackHandler, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { SlideInRight, SlideOutRight } from 'react-native-reanimated';
 import { IconButton } from './IconButton';
 import { spacing } from '../design/tokens';
@@ -33,6 +34,7 @@ export function ScreenShell({
   children: React.ReactNode;
 }) {
   const styles = useStyles();
+  const insets = useSafeAreaInsets();
   useEffect(() => {
     if (!onBack) return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -44,7 +46,7 @@ export function ScreenShell({
 
   return (
     <Animated.View entering={SlideInRight.duration(180)} exiting={SlideOutRight.duration(140)} style={styles.root}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top }]}>
         {onBack ? <IconButton icon="arrow-left" label="Volver" size={40} raised={false} variant="plain" onPress={onBack} /> : null}
         <View style={styles.titles}>
           <Text style={styles.title} numberOfLines={1}>
@@ -70,7 +72,9 @@ export function ScreenShell({
 }
 
 const useStyles = themedStyles((colors) => ({
-  root: { ...StyleSheet.absoluteFill, backgroundColor: colors.background },
+  // Por encima del cromo del levantamiento: en Android el orden de dibujo lo
+  // decide la elevación, y la barra superior del editor tapaba la cabecera.
+  root: { ...StyleSheet.absoluteFill, backgroundColor: colors.background, zIndex: 100, elevation: 24 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

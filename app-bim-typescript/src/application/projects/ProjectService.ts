@@ -177,6 +177,7 @@ export class ProjectService {
    */
   async listSpaceDetails(project: ProjectId): Promise<SpaceDetail[]> {
     const spaces = await this.projects.listSpaces(project);
+    const net = await this.projects.netAreaBySpace();
 
     const details: SpaceDetail[] = [];
     for (const space of spaces) {
@@ -185,7 +186,8 @@ export class ProjectService {
       details.push({
         space,
         room,
-        areaM2: room?.area != null ? Number(room.area) : null,
+        // Neta (cara interior) si hay recintos; si no, la del Recinto al eje.
+        areaM2: room?.area != null ? net.get(space.roomId) ?? Number(room.area) : null,
         // El propio Room está en la lista de objetos de su Recinto; se descuenta
         // para que el número que se enseña sea "elementos dibujados".
         objectCount: Math.max(0, objects.length - (room ? 1 : 0)),
