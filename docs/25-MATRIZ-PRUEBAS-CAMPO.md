@@ -313,3 +313,27 @@ Leyenda: ✅ OK · 🟡 Parcial · ❌ Falla · ⬜ No probado · ➖ No aplica.
 - Archivos exportados en la tableta (`/sdcard/PolyLive-QA/`) y validados en el PC: IFC del espacio (ifcopenshell, 15 geometrías), IFC del proyecto con 2 espacios (1 `IfcProject`, 8 muros, 2 `IfcSpace`), DXF (ezdxf, 11 capas), paquete `.polylive` (esquema 3), plano PDF, registro fotográfico PDF, acta de revisión PDF/CSV, CSV de áreas y de avance.
 - Entorno: Metro por `adb reverse` con un reenviador IPv4→IPv6 (Metro escucha solo en `::1` en este equipo).
 
+
+## 6. Complemento: ronda visual en tema Oscuro y Alto contraste (2026-10-07)
+
+Mismo equipo y proyecto. Se recorrió cada pantalla y modo en cada tema (✅ legible / ❌ falla). Claro ya estaba cubierto en las secciones 3–4.
+
+| ID | Superficie | Oscuro | Alto contraste | Nota |
+|---|---|:-:|:-:|---|
+| T01 | Pantalla de operador, Proyectos, formulario Nuevo proyecto, diálogos | ✅ | 🟡 | AC: el botón 'Guardar' deshabilitado queda durazno desvaído (H-43) |
+| T02 | Menú ☰ y cajón ⋮ | ✅ | ✅ | |
+| T03 | Planta: muros, columnas, suelo, recinto, fotos | ✅ | ✅ | |
+| T04 | Rótulos del dibujo técnico (cotas, texto, etiqueta, coordenada, área) | ❌→✅ | ✅ | Oscuro: salían como cajas blancas sin texto (H-44); corregido con `labelBackdrop` (+ test) y verificado en la tablet |
+| T05 | Cuadrícula | ✅ | ❌ | AC: cuadrícula azul gruesa más puntos saturan el dibujo (H-07) |
+| T06 | FAB, selector de modo, Filtros, Capas | ✅ | ✅ | |
+| T07 | Selectores de Niveles/Fases y ventana de niveles | ✅ | ✅ | |
+| T08 | Hojas de muro, recinto, observación, lista de observaciones | ✅ | ✅ | |
+| T09 | Modo Topografía (mojones, rótulos N/E) | ✅ | ✅ | |
+| T10 | Modo Avance (suelo pintado) | ✅ | ✅ | |
+| T11 | Modo Revisión (flecha, hoja) | ✅ | ✅ | |
+| T12 | Alzado (muro, ventana, mini-mapa, líneas de nivel) | ✅ | ✅ | AC: guías azules de la ventana más gruesas, legibles |
+| T13 | Galería y cámara | ✅ | ⬜ | AC sin revisar |
+| T14 | Persistencia del tema tras recargar | ✅ | ✅ | |
+| T15 | Pantallas Exportar, Ajustes, Perfil, Importar | ⬜ | ⬜ | Sin revisar en ambos temas |
+
+Hallazgos nuevos: **H-43** (P3) 'Guardar' deshabilitado poco legible en alto contraste; **H-44** (P2, corregido) rótulos invisibles en oscuro.
