@@ -53,6 +53,10 @@ Borrar archivos del repo solo con OK explícito.
    y `sdk.dir=C:/asdk` en `android/local.properties`.
 3. `cd android && ./gradlew.bat assembleRelease -PreactNativeArchitectures=arm64-v8a`
    → `android/app/build/outputs/apk/release/app-release.apk`.
+   Para revisar cambios en vivo (dev client): añadir también `applicationIdSuffix ".qa"` en
+   `buildTypes.debug`, `./gradlew.bat assembleDebug -PreactNativeArchitectures=arm64-v8a`, instalar
+   `android/app/build/outputs/apk/debug/app-debug.apk`, `adb reverse tcp:8081 tcp:8081` y
+   `npx expo start --dev-client --localhost`: cada cambio se recarga al guardar.
 4. Archivos bloqueados: `taskkill //F //IM java.exe`, repetir con `--no-parallel`, reintentar.
 5. Tableta: `source scripts/qa/adb.sh`; mirar `adb shell wm size` antes de usar coordenadas;
    `pm clear` solo sobre `com.polylivebim.qa`. Si `adb devices` sale vacío: `kill-server` + `start-server`.
