@@ -61,7 +61,7 @@ export async function importProjectPackageFlow(services: AppServices): Promise<s
       const ok = await new Promise<boolean>((resolve) =>
         alertDialog(
           'Reemplazar proyecto',
-          `"${project.name}" ya está en este equipo. Al importar se reemplaza por la versión del paquete (${new Date(pkg.manifest.exportedAt).toLocaleString()}). Lo hecho después en este teléfono se pierde.`,
+          `"${project.name}" ya está en este equipo. Al importar se reemplaza por la versión del paquete (${new Date(pkg.manifest.exportedAt).toLocaleString()}). Lo hecho después en este equipo se pierde.`,
           [
             { text: 'Cancelar', style: 'cancel', onPress: () => resolve(false) },
             { text: 'Reemplazar', style: 'destructive', onPress: () => resolve(true) },
