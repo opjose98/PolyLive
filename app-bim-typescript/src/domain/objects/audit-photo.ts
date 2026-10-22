@@ -20,7 +20,7 @@ import { Point2D } from '../geometry/types';
  * el cono de visión: sin él, un marcador dice dónde se estaba pero no qué se
  * estaba mirando.
  */
-export interface PhotoMarker {
+interface PhotoMarker {
   readonly position: Point2D;
   readonly direction?: number;
   /** Un marcador oculto sigue existiendo pero no se dibuja en planta. */

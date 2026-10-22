@@ -24,7 +24,7 @@ import { Window } from '../../domain/objects/window';
 import type { Handle } from '../../application/canvas/SelectionService';
 import type { EditorController, EditorState } from '../../application/editor/EditorController';
 
-export interface LiveOverlay {
+interface LiveOverlay {
   readonly wallDraft: EditorState['wallDraft'];
   /** El objeto arrastrado en su posición viva, con sus vanos. */
   readonly objects: readonly RevitObjectBase[];

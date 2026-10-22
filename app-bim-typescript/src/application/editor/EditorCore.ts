@@ -121,7 +121,7 @@ export interface CreationMethods {
 }
 
 /** Muro en curso de trazado (no persistido). */
-export interface WallDraft {
+interface WallDraft {
   /** Punto fijado. En "punto a punto", `null` hasta el primer toque. */
   readonly start: Point2D | null;
   /** Donde está el dedo ahora, ya con snaps aplicados. */
@@ -244,7 +244,7 @@ export interface EditorState {
 type EditorListener = (state: EditorState) => void;
 
 /** Lo común a todo destino de arrastre: plan de uniones (si el muro tiene) y muros arrastrados. */
-export interface DragJoints {
+interface DragJoints {
   readonly plan: WallEndsChange[] | null;
   readonly linked: RevitObjectBase[];
 }

@@ -39,7 +39,7 @@ import { Window } from '../../domain/objects/window';
  * - `start` / `end`: extremos de un muro (arrastrarlos re-traza el muro)
  * - `center`: mueve el objeto entero (punto medio de un muro, centro de una columna)
  */
-export type HandleKind = 'start' | 'end' | 'center';
+type HandleKind = 'start' | 'end' | 'center';
 
 export interface Handle {
   readonly kind: HandleKind;

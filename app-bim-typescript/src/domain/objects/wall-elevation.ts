@@ -393,4 +393,3 @@ export function deserializeOpenings(json: string): WallOpening[] {
   }));
 }
 
-export type { SquareMeters };

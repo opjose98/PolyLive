@@ -32,7 +32,7 @@ import { ElevationSeverity, ElevationViewport, snapXSmart, snapYSmart } from './
 export type ElevationTool = 'select' | OpeningType;
 export type WallSide = 'A' | 'B';
 
-export interface LevelLine {
+interface LevelLine {
   readonly id: string;
   readonly name: string;
   /** Altura en el CSL (0 = base más baja del muro). */

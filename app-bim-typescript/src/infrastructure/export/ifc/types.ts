@@ -124,7 +124,7 @@ export interface IfcLevelInput {
 // Resultado de validación (Compatibility Gate)
 // ---------------------------------------------------------------------------
 
-export type ValidationSeverity = 'error' | 'warning';
+type ValidationSeverity = 'error' | 'warning';
 
 export interface GateValidationEntry {
   readonly criterion: number;    // 1-8
