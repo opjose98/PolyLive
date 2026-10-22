@@ -189,7 +189,8 @@ const useStyles = themedStyles((colors) => ({
   extra: { marginTop: spacing.md, gap: spacing.sm, alignItems: 'center', width: sizes.fabView },
   window: { right: 64, width: 210 },
   checkRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 40 },
-  checkLabel: { ...type.body, color: colors.text },
+  // El rótulo largo se parte en líneas; la casilla no se encoge ni sale del panel (H-27).
+  checkLabel: { ...type.body, color: colors.text, flex: 1, marginRight: spacing.sm },
   check: {
     width: 20,
     height: 20,
