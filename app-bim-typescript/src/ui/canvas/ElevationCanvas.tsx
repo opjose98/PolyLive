@@ -98,20 +98,19 @@ export const ElevationCanvas = React.memo(function ElevationCanvas(props: Elevat
     dY.value = 0;
   }, [picture, delta, dS, dX, dY]);
 
+  // Estado del gesto en un objeto, no en `let`: los callbacks de Gesture se convierten en worklets y cada
+  // uno recibía su propia copia de las variables; el trazo de la cercha se volvía paneo (H-25). Ver PlanCanvas.
+  const g = useRef({ dragging: false, drawing: false, pinchLast: 1, moving: 0, lastMove: 0 }).current;
+
   const gesture = useMemo(() => {
-    let dragging = false;
-    let drawing = false;
-    let pinchLast = 1;
-    let moving = 0;
     // El alzado se regraba entero con cada punto del trazo: a ~30 Hz como
     // máximo. Si el hilo JS se atrasa, los eventos encolados se descartan
     // al instante en vez de redibujar cada uno (antes el trazo iba segundos
     // detrás del dedo). El final del trazo siempre usa el punto real.
-    let lastMove = 0;
     const throttled = (fn: () => void) => {
       const now = Date.now();
-      if (now - lastMove < 33) return;
-      lastMove = now;
+      if (now - g.lastMove < 33) return;
+      g.lastMove = now;
       fn();
     };
     const drawMove = (x: number, y: number) => throttled(() => cb.current.onDrawMove?.(x, y));
@@ -121,8 +120,8 @@ export const ElevationCanvas = React.memo(function ElevationCanvas(props: Elevat
       dY.value = delta.y;
     };
     const release = () => {
-      moving = Math.max(0, moving - 1);
-      if (moving === 0 && (delta.s !== 1 || delta.x !== 0 || delta.y !== 0)) cb.current.onViewDelta(delta.s, delta.x, delta.y);
+      g.moving = Math.max(0, g.moving - 1);
+      if (g.moving === 0 && (delta.s !== 1 || delta.x !== 0 || delta.y !== 0)) cb.current.onViewDelta(delta.s, delta.x, delta.y);
     };
 
     const pan = Gesture.Pan()
@@ -131,21 +130,21 @@ export const ElevationCanvas = React.memo(function ElevationCanvas(props: Elevat
       .minDistance(4)
       .onStart((e) => {
         if (cb.current.drawEnabled) {
-          drawing = true;
+          g.drawing = true;
           cb.current.onDrawBegin?.(e.x - e.translationX, e.y - e.translationY);
           cb.current.onDrawMove?.(e.x, e.y);
           return;
         }
-        dragging = cb.current.onDragStart(e.x - e.translationX, e.y - e.translationY);
-        if (dragging) haptic.grab();
-        else moving++;
+        g.dragging = cb.current.onDragStart(e.x - e.translationX, e.y - e.translationY);
+        if (g.dragging) haptic.grab();
+        else g.moving++;
       })
       .onChange((e) => {
-        if (drawing) {
+        if (g.drawing) {
           drawMove(e.x, e.y);
           return;
         }
-        if (dragging) {
+        if (g.dragging) {
           throttled(() => cb.current.onDragMove(e.x, e.y));
           return;
         }
@@ -154,39 +153,39 @@ export const ElevationCanvas = React.memo(function ElevationCanvas(props: Elevat
         publish();
       })
       .onEnd((e) => {
-        if (drawing) {
+        if (g.drawing) {
           haptic.commit();
           cb.current.onDrawEnd?.(e.x, e.y);
-          drawing = false;
+          g.drawing = false;
           return;
         }
-        if (dragging) {
+        if (g.dragging) {
           haptic.commit();
           cb.current.onDragMove(e.x, e.y); // el último punto, aunque el filtro lo haya saltado
           cb.current.onDragEnd();
         }
       })
       .onFinalize((_e, ok) => {
-        if (drawing) {
-          drawing = false;
+        if (g.drawing) {
+          g.drawing = false;
           cb.current.onDrawCancel?.();
           return;
         }
-        if (dragging) {
+        if (g.dragging) {
           if (!ok) cb.current.onDragCancel();
         } else release();
-        dragging = false;
+        g.dragging = false;
       });
 
     const pinch = Gesture.Pinch()
       .runOnJS(true)
       .onStart(() => {
-        pinchLast = 1;
-        moving++;
+        g.pinchLast = 1;
+        g.moving++;
       })
       .onChange((e) => {
-        const k = e.scale / pinchLast;
-        pinchLast = e.scale;
+        const k = e.scale / g.pinchLast;
+        g.pinchLast = e.scale;
         // Zoom alrededor de los dedos: el punto bajo ellos no se mueve.
         delta.x = e.focalX - (e.focalX - delta.x) * k;
         delta.y = e.focalY - (e.focalY - delta.y) * k;
