@@ -141,7 +141,7 @@ export function isPointInPolygon(point: Point2D, vertices: readonly Point2D[]): 
 // Internos
 // ---------------------------------------------------------------------------
 
-function averageOfVertices(vertices: readonly Point2D[]): Point2D {
+export function averageOfVertices(vertices: readonly Point2D[]): Point2D {
   const n = vertices.length;
   let sx = 0;
   let sy = 0;

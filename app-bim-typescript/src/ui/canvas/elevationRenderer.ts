@@ -22,7 +22,8 @@ import type { ICanvasRenderer } from '../../native/canvas/SkiaCanvasAdapter';
 import { WallElevation, WallOpening, WallOpeningId, baseAt, effectiveLeftHeight, effectiveRightHeight, hasHeightProfile, openingEnd, openingTop, openingCenterX, openingCenterY, umbral, dintel, openingTypeLabel } from '../../domain/objects/wall-elevation';
 import type { ElevationSeverity, ElevationViewport } from '../../application/elevation/WallElevationService';
 import { CANVAS_PALETTES, CanvasPalette } from '../design/canvasThemes';
-import { drawSketch, SketchShape, withAlpha } from './sketch';
+import { drawSketch, SketchShape } from './sketch';
+import { withAlpha } from '../design/tokens';
 
 export interface ElevationScene {
   readonly elevation: WallElevation;

@@ -127,7 +127,7 @@ export class PolygonValidator {
  * un recinto comparten extremos por definición, así que un test inclusivo
  * marcaría todo recinto válido como auto-intersectado.
  */
-function segmentsIntersect(a1: Point2D, a2: Point2D, b1: Point2D, b2: Point2D): boolean {
+export function segmentsIntersect(a1: Point2D, a2: Point2D, b1: Point2D, b2: Point2D): boolean {
   const d1 = cross2d(sub(b2, b1), sub(a1, b1));
   const d2 = cross2d(sub(b2, b1), sub(a2, b1));
   const d3 = cross2d(sub(a2, a1), sub(b1, a1));

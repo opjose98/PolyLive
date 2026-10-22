@@ -22,6 +22,7 @@
 // todos.
 // =============================================================================
 
+import { averageOfVertices } from '../../../domain/geometry/polygon-utils';
 import { columnForExport, roomForExport, toLocal, wallForExport } from '../../../domain/geometry/handedness';
 import { Point2D } from '../../../domain/geometry/types';
 import { Wall } from '../../../domain/objects/wall';
@@ -445,7 +446,7 @@ export class DXFSerializer {
         const label = `${(data.room.properties.name as string | undefined) ?? 'Recinto'} — ${Number(
           data.room.area,
         ).toFixed(2)} m2`;
-        this.text(DXF_LAYERS.annotation, centroidOf(data.room.geometry), label, 0.25);
+        this.text(DXF_LAYERS.annotation, averageOfVertices(data.room.geometry), label, 0.25);
       }
     }
 
@@ -754,11 +755,6 @@ export function computeBounds(data: DXFExportData): DXFBounds {
 
   const margin = 1;
   return { minX: minX - margin, minY: minY - margin, maxX: maxX + margin, maxY: maxY + margin };
-}
-
-function centroidOf(points: readonly Point2D[]): Point2D {
-  const sum = points.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
-  return { x: sum.x / points.length, y: sum.y / points.length };
 }
 
 function toDegrees(radians: number): number {

@@ -42,9 +42,9 @@ import { worldToScreen } from '../../domain/geometry/coordinates';
 import { isPointInPolygon } from '../../domain/geometry/polygon-utils';
 import type { Handle } from '../../application/canvas/SelectionService';
 import { CANVAS_PALETTES, CanvasPalette } from '../design/canvasThemes';
-import { sizes } from '../design/tokens';
+import { sizes, withAlpha } from '../design/tokens';
 import { buildWallOutlines, faceSegments, hatchSegments, WallOutline } from './wallGeometry';
-import { drawSketch, SketchShape, withAlpha } from './sketch';
+import { drawSketch, SketchShape } from './sketch';
 
 // ---------------------------------------------------------------------------
 // Entrada
@@ -121,7 +121,7 @@ export interface PlanScene {
   readonly snapIndicator?: Point2D | null;
 }
 
-export interface PlanRoom {
+interface PlanRoom {
   readonly polygon: readonly Point2D[];
   readonly area: number;
   readonly centroid: Point2D;

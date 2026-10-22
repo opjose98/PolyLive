@@ -24,6 +24,7 @@ import { StyleSheet } from 'react-native';
 import type { CanvasThemeId, WorkModeId } from '../../application/workspace/catalog';
 import { workspaceStore } from '../../state/workspaceStore';
 import { CANVAS_PALETTES, CanvasPalette } from './canvasThemes';
+import { withAlpha } from './tokens';
 
 export interface ChromeColors {
   /** Relleno de acento (FAB, botón principal, chip activo). */
@@ -191,11 +192,6 @@ function canvasPaletteFor(theme: CanvasThemeId, mode: WorkModeId): CanvasPalette
     canvasCache.set(key, p);
   }
   return p;
-}
-
-function withAlpha(hex: string, alpha: number): string {
-  const n = parseInt(hex.slice(1), 16);
-  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
 }
 
 /** Colores del cromo según el modo y el tema activos. */
