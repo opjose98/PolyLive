@@ -214,6 +214,8 @@ const useStyles = themedStyles((colors) => ({
     borderColor: colors.border,
     borderRadius: radius.sm,
     paddingHorizontal: spacing.sm,
+    // Android añade relleno vertical propio: con alto fijo recortaba los dígitos (H-10).
+    paddingVertical: 0,
     color: colors.text,
   },
 }));
