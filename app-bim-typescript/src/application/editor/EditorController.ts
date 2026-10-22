@@ -20,20 +20,7 @@ import type { MeasurementId, AuditPhotoId } from '../../domain/objects/base';
 
 import type { PhotoFaceAnchor } from '../../domain/objects/audit-photo';
 import {
-  
-  
-  
-  
   PhotoMarkerView,
-  
-  
-  
-  
-  
-  
-  
-  
-  
 } from './EditorCore';
 import { EditorCreation } from './EditorCreation';
 

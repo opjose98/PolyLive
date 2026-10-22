@@ -24,7 +24,6 @@ jest.mock('expo-camera', () => ({
 import {
   ExpoPhotoCapture,
   createPhotoCapture,
-  
 } from '../../../src/native/camera/ExpoPhotoCapture';
 import type CameraView from 'expo-camera/build/CameraView';
 

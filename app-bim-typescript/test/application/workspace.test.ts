@@ -21,7 +21,6 @@ import { FAB_CLOSED, fabMainIcon, pickFabCategory, pressFabMain } from '../../sr
 import { valueFromDrag, nudgeProp } from '../../src/application/workspace/propDrag';
 import {
   createRangeState,
-  
   indexFromTrackFraction,
   itemAt,
   moveThumb,

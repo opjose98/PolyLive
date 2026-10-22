@@ -20,19 +20,8 @@ import { JointWall, WallEndsChange, endsAt, planEndMove, planWallTranslate } fro
 
 import {
   EditorCore,
-  
-  
-  
-  
-  
   DragTarget,
-  
   cloneWith,
-  
-  
-  
-  
-  
 } from './EditorCore';
 
 export abstract class EditorGestures extends EditorCore {

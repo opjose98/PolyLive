@@ -8,15 +8,11 @@ import {
   Door,
   RevitObjectId,
   RoomId,
-  
-  
   IObjectStore,
   RevitObjectBase,
   revitObjectId,
   roomId,
   wallId,
-  
-  
 } from '../../src/domain/objects';
 import { meters, Point2D } from '../../src/domain/geometry/types';
 import { CreateWallCommand } from '../../src/application/commands/CreateWallCommand';

@@ -17,37 +17,20 @@ import { Floor, floorZoneId } from '../../domain/objects/floor';
 
 import { ElevationSnapshotCommand } from '../commands/ElevationSnapshotCommand';
 import {
-  
   VerticalExtent,
-  
   WallVertical,
-  
   hostLevelOf,
   profileHeight,
   profileProblem,
-  
   resolveExtent,
   resolveWallProfile,
-  
 } from '../../domain/objects/vertical';
 import { touchToleranceMeters } from '../canvas/SelectionService';
 import { diagnostics } from '../../shared/diagnostics';
 
 import {
-  
   EditorState,
-  
-  
-  
-  
-  
-  
-  
   MIN_WALL_LENGTH,
-  
-  
-  
-  
 } from './EditorCore';
 import { EditorGestures } from './EditorGestures';
 

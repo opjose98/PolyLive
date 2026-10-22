@@ -4,17 +4,12 @@
 
 import {
   Wall,
-  
   Door,
-  
   Room,
   RevitObjectBase,
   RevitObjectId,
   RoomId,
   WallId,
-  
-  
-  
   IObjectStore,
   Measurement,
   AuditPhoto,
@@ -22,7 +17,6 @@ import {
   roomId,
   wallId,
   levelId,
-  
   } from '../../src/domain/objects';
 
 import { meters, squareMeters } from '../../src/domain/geometry/types';

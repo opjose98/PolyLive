@@ -31,7 +31,6 @@ jest.mock('expo-file-system', () => ({
 import {
   ExpoFileSystem,
   createFileSystem,
-  
 } from '../../../src/native/filesystem/ExpoFileSystem';
 
 // ---------------------------------------------------------------------------
