@@ -41,9 +41,9 @@ export function SideDrawer({ open, onClose, side, top = 0, children }: SideDrawe
   // Cerrado y sin animar, el cajón se desmonta: no depende de que el estilo animado
   // llegue a la vista (tras volver del selector de carpetas a veces no llegaba, H-53).
   const [mounted, setMounted] = useState(open);
+  if (open && !mounted) setMounted(true);
 
   useEffect(() => {
-    if (open) setMounted(true);
     drag.value = 0;
     progress.value = withSpring(open ? 1 : 0, spring.gentle, (finished) => {
       if (finished && !open) runOnJS(setMounted)(false);
