@@ -58,5 +58,8 @@ Borrar archivos del repo solo con OK explícito.
    `android/app/build/outputs/apk/debug/app-debug.apk`, `adb reverse tcp:8081 tcp:8081` y
    `npx expo start --dev-client --localhost`: cada cambio se recarga al guardar.
 4. Archivos bloqueados: `taskkill //F //IM java.exe`, repetir con `--no-parallel`, reintentar.
+   Si falla `prepare*Headers*` ("Unable to delete directory … prefab-headers"): con Gradle parado, borrar
+   `node_modules/{react-native-reanimated,react-native-worklets}/android/build/prefab-headers` y
+   `node_modules/@shopify/react-native-skia/android/build/headers`, y compilar con `--no-parallel --max-workers=1`.
 5. Tableta: `source scripts/qa/adb.sh`; mirar `adb shell wm size` antes de usar coordenadas;
    `pm clear` solo sobre `com.polylivebim.qa`. Si `adb devices` sale vacío: `kill-server` + `start-server`.
