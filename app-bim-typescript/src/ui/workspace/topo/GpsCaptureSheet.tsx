@@ -1,5 +1,5 @@
 // =============================================================================
-// GpsCaptureSheet — "Deja el celular quieto" y promedia el GPS
+// GpsCaptureSheet — "Deja el equipo quieto" y promedia el GPS
 // =============================================================================
 //
 // Anillo de progreso con los segundos que faltan, lecturas, dispersión y
@@ -80,7 +80,7 @@ export function GpsCaptureSheet({
     >
       <View style={styles.root}>
         <Text style={styles.title}>Punto GPS</Text>
-        <Text style={styles.sub}>Para {purpose}. Deja el celular quieto, en el punto, con vista al cielo.</Text>
+        <Text style={styles.sub}>Para {purpose}. Deja el equipo quieto, en el punto, con vista al cielo.</Text>
         <View style={styles.ringWrap}>
           <Canvas style={styles.ring}>
             <Path path={RING_TRACK} color={colors.border} style="stroke" strokeWidth={8} />
