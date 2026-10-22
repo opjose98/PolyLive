@@ -25,7 +25,7 @@ import { revitObjectId } from '../../domain/objects/base';
 import { LEVEL_PROP, ProjectMarker } from '../../domain/objects/marker';
 import { LevelElevations, WallProfile, WallVertical, profileBottom, profileHeight, profileProblem, resolveWallProfile, wallVerticalOf } from '../../domain/objects/vertical';
 import { OpeningType, WallElevation, WallOpening, WallOpeningId, WallQuantification, computeQuantification, effectiveLeftHeight, effectiveRightHeight, levelsFromProfile, openingEnd, openingTop, OPENING_DEFAULTS } from '../../domain/objects/wall-elevation';
-import { AppError } from '../../shared/errors/AppError';
+import { diagnostics, reportFailure } from '../../shared/diagnostics';
 import type { AppServices } from '../AppServices';
 import { ElevationSeverity, ElevationViewport, snapXSmart, snapYSmart } from './WallElevationService';
 
@@ -123,7 +123,7 @@ export class ElevationEditor {
   }
 
   private fail(err: unknown, fallback: string): void {
-    this.notify('error', err instanceof AppError ? err.userMessage : fallback);
+    this.notify('error', reportFailure('elevation', err, fallback));
   }
 
   // --- Carga ----------------------------------------------------------------
@@ -153,9 +153,10 @@ export class ElevationEditor {
       this.stored = await this.services.elevations.getElevation(wall);
       this.publish(wall, this.stored);
       if (fit) this.zoomToFit();
-    } catch {
+    } catch (err) {
       // La vista llama a load() sin esperar: un error aquí no debe quedar
       // como promesa rechazada sin manejar.
+      diagnostics.error('elevation', 'No se pudo leer el alzado del muro', err);
       this.notify('error', 'No se pudo leer el alzado del muro.');
     }
   }

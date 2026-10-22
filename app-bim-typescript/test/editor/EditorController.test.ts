@@ -26,6 +26,7 @@ import { Room } from '../../src/domain/objects/room';
 import { meters } from '../../src/domain/geometry/types';
 import { MIN_SCALE } from '../../src/application/canvas/types';
 import { extent, uniformWall } from '../../src/domain/objects/vertical';
+import { diagnostics } from '../../src/shared/diagnostics';
 
 const ROOM_ID: RoomId = roomId('editor-room');
 const ROOM_OBJECT_ID: RevitObjectId = revitObjectId('editor-room');
@@ -480,6 +481,8 @@ describe('EditorController', () => {
       const reread = (await services.store.readObject(id)) as Wall;
       expect(reread.thickness).toBeCloseTo(0.15);
       expect(editor.getState().notice?.kind).toBe('error');
+      // H-46: el fallo también queda en el registro de diagnóstico.
+      expect(diagnostics.entries().some((e) => e.source === 'editor')).toBe(true);
     });
   });
 

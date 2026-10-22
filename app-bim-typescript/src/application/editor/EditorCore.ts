@@ -57,7 +57,7 @@ import type { ZoneEdit } from '../../infrastructure/sqlite/ZoneStore';
 import { LEVEL_PROP, PHASE_PROP } from '../../domain/objects/marker';
 import { LevelElevations, VerticalExtent, WallProfile, WallVertical, columnVerticalOf, hostLevelOf, profileSpans, resolveExtent, resolveWallProfile, wallVerticalOf } from '../../domain/objects/vertical';
 import { projectPointToWall, isVanoWithinWall } from '../../domain/geometry/projections';
-import { AppError } from '../../shared/errors/AppError';
+import { reportFailure } from '../../shared/diagnostics';
 import { CanvasManager } from '../canvas/CanvasManager';
 import { CanvasPoint, canvasPoint, MIN_SCALE, MAX_SCALE } from '../canvas/types';
 import { SnapHandler } from '../canvas/SnapHandler';
@@ -397,7 +397,8 @@ export abstract class EditorCore {
   }
 
   protected fail(err: unknown, fallback: string): void {
-    this.notify('error', err instanceof AppError ? err.userMessage : fallback);
+    // Al registro también: "Enviar diagnóstico" debe traer la causa, no solo el aviso que se vio.
+    this.notify('error', reportFailure('editor', err, fallback));
   }
 
   // -------------------------------------------------------------------------

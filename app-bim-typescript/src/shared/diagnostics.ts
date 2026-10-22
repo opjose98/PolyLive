@@ -9,6 +9,8 @@
 // ("Enviar diagnóstico"). Sin servicios externos.
 // =============================================================================
 
+import { AppError } from './errors/AppError';
+
 export type DiagnosticLevel = 'info' | 'warn' | 'error';
 
 export interface DiagnosticEntry {
@@ -63,6 +65,19 @@ export const diagnostics = {
     entries.length = 0;
   },
 };
+
+/**
+ * Registra un fallo que se va a mostrar al usuario y devuelve su texto: el de un
+ * `AppError` (esperado, va como aviso) o `fallback` (inesperado, va como error).
+ */
+export function reportFailure(source: string, err: unknown, fallback: string): string {
+  if (err instanceof AppError) {
+    record('warn', source, fallback, err);
+    return err.userMessage;
+  }
+  record('error', source, fallback, err);
+  return fallback;
+}
 
 /** Una línea de texto por entrada (para el archivo y para "Enviar diagnóstico"). */
 export function formatEntry(e: DiagnosticEntry): string {

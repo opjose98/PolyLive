@@ -23,7 +23,7 @@ import { View, Text, FlatList, TouchableOpacity, TextInput, Modal, RefreshContro
 import { AppServices } from '../../application/AppServices';
 import { Project, ProjectSummary, BIM_DISCIPLINES, BimDiscipline } from '../../domain/objects/project';
 import type { Operator } from '../../domain/objects/operator';
-import { AppError } from '../../shared/errors/AppError';
+import { reportFailure } from '../../shared/diagnostics';
 import { ActionButton, alertDialog } from '../primitives';
 import { TextField, SegmentedField } from '../components/fields';
 import { spacing, radius, sizes } from '../design/tokens';
@@ -116,7 +116,7 @@ export function ProjectsScreen({
               } catch (err) {
                 alertDialog(
                   'Error',
-                  err instanceof AppError ? err.userMessage : 'No se pudo eliminar el proyecto.',
+                  reportFailure('projects', err, 'No se pudo eliminar el proyecto.'),
                 );
               }
             },
@@ -219,7 +219,7 @@ export function ProjectsScreen({
           } catch (err) {
             alertDialog(
               'Error',
-              err instanceof AppError ? err.userMessage : 'No se pudo crear el proyecto.',
+              reportFailure('projects', err, 'No se pudo crear el proyecto.'),
             );
           }
         }}
@@ -240,7 +240,7 @@ export function ProjectsScreen({
           } catch (err) {
             alertDialog(
               'Error',
-              err instanceof AppError ? err.userMessage : 'No se pudo guardar el proyecto.',
+              reportFailure('projects', err, 'No se pudo guardar el proyecto.'),
             );
           }
         }}

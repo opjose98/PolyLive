@@ -31,6 +31,7 @@ import {
   
 } from '../../domain/objects/vertical';
 import { touchToleranceMeters } from '../canvas/SelectionService';
+import { diagnostics } from '../../shared/diagnostics';
 
 import {
   
@@ -328,7 +329,9 @@ export abstract class EditorCreation extends EditorGestures {
       return elevations.flatMap((e) =>
         e.openings.filter((o) => o.type === 'opening').map((o) => ({ wallId: e.wallId, xOffset: o.xOffset, width: o.width })),
       );
-    } catch {
+    } catch (err) {
+      // Los vanos genéricos son un añadido: sin ellos la planta se dibuja igual.
+      diagnostics.warn('editor', 'No se pudieron leer los vanos genéricos', err);
       return [];
     }
   }

@@ -17,7 +17,7 @@ import { AppServices } from '../../application/AppServices';
 import { SpaceDetail } from '../../application/projects/ProjectService';
 import { Project } from '../../domain/objects/project';
 import { RoomId, roomId as toRoomId } from '../../domain/objects/base';
-import { AppError } from '../../shared/errors/AppError';
+import { reportFailure } from '../../shared/diagnostics';
 import { ActionButton, alertDialog } from '../primitives';
 import { TextField } from '../components/fields';
 import { SpacePreview } from '../components/SpacePreview';
@@ -87,7 +87,7 @@ export function ProjectWorkspaceScreen({
       await load();
       onOpenSpace(room.roomId);
     } catch (err) {
-      alertDialog('Error', err instanceof AppError ? err.userMessage : 'No se pudo crear el espacio.');
+      alertDialog('Error', reportFailure('workspace', err, 'No se pudo crear el espacio.'));
     }
   }, [services, project.id, newName, load, onOpenSpace]);
 
@@ -110,7 +110,7 @@ export function ProjectWorkspaceScreen({
               } catch (err) {
                 alertDialog(
                   'Error',
-                  err instanceof AppError ? err.userMessage : 'No se pudo quitar el espacio.',
+                  reportFailure('workspace', err, 'No se pudo quitar el espacio.'),
                 );
               }
             },

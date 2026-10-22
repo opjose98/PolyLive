@@ -15,7 +15,7 @@
 // =============================================================================
 
 import type { MenuScreen } from '../workspace/useSurveyMenu';
-import { record } from '../../shared/diagnostics';
+import { record, reportFailure } from '../../shared/diagnostics';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Dimensions, Modal, BackHandler } from 'react-native';
 
@@ -243,7 +243,7 @@ export function SurveyScreen({
   const live = useMemo(() => createLiveSource(editor), [editor]);
 
   useEffect(() => {
-    editor.init().catch(() => toast('No se pudo abrir el levantamiento.', { kind: 'error' }));
+    editor.init().catch((err) => toast(reportFailure('survey', err, 'No se pudo abrir el levantamiento.'), { kind: 'error' }));
   }, [editor]);
 
   // Los avisos del controlador se muestran una vez y se limpian, para que un
