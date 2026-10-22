@@ -152,3 +152,73 @@ Después de la prueba en tableta (docs/25) y antes de fusionar a `main`:
 Estado: 974 tests, `tsc` y ESLint sin errores, knip limpio, IFC/DXF validados. Pendiente: la prueba en
 la tableta con la build de desarrollo con rotación (los hallazgos «Verificar en equipo» de docs/25) y
 dos decisiones de producto (H-15 encadenar muros, H-18 cota alineada u ortogonal).
+
+
+## 6. Plan — Importar levantamientos de Revit por IFC (2026-10-22, sin código aún)
+
+Decidido con el dueño: **IFC a objetos editables (B), parser STEP en el teléfono (TypeScript),
+GlobalId de Revit preservado, por fases.** El código empieza cuando cierre la sesión de revisión
+que trabaja hoy sobre `audit/estable-campo`; irá en su propia rama (`feat/importar-ifc`, desde
+`main`) y en un worktree aparte.
+
+### 6.1 Vía de entrada (alcance evaluado)
+
+| Vía | Decisión |
+|---|---|
+| IFC nativo de Revit → archivo al teléfono → PolyLive | **Elegida.** openBIM, sin instalar nada en Revit, sirve para otros autores. |
+| Configuración de exportación IFC guardada en Revit («PolyLive») | **Sí, sin código**: fija IFC2x3 CV 2.0 (o IFC4 Design Transfer View), espacios, cantidades base, coordenadas compartidas. Se documenta en la fase 1. |
+| Script Dynamo / pyRevit | Solo si hace falta automatizar la exportación; nunca formato propio. |
+| Add-in C# (API de Revit) que escriba `.polylive` | **Descartado por ahora**: proyecto .NET por versión de Revit y atado al esquema interno. Se reconsidera solo si el IFC pierde datos imprescindibles con archivos reales. |
+| Conversión en la nube (Autodesk APS) | Descartado: exige internet y cuenta; en obra no hay. |
+| web-ifc (WASM) | Descartado: Hermes no ejecuta WebAssembly. |
+
+IFC4 **Reference View** no sirve: exporta geometría teselada, sin eje ni capas, y no hay espesor
+fiable del muro.
+
+### 6.2 Modelo de datos (sin migración)
+
+- Cada objeto importado guarda en `properties_json`: `ifcGuid` (GlobalId de Revit), `origin: 'ifc'`
+  y el nombre o tipo de Revit. `ObjectProperties` es abierto: no cambia el esquema SQLite.
+- Lo creado en PolyLive no lleva `origin` (o `'polylive'`); su GUID sigue saliendo de su id
+  (`guid-generator.ts`), como hoy.
+- Niveles: cada `IfcBuildingStorey` → marcador `level` del proyecto (`project_markers`), con su cota.
+- Espacios: cada planta importada → un espacio (`project_spaces`), y cada `IfcSpace` → `Room`.
+
+### 6.3 Fases
+
+**Fase 1 — Importar y ver en el teléfono** (casi todo archivos nuevos)
+- `infrastructure/import/ifc/`: lector STEP (espejo de `step-writer.ts`), resolución de
+  referencias `#n`, unidades (`IfcSIUnit`, prefijos) y `IfcLocalPlacement` encadenado a 2D de planta.
+- Mapeo: `IfcBuildingStorey` → nivel · `IfcWall`/`IfcWallStandardCase` → `Wall` (eje por la
+  representación `Axis`, espesor por `IfcMaterialLayerSetUsage`; si no hay, desde el perfil
+  extruido) · `IfcDoor`/`IfcWindow` → vanos en su muro (vía `IfcRelVoidsElement` +
+  `IfcRelFillsElement`) · `IfcSpace` → `Room` · `IfcSlab` y columnas: fuera de la fase 1.
+- Lo que no se reconozca se cuenta y se informa («n elementos ignorados por tipo»); nunca se aborta
+  el archivo entero por un elemento.
+- Caso de uso `ImportIfcUseCase` en `application/` (el dominio no ve el parser); entrada por el
+  selector de archivos existente (`native/files`), con confirmación (resumen por tipo y nivel)
+  antes de escribir, en una transacción.
+- Georreferencia: si trae `IfcMapConversion`, se ofrece usarla; si no, coordenadas locales.
+- Tests jest con IFC de muestra reales del dueño (anonimizados) en `test/fixtures/ifc/`, más un
+  ida y vuelta: IFC exportado por PolyLive → importado → mismas geometrías (tolerancia en mm).
+
+**Fase 2 — Editar y levantar sobre lo importado**
+- Lo importado se edita con las herramientas actuales. Marca visual discreta de «importado» con los
+  tokens de `src/ui/design` (sin colores nuevos). Al editarlo conserva `ifcGuid`.
+
+**Fase 3 — Exportar solo lo creado en PolyLive** (toca código compartido: después de integrar la
+sesión de revisión)
+- Filtro por `origin` en los casos de uso de exportación IFC/DXF; los objetos importados se omiten.
+- **Pendiente de decisión**: un vano creado en PolyLive sobre un muro importado — (a) exportar el
+  vano suelto, (b) exportar también su muro anfitrión, (c) no exportarlo. Propuesta: (b).
+- Validación con `scripts/validate_exports.py` como hoy.
+
+**Más adelante (fuera de alcance):** informe de diferencias diseño ↔ levantado por `ifcGuid`, BCF
+para devolver observaciones a Revit, y el IFC como capa de referencia de solo lectura.
+
+### 6.4 Antes de empezar
+
+1. Uno o dos IFC reales de levantamientos (IFC2x3 CV 2.0), con al menos un muro compuesto, una
+   puerta y un espacio.
+2. La decisión de 6.3 (vanos en muros importados).
+3. La sesión de revisión integrada en `main`.
