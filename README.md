@@ -4,7 +4,7 @@ Monorepo de levantamientos BIM en campo. Contiene el motor activo en desarrollo
 (`app-bim-typescript`), un proyecto de referencia (`_LevON`) cuya esencia de
 motor 2D está guiando la refactorización actual, la bóveda de documentación
 viva (`_0bsidian`) y los informes narrativos del experimento
-Claude+Obsidian que originó el proyecto (`docs/`, `Claude outputs/`).
+Claude+Obsidian que originó el proyecto (`docs/`; las salidas originales en `docs/archivo/`).
 
 ## Estructura del repositorio
 
@@ -14,7 +14,7 @@ PolyLive/
 ├── _LevON/LevON/          ← referencia: proyecto Flutter/Dart (no se compila desde aquí)
 ├── _0bsidian/             ← bóveda Obsidian: fuente de verdad de la arquitectura de PolyLive
 ├── docs/                  ← informes del experimento (numerados 01–13)
-├── Claude outputs/        ← salidas originales del experimento, previas a docs/
+├── docs/archivo/          ← salidas originales del experimento (histórico, no se edita)
 └── setup-app-bim-vault.ps1
 ```
 
