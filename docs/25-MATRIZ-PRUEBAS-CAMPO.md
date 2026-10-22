@@ -17,6 +17,8 @@ Fecha: 2026-10-07 · App: dev client Expo SDK 57 con Metro (rama `feat/mvp-audit
 
 Hallazgos: **42** — corregidos 30 · no reproducibles 3 · por verificar en el equipo 7 · decisión pendiente 2 · abiertos P1 0 / P2 0 / P3 0.
 
+**Ronda 2 (2026-10-22):** los 7 «Verificar en equipo» quedan cerrados (3 corregidos, 4 no se reproducen) y entran 19 hallazgos nuevos (H-45 a H-63: el P1 y uno de los P2 corregidos, dos P2 a decisión). Estado actual y filas re-probadas en el § 6.
+
 Leyenda: ✅ OK · 🟡 Parcial · ❌ Falla · ⬜ No probado · ➖ No aplica. Prioridad: **P1** corrompe datos o bloquea, **P2** funciona mal, **P3** pulido.
 
 ### Qué NO se pudo probar (y por qué)
@@ -337,3 +339,91 @@ Nota: los ids H-04 y H-05 no se usaron (se descartaron al verificarlos).
 - Archivos exportados en la tableta (`/sdcard/PolyLive-QA/`) y validados en el PC: IFC del espacio (ifcopenshell, 15 geometrías), IFC del proyecto con 2 espacios (1 `IfcProject`, 8 muros, 2 `IfcSpace`), DXF (ezdxf, 11 capas), paquete `.polylive` (esquema 3), plano PDF, registro fotográfico PDF, acta de revisión PDF/CSV, CSV de áreas y de avance.
 - Entorno: Metro por `adb reverse` con un reenviador IPv4→IPv6 (Metro escucha solo en `::1` en este equipo).
 
+## 6. Ronda 2 (2026-10-22) · dev client Expo 57 en la TB370FU
+
+App: dev client `com.polylivebim.qa` (build debug local, `assembleDebug`) con Metro, rama `audit/estable-campo`. Equipo: Lenovo TB370FU, 1840 × 2944, **vertical a pantalla completa** (sin ventana angosta). Proyecto de prueba `QA2 Estructuras` (BIM002) y operador `QA`. Informe completo: `docs/26-INFORME-ESTABLE-CAMPO.md`.
+
+### 6.1 Los 7 «Verificar en equipo»
+
+| ID | Resultado ronda 2 | Evidencia |
+|---|---|---|
+| H-10 | ✅ Corregido y verificado | Se reproducía (dígitos de «Escala 1:» recortados); `paddingVertical: 0` en `ConfigDrawer`; captura tras recarga completa |
+| H-13 | ✅ No se reproduce | El ← del selector de Niveles termina por encima del gizmo |
+| H-19 | ✅ No se reproduce | Foto: tras el obturador y los permisos vuelve a la MISMA actividad (mismo registro `MainActivity`), sin reinicio |
+| H-25 | ✅ Corregido y verificado (era **alto**) | Causa: los callbacks de `Gesture.*` son worklets y cada uno tenía su copia de las variables `let`; el trazo se volvía paneo. Estado del gesto a `useRef` (como `PlanCanvas`); test `test/ui/gestureState.test.ts`; cercha de 2,41 m creada |
+| H-27 | ✅ Corregido y verificado | Casillas de Filtros/Capas dentro del panel; rótulos largos en dos líneas (`FabView`) |
+| H-34 | ✅ A pantalla completa | Todas las entradas del menú ☰ caben; la ventana angosta no se probó |
+| H-40 | ✅ No se reproduce | Con Filtros abierto, el modo cambia y el panel se cierra |
+
+### 6.2 Filas re-probadas (estado ronda 2)
+
+| Fila | Ronda 1 | Ronda 2 | Nota |
+|---|:-:|:-:|---|
+| A09 | ⬜ | ✅ | Proyecto con disciplina Estructuras; Editar a Instalaciones se guarda |
+| A10 | 🟡 | ✅ | Editar guarda; Eliminar pide confirmar y quita el proyecto (uno desechable) |
+| A12 / I09 / J11 | ✅ | ✅ | Importar `.polylive` con reemplazo: 19 filas, disciplina y amarre vuelven a los del paquete |
+| B06 | 🟡 | 🟡 | Galería, Cambiar de proyecto, Operador y Ajustes ✅; «Otros espacios» sin probar |
+| B07 | ❌ | ✅ | Con el volcado de accesibilidad (`--compressed`) el menú cerrado no expone entradas (H-06); desde H-53 ni se monta |
+| B14 | ✅ | ✅ | H-10 corregido |
+| B24 | ❌ | ✅ | H-13 |
+| C07 / C08 | ✅ | ✅ | Puerta (arco de giro) y ventana sobre muros del recinto |
+| C21 / J03 | ✅ / 🟡 | ✅ | Permiso de cámara y de ubicación al usarlos; FOT001 anclada; sin reinicio (H-19) |
+| E05 | ❌ | ✅ | H-25 |
+| E06 | 🟡 | 🟡 | Cercha ✅ (mismo gesto que cota, línea, viga y correa); el resto sin recorrer uno a uno |
+| E07 | ⬜ | ✅ | Foto anclada a la cara A del muro |
+| E10 / E11 | 🟡 / ❌ | ✅ | El alzado abre encuadrado; tras la cercha la vista se conserva |
+| F02 | 🟡 | ✅ | Origen Nacional (CTM12) y Oeste; Oeste-Oeste sin probar |
+| F05 | ⬜ | ✅ | Amarre por GPS (interior, ±13 m; la app avisa «impreciso»): N 1.833.058 / E 4.602.286 en CTM12 |
+| F06 | ⬜ | ✅ | 2 mojones por coordenadas colocados en los vértices: ajuste por mínimos cuadrados, **RMSE 0,002 m** |
+| F15 | 🟡 | ✅ | H-27 |
+| G04 | ⬜ | ✅ | Cambiar color, agregar actividad, quitar del catálogo (con confirmación) |
+| G09 | ⬜ | ✅ | Pincel sobre la cara A: 1,58 m² (15 % del soporte) |
+| G12 / I10 | ✅ / ❌ | ✅ | La carpeta se pide una vez; IFC del proyecto, plano, CSV, paquete, registro y PDF de avance la reutilizan (H-28) |
+| G13 | ⬜ | ✅ | PDF de avance revisado a ojo: planta, alzado pintado, resumen y detalle por soporte (10,18 m², 15,5 %) |
+| G14 | ❌ | ✅ | Reabrir el espacio abre en Levantamiento (H-29) |
+| H12 | ⬜ | ✅ | Nube en el alzado (modo Revisión) → Observación 1 |
+| I03 | 🟡 | ✅ | La pantalla muestra área neta 12,83 m² y al eje 13,93 m² (H-32) |
+| I05 | ✅ | 🟡 | Revisado a ojo: rótulo, escala gráfica y cuadro de áreas bien; **sin puertas ni ventanas** (H-54) |
+| I07 | ✅ | ✅ | Revisado a ojo: foto, código, fecha, autor, planta, GPS y sello SHA-256 «íntegra» |
+| I11 | 🟡 | ✅ | H-34 a pantalla completa |
+| J06 | ❌ | ✅ | Encabezados de Galería, Exportar, Ajustes y Operador visibles (H-35) |
+| J08 | ❌ | ✅ | Consola de Metro sin avisos de SkPath ni SafeAreaView (queda uno de la dependencia `@noble/hashes`) |
+| K13 / K15 | ⬜ | ✅ | Galería, Exportar, Ajustes y Operador legibles en Alto contraste y en Oscuro |
+| B03 | ⬜ | ⬜ | En el alzado ese lugar es «Volver a la planta»: queda para la prueba a mano |
+| J01 | 🟡 | ⬜ | Giro a horizontal: requiere cambiar el ajuste del sistema (pendiente de autorización) o girar a mano |
+
+No re-probadas en esta ronda (corregidas con test en la ronda 1): B21, B22, C05, D02, D07, D13, D14, D17, D19, E04, E09, E14, F04, J02, J07, K01, K05.
+
+### 6.3 Hallazgos nuevos (ronda 2)
+
+| ID | Prio | Ámbito | Hallazgo | Estado | Archivo |
+|---|:-:|---|---|---|---|
+| H-45 | P2 | Paquete | Importar un `.polylive` cuyo código BIM ya usa OTRO proyecto deja dos proyectos con el mismo código (la unicidad solo se valida al crear y editar) | **Decisión**: renombrar al importar (recomendado) o rechazar | `infrastructure/package/projectPackage.ts` |
+| H-46 | P2 | Diagnóstico | Los fallos del editor, alzado y pantallas solo mostraban un aviso: «Enviar diagnóstico» no traía la causa | Corregido (`reportFailure`), test | `shared/diagnostics.ts` |
+| H-47 | P3 | Permisos | `SYSTEM_ALERT_WINDOW` en el manifiesto de release | Corregido (`blockedPermissions`); la variante debug lo sigue declarando | `app.json` |
+| H-48 | P3 | Textos | «este teléfono» en importar y en el permiso de cámara | Corregido | `projectPackageActions.ts`, `CameraCaptureView.tsx` |
+| H-49 | P3 | Código | knip volvía a reportar 14 exportaciones sin uso | Corregido | varios |
+| H-50 | P3 | Tests | Jest avisa a veces de un worker que no cierra; con `--detectOpenHandles` no aparece | Abierto (intermitente) | — |
+| H-51 | P3 | Rendimiento | Los `Picture` de Skia del lienzo no se liberan con `dispose` | Abierto: medir memoria en sesiones largas antes de tocarlo | `ui/canvas/PlanCanvas.tsx` |
+| H-52 | P3 | Persistencia | Las transacciones de expo-sqlite no son exclusivas: dos escrituras simultáneas chocarían; hoy el editor las serializa con `busy` | Abierto (sin reproducción) | `native/sqlite/ExpoSQLiteDatabase.ts` |
+| H-53 | **P1** | Menú ☰ | Tras el selector de carpetas el menú quedaba dibujado abierto sin responder y los toques atravesaban al lienzo | Corregido: el cajón cerrado se desmonta; verificado en la tableta | `ui/primitives/SideDrawer.tsx` |
+| H-54 | P2 | PDF | El plano PDF y el PDF de avance no dibujan puertas, ventanas ni vanos (el IFC y el DXF sí) | **Decisión**: dibujar los vanos en `planSvg` (recomendado) | `application/report/planSvg.ts` |
+| H-55 | P3 | Textos | «celular» en el GPS de Topografía | Corregido | `GpsCaptureSheet.tsx`, `TopographySetup.tsx` |
+| H-56 | P3 | Operador | Barra de estado ilegible (iconos claros sobre blanco) y el campo «Nuevo operador» queda bajo la barra de gestos | Abierto | `OperatorSelectorScreen.tsx` |
+| H-57 | P3 | Ajustes | Fecha de las copias en formato inglés («10/22/2026, 11:50:01 AM») y nivel por defecto como id interno («level-1») | Abierto | `SettingsScreen.tsx` |
+| H-58 | P3 | Fotos | El rótulo «FOT00n» sobre el punto del alzado casi no se lee; en planta sale espaciado («FO T001») | Abierto | `elevationRenderer.ts`, `planRenderer.ts` |
+| H-59 | P3 | Lienzo | Al reabrir un espacio la vista no se encuadra al dibujo | Abierto | `application/editor/EditorCore.ts` |
+| H-60 | P3 | Tema oscuro | «Guardar cambios» deshabilitado (Operador) casi invisible | Abierto | `OperatorProfileScreen.tsx` |
+| H-61 | P3 | FAB | El encabezado «ARQUITECTÓNICO» se parte en dos líneas (ya visto en docs/21) | Abierto | `FabCreate.tsx` |
+| H-62 | P3 | Accesibilidad | El obturador de la cámara no tiene etiqueta | Abierto | `CameraCaptureView.tsx` |
+| H-63 | P3 | PDF | El registro fotográfico rotula «ESCALA gráfica (ver barra)» sin barra | Abierto | `application/report/deliverables.ts` |
+
+H-14 (rótulos del FAB): el rótulo «Foto» de Auditoría no activó la herramienta y el círculo sí; los rótulos «Puerta» y «Arrastre libre» sí respondieron. Queda **intermitente**, para la prueba a mano.
+
+Decisiones de producto abiertas: H-15 (encadenar muros), H-18 (cota alineada u ortogonal), H-45 y H-54. Opciones y recomendación en docs/26 § 5.
+
+### 6.4 Datos de la prueba (ronda 2)
+
+- Exportados a `/sdcard/PolyLive-QA/` y revisados en el PC: 3 IFC (espacio ×2 y proyecto) abiertos con ifcopenshell (IFC4: 4 `IfcWall`, 1 `IfcDoor`, 1 `IfcWindow`, 1 `IfcSpace`, 2 `IfcOpeningElement`), paquete `.polylive` (esquema 3, 7 objetos), CSV de áreas, plano PDF, registro fotográfico PDF y PDF de avance (los tres PDF leídos página por página).
+- Metro escucha en IPv4 con `--lan`: ya no hace falta el reenviador de la ronda 1.
+- En el dev client, dos «R» seguidas recargan la app: el texto por `adb shell input text` no debe llevar dos «r» seguidas rápidas (se tecleó por partes).

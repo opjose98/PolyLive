@@ -32,3 +32,7 @@ Código: `ui/canvas/PlanCanvas.tsx`, `ui/canvas/liveOverlay.ts`, `ui/canvas/Elev
   `Picture` se graba más grande que la pantalla para que al panear no aparezcan bordes vacíos.
 - El adaptador Skia no reconvierte el color en cada trazo (caché de colores y del estado del pincel).
 - El toque no espera al doble toque (se reconocen en paralelo).
+- El estado de un gesto (dibujando, arrastrando, pinch…) va en un **objeto** (`useRef`), nunca en variables `let`:
+  los callbacks de `Gesture.*` se convierten en worklets y cada uno recibe su propia copia del cierre. En el alzado
+  `onStart` marcaba el trazo y `onChange` no lo veía: la cercha se volvía paneo (H-25, docs/25 § 6).
+  Lo vigila `test/ui/gestureState.test.ts`.
