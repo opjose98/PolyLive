@@ -206,9 +206,3 @@ function isPolygonSelfIntersecting(vertices: Point2D[]): boolean {
 
   return false;
 }
-
-/**
- * Determina si dos segmentos (p1→p2) y (p3→p4) se cruzan propiamente.
- * No cuenta intersecciones en los extremos (T-joints, esquinas).
- */
-/** Producto cruzado 2D: (b-a) × (c-a). */

@@ -138,9 +138,10 @@ export function isPointInPolygon(point: Point2D, vertices: readonly Point2D[]): 
 /** Aproxima un arco como polilínea. Reexportado para tener la API poligonal junta. */
 
 // ---------------------------------------------------------------------------
-// Internos
+// Internos (averageOfVertices también lo usan DXF y el dibujo técnico para ubicar rótulos)
 // ---------------------------------------------------------------------------
 
+/** Promedio de los vértices: punto de rótulo y respaldo del centroide en polígonos degenerados. */
 export function averageOfVertices(vertices: readonly Point2D[]): Point2D {
   const n = vertices.length;
   let sx = 0;

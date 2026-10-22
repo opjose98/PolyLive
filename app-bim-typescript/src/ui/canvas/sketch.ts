@@ -58,7 +58,6 @@ export function mergeSketches(...sources: readonly SketchSource[]): SketchSource
   };
 }
 
-/** #RRGGBB + opacidad → rgba(). */
 /** Trazo de marcador de revisión (px), independiente del zoom. */
 const MARKUP_PX = 2.5;
 
