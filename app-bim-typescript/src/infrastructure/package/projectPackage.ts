@@ -197,8 +197,11 @@ export async function importProjectPackage(db: IDatabase, pkg: ProjectPackage): 
         else if (spaces.length) await db.run(`DELETE FROM ${spec.table} WHERE ${spec.where} IN (${spaces.map(() => '?').join(',')})`, [...spaces]);
       }
     }
+    // Paquetes de antes de la v4: niveles y fases eran del proyecto; cada espacio recibe una copia.
+    const spaceIds = (pkg.tables.project_spaces ?? []).map((s) => s.room_id);
+    const perSpace = (rows: readonly Row[]) => rows.flatMap((r) => ('space_id' in r ? [r] : spaceIds.map((space_id) => ({ ...r, space_id }))));
     for (const spec of TABLES) {
-      const list = pkg.tables[spec.table] ?? [];
+      const list = spec.table === 'project_markers' ? perSpace(pkg.tables[spec.table] ?? []) : pkg.tables[spec.table] ?? [];
       if (!list.length) continue;
       const known = new Set((await db.all<{ name: string }>(`PRAGMA table_info(${spec.table})`)).map((c) => c.name));
       for (const raw of list) {

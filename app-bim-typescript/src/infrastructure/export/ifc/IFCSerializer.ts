@@ -45,6 +45,9 @@ export type SpaceContent = Pick<
 > & {
   /** Ubicación del espacio en el proyecto (amarre): x, y (m, Y arriba) y giro (rad). */
   readonly placement?: { readonly x: number; readonly y: number; readonly rotation: number };
+  /** Niveles y fases del espacio (son de cada espacio); sin niveles, un único «Nivel 0». */
+  readonly levels?: readonly IfcLevelInput[];
+  readonly phaseNames?: ReadonlyMap<string, string>;
 };
 
 /** El proyecto: datos comunes (niveles, fases, georreferencia) y sus espacios. */
@@ -113,9 +116,14 @@ export class IFCSerializer {
     // ------------------------------------------------------------------
     // 3. Contexto, proyecto, sitio, edificio, pisos
     // ------------------------------------------------------------------
-    const levels = [...(input.levels?.length ? input.levels : [DEFAULT_LEVEL])].sort((a, b) => a.elevation - b.elevation);
-    const baseLevel = levels.find((l) => l.isBase) ?? levels.find((l) => l.elevation === 0) ?? levels[0];
-    const elevations: LevelElevations = new Map(levels.map((l) => [l.id, l.elevation] as [string, number]));
+    // Los niveles son de cada espacio: el IFC lleva un piso por COTA distinta, y cada
+    // espacio cuelga sus elementos del piso de la cota de su nivel.
+    const levelsOf = (sp: SpaceContent) =>
+      [...(sp.levels?.length ? sp.levels : [DEFAULT_LEVEL])].sort((a, b) => a.elevation - b.elevation);
+    const baseOf = (lv: readonly IfcLevelInput[]) => lv.find((l) => l.isBase) ?? lv.find((l) => l.elevation === 0) ?? lv[0];
+    let levels = levelsOf(valid[0]);
+    let baseLevel = baseOf(levels);
+    let elevations: LevelElevations = new Map();
 
     const context = w.writeContext(input.author ?? '');
     const units = w.writeUnits();
@@ -135,16 +143,22 @@ export class IFCSerializer {
       `IFCBUILDING('${stableGuid(`building:${input.projectKey ?? projectName}`)}',${oh},${stepString(input.buildingName ?? 'Edificio')},$,$,${ref(buildingPlacement)},$,$,.ELEMENT.,$,$,$)`,
     );
 
-    const storeys = new Map<string, Storey>();
-    for (const level of levels) {
+    const storeys = new Map<number, Storey>();
+    const guidSources = new Set<string>();
+    for (const level of valid.flatMap(levelsOf).sort((a, b) => a.elevation - b.elevation)) {
+      if (storeys.has(level.elevation)) continue;
+      // El GUID sale del id del nivel; dos espacios pueden compartir id con cotas distintas.
+      let source = `storey:${level.id}`;
+      if (guidSources.has(source)) source = `storey:${level.id}@${level.elevation}`;
+      guidSources.add(source);
       const placement = w.placementAt(buildingPlacement, 0, 0, level.elevation);
       const entity = w.add(
-        `IFCBUILDINGSTOREY('${stableGuid(`storey:${level.id}`)}',${oh},${stepString(level.name)},$,$,${ref(placement)},$,$,.ELEMENT.,${stepReal(level.elevation)})`,
+        `IFCBUILDINGSTOREY('${stableGuid(source)}',${oh},${stepString(level.name)},$,$,${ref(placement)},$,$,.ELEMENT.,${stepReal(level.elevation)})`,
       );
-      storeys.set(level.id, { level, entity, placement, elements: [] });
+      storeys.set(level.elevation, { level, entity, placement, elements: [] });
     }
-    const baseStorey = storeys.get(baseLevel.id)!;
-    const storeyOf = (levelId: string) => storeys.get(levelId) ?? baseStorey;
+    let baseStorey = storeys.get(baseLevel.elevation)!;
+    const storeyOf = (levelId: string) => storeys.get(elevations.get(levelId) ?? NaN) ?? baseStorey;
     products += 3 + storeys.size;
 
     w.aggregates(`project:${project}`, project, [site]);
@@ -154,11 +168,17 @@ export class IFCSerializer {
     const levelName = (id: string | null) => (id === null ? 'Unconnected' : levels.find((l) => l.id === id)?.name ?? baseLevel.name);
     const phaseName = (o: RevitObjectBase) => {
       const id = o.properties?.[PHASE_PROP];
-      return typeof id === 'string' ? input.phaseNames?.get(id) ?? '' : '';
+      return typeof id === 'string' ? phaseNames?.get(id) ?? '' : '';
     };
+    let phaseNames: ReadonlyMap<string, string> | undefined;
 
     let spacesWritten = 0;
     for (const sp of valid) {
+      levels = levelsOf(sp);
+      baseLevel = baseOf(levels);
+      elevations = new Map(levels.map((l) => [l.id, l.elevation] as [string, number]));
+      baseStorey = storeys.get(baseLevel.elevation)!;
+      phaseNames = sp.phaseNames;
       // IFC usa Y hacia arriba (norte); el modelo, Y hacia abajo (ver handedness.ts).
       const walls = sp.walls.filter((wl) => !wl.is_deleted).map(wallForExport);
       const doors = sp.doors.filter((d) => !d.is_deleted);

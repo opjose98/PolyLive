@@ -61,6 +61,20 @@ describe('IFCSerializer.serializeProject', () => {
     expect(lintIfc(r.content)).toEqual([]);
   });
 
+  test('niveles por espacio: un piso por cota distinta y GUIDs únicos (docs/23 § 7)', async () => {
+    const lv = (top: number) => [
+      { id: 'p:level:base', name: 'Piso', elevation: 0, isBase: true },
+      { id: 'n1', name: 'Cubierta', elevation: top },
+    ];
+    const r = await new IFCSerializer().serializeProject({
+      spaces: [{ ...space('a'), levels: lv(3.5) }, { ...space('b', { placement: { x: 10, y: 0, rotation: 0 } }), levels: lv(3.24) }],
+    });
+    const storeys = ofType(r.content, 'IFCBUILDINGSTOREY');
+    expect(storeys.map((st) => st.args[9]).sort()).toEqual(['0.', '3.24', '3.5']);
+    expect(new Set(storeys.map((st) => st.args[0])).size).toBe(3);
+    expect(lintIfc(r.content)).toEqual([]);
+  });
+
   test('el espacio con ubicación queda desplazado en el proyecto', async () => {
     const r = await new IFCSerializer().serializeProject({
       spaces: [space('a'), space('b', { placement: { x: 10, y: 0, rotation: 0 } })],

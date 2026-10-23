@@ -314,6 +314,7 @@ export function SurveyScreen({
   const { loaded: markersLoaded, view: levelInfo, levelHandlers, phaseHandlers, projectLevels } = useProjectLevels({
     services,
     projectId,
+    spaceId: roomId as string,
     editor,
   });
 

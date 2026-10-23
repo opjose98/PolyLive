@@ -76,6 +76,24 @@ describe('Paquete de proyecto .polylive', () => {
     expect((await b.services.drafts.list(R as string)).map((d) => d.id)).toEqual(['d1']);
   });
 
+  it('los niveles viajan por espacio, y un paquete de antes de la v4 los copia a cada espacio', async () => {
+    const { a, project, R } = await seed();
+    const scope = { projectId: project.id as string, spaceId: R as string };
+    await a.services.markers.add(scope, 'level', 'Cubierta');
+    const pkg = unzipPackage(zipPackage(await readProjectPackage(a.db, project.id as string)));
+    const b = await openDb();
+    opened.push(b);
+    await importProjectPackage(b.db, pkg);
+    expect((await b.services.markers.list(scope, 'level')).map((m) => m.name)).toEqual(['Nivel 0', 'Cubierta 1']);
+
+    // Paquete viejo: filas de project_markers sin space_id.
+    const old = { ...pkg, tables: { ...pkg.tables, project_markers: pkg.tables.project_markers.map(({ space_id: _s, ...r }) => r) } };
+    const c = await openDb();
+    opened.push(c);
+    await importProjectPackage(c.db, old);
+    expect((await c.services.markers.list(scope, 'level')).map((m) => m.name)).toEqual(['Nivel 0', 'Cubierta 1']);
+  });
+
   it('importar sobre el mismo proyecto lo reemplaza (no duplica)', async () => {
     const { a, project, R } = await seed();
     const pkg = unzipPackage(zipPackage(await readProjectPackage(a.db, project.id as string)));

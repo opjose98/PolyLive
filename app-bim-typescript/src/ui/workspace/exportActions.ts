@@ -119,8 +119,8 @@ export async function exportRevitIfc(services: AppServices, ctx: ExportContext):
       ? mapConversionFor(geo, space, workingCrs(geo.crs), crsDef(workingCrs(geo.crs)).name)
       : undefined;
     const [lv, ph, elevs, zones] = await Promise.all([
-      ctx.projectId ? services.markers.list(ctx.projectId, 'level') : none,
-      ctx.projectId ? services.markers.list(ctx.projectId, 'phase') : none,
+      ctx.projectId ? services.markers.list({ projectId: ctx.projectId, spaceId: space }, 'level') : none,
+      ctx.projectId ? services.markers.list({ projectId: ctx.projectId, spaceId: space }, 'phase') : none,
       services.elevations.listElevations(ctx.roomId),
       services.zones.list(ctx.roomId as string),
     ]);
@@ -160,7 +160,9 @@ export async function exportPlanDxf(services: AppServices, ctx: ExportContext): 
     // Las elevaciones van explícitas: sin ellas el DXF saldría sin huecos.
     const elevations = await services.elevations.listElevations(ctx.roomId);
     // La planta del DXF es la del nivel base: sus recintos (los de otros niveles se superpondrían).
-    const base = ctx.projectId ? (await services.markers.list(ctx.projectId, 'level')).find((m) => m.isBase)?.id : undefined;
+    const base = ctx.projectId
+      ? (await services.markers.list({ projectId: ctx.projectId, spaceId: ctx.roomId as string }, 'level')).find((m) => m.isBase)?.id
+      : undefined;
     const allZones = await services.zones.list(ctx.roomId as string);
     const zones = dxfZones(allZones, base ?? '');
     // Dibujo técnico del mismo nivel (el de planta; lo de alzado no va al plano de planta).
@@ -227,26 +229,34 @@ export async function exportProjectIfc(
     const mapConversion = isGeoreferenced(geo)
       ? mapConversionFor(geo, PROJECT_ORIGIN, workingCrs(geo.crs), crsDef(workingCrs(geo.crs)).name)
       : undefined;
-    const [lv, ph, details] = await Promise.all([
-      services.markers.list(ctx.projectId, 'level'),
-      services.markers.list(ctx.projectId, 'phase'),
-      services.projects.listSpaceDetails(toProjectId(ctx.projectId)),
-    ]);
+    const details = await services.projects.listSpaceDetails(toProjectId(ctx.projectId));
     const spaces = [];
     let memberCount = 0;
     for (const d of details) {
       if (!d.room) continue;
       const roomId = d.space.roomId as RoomId;
       const spaceCtx: ExportContext = { ...fileCtx, roomId, spaceName: d.space.name };
-      const [elevs, zones, drafts] = await Promise.all([
+      const scope = { projectId: ctx.projectId, spaceId: roomId as string };
+      const [elevs, zones, drafts, lv, ph] = await Promise.all([
         services.elevations.listElevations(roomId),
         services.zones.list(d.space.roomId as string),
         loadDrafts(services, spaceCtx),
+        services.markers.list(scope, 'level'),
+        services.markers.list(scope, 'phase'),
       ]);
       const { sills, bareOpenings } = elevationOpenings(elevs);
       const members = draftIfcMembers(drafts);
       memberCount += members.length;
-      spaces.push({ roomId, placement: geo?.placements[d.space.roomId as string], zones: ifcZones(zones), openingSills: sills, bareOpenings, members });
+      spaces.push({
+        roomId,
+        placement: geo?.placements[d.space.roomId as string],
+        zones: ifcZones(zones),
+        openingSills: sills,
+        bareOpenings,
+        members,
+        levels: lv.map((m) => ({ id: m.id, name: m.name, elevation: m.value, isBase: m.isBase })),
+        phaseNames: new Map(ph.map((m) => [m.id, m.name] as [string, string])),
+      });
     }
     if (!spaces.length) {
       const message = 'El proyecto no tiene espacios con datos para exportar.';
@@ -254,8 +264,6 @@ export async function exportProjectIfc(
       return { ok: false, message };
     }
     const out = await services.useCases.exportProjectIfc.execute({
-      levels: lv.map((m) => ({ id: m.id, name: m.name, elevation: m.value, isBase: m.isBase })),
-      phaseNames: new Map(ph.map((m) => [m.id, m.name] as [string, string])),
       projectName: ctx.projectName,
       projectKey: ctx.projectId,
       author: ctx.author,
@@ -277,7 +285,7 @@ export async function exportProjectIfc(
       });
     }
     const detail =
-      `${out.spaces} espacio(s), ${lv.length || 1} nivel(es)` +
+      `${out.spaces} espacio(s), ${new Set(spaces.flatMap((sp) => sp.levels.map((l) => l.elevation))).size || 1} cota(s) de nivel` +
       (unplaced ? `, ${unplaced} sin ubicar` : '') +
       summarize(memberCount, 'barra de dibujo', 'barras de dibujo') +
       (mapConversion ? ', georreferenciado' : '') +

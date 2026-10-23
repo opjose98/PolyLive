@@ -70,6 +70,38 @@ export const MIGRATIONS: readonly Migration[] = [
       }
     },
   },
+  {
+    version: 4,
+    name: 'Niveles y fases por espacio (docs/23 § 7)',
+    async up(db) {
+      if (await hasColumn(db, 'project_markers', 'space_id')) return;
+      // Cada espacio recibe una copia con los MISMOS ids: los objetos ya guardados siguen
+      // apuntando a su nivel y su fase sin reescribir ni una fila. Por eso la clave pasa a
+      // ser (space_id, id): el id solo es único dentro de su espacio.
+      await db.exec(`
+        CREATE TABLE project_markers_v4 (
+          id           TEXT NOT NULL,
+          project_id   TEXT NOT NULL,
+          space_id     TEXT NOT NULL,
+          kind         TEXT NOT NULL CHECK(kind IN ('level', 'phase')),
+          name         TEXT NOT NULL,
+          value        REAL NOT NULL DEFAULT 0,
+          is_base      INTEGER NOT NULL DEFAULT 0 CHECK(is_base IN (0, 1)),
+          is_deleted   INTEGER NOT NULL DEFAULT 0 CHECK(is_deleted IN (0, 1)),
+          created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
+          PRIMARY KEY (space_id, id)
+        )`);
+      await db.exec(`
+        INSERT OR IGNORE INTO project_markers_v4
+          (id, project_id, space_id, kind, name, value, is_base, is_deleted, created_at, updated_at)
+        SELECT m.id, m.project_id, s.room_id, m.kind, m.name, m.value, m.is_base, m.is_deleted, m.created_at, m.updated_at
+        FROM project_markers m JOIN project_spaces s ON s.project_id = m.project_id`);
+      await db.exec(`DROP TABLE project_markers`);
+      await db.exec(`ALTER TABLE project_markers_v4 RENAME TO project_markers`);
+      await db.exec(`CREATE INDEX IF NOT EXISTS idx_project_markers_space ON project_markers(space_id, kind) WHERE is_deleted = 0`);
+    },
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
