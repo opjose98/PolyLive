@@ -17,7 +17,7 @@ Fecha: 2026-10-07 · App: dev client Expo SDK 57 con Metro (rama `feat/mvp-audit
 
 Hallazgos: **42** — corregidos 30 · no reproducibles 3 · por verificar en el equipo 7 · decisión pendiente 2 · abiertos P1 0 / P2 0 / P3 0.
 
-**Ronda 2 (2026-10-22):** los 7 «Verificar en equipo» quedan cerrados (3 corregidos, 4 no se reproducen) y entran 19 hallazgos nuevos (H-45 a H-63: el P1 y uno de los P2 corregidos, dos P2 a decisión). Estado actual y filas re-probadas en el § 6.
+**Ronda 2 (2026-10-22):** los 7 «Verificar en equipo» quedan cerrados (3 corregidos, 4 no se reproducen) y entran 24 hallazgos nuevos (H-45 a H-68): los 4 P1 (H-52, H-53, H-64, H-65) corregidos y verificados; P2 a decisión: H-45, H-54, H-67; P2 abierto: H-66. Estado actual y filas re-probadas en el § 6.
 
 Leyenda: ✅ OK · 🟡 Parcial · ❌ Falla · ⬜ No probado · ➖ No aplica. Prioridad: **P1** corrompe datos o bloquea, **P2** funciona mal, **P3** pulido.
 
@@ -405,7 +405,7 @@ No re-probadas en esta ronda (corregidas con test en la ronda 1): B21, B22, C05,
 | H-49 | P3 | Código | knip volvía a reportar 14 exportaciones sin uso | Corregido | varios |
 | H-50 | P3 | Tests | Jest avisa a veces de un worker que no cierra; con `--detectOpenHandles` no aparece | Abierto (intermitente) | — |
 | H-51 | P3 | Rendimiento | Los `Picture` de Skia del lienzo no se liberan con `dispose` | Abierto: medir memoria en sesiones largas antes de tocarlo | `ui/canvas/PlanCanvas.tsx` |
-| H-52 | P3 | Persistencia | Las transacciones de expo-sqlite no son exclusivas: dos escrituras simultáneas chocarían; hoy el editor las serializa con `busy` | Abierto (sin reproducción) | `native/sqlite/ExpoSQLiteDatabase.ts` |
+| H-52 | **P1** | Persistencia | Las transacciones de expo-sqlite no eran exclusivas: un BEGIN durante otra transacción fallaba y su ROLLBACK deshacía la primera (visto en la tableta: «cannot rollback - no transaction is active» al reabrir) | Corregido: transacciones en cola, test | `native/sqlite/ExpoSQLiteDatabase.ts` |
 | H-53 | **P1** | Menú ☰ | Tras el selector de carpetas el menú quedaba dibujado abierto sin responder y los toques atravesaban al lienzo | Corregido: el cajón cerrado se desmonta; verificado en la tableta | `ui/primitives/SideDrawer.tsx` |
 | H-54 | P2 | PDF | El plano PDF y el PDF de avance no dibujan puertas, ventanas ni vanos (el IFC y el DXF sí) | **Decisión**: dibujar los vanos en `planSvg` (recomendado) | `application/report/planSvg.ts` |
 | H-55 | P3 | Textos | «celular» en el GPS de Topografía | Corregido | `GpsCaptureSheet.tsx`, `TopographySetup.tsx` |
@@ -417,10 +417,15 @@ No re-probadas en esta ronda (corregidas con test en la ronda 1): B21, B22, C05,
 | H-61 | P3 | FAB | El encabezado «ARQUITECTÓNICO» se parte en dos líneas (ya visto en docs/21) | Abierto | `FabCreate.tsx` |
 | H-62 | P3 | Accesibilidad | El obturador de la cámara no tiene etiqueta | Abierto | `CameraCaptureView.tsx` |
 | H-63 | P3 | PDF | El registro fotográfico rotula «ESCALA gráfica (ver barra)» sin barra | Abierto | `application/report/deliverables.ts` |
+| H-64 | **P1** | Topología | Un muro colgante (p. ej. el lado abierto de una bodega) impedía cerrar la cara exterior y se descartaba como «exterior» el recinto más grande: el aula desaparecía | Corregido: se podan los filamentos antes de buscar caras; tests; verificado en la tableta | `domain/topology/TopologyGraph.ts` |
+| H-65 | **P1** | Campos | Lo tecleado en 14 campos de texto (nombre, uso y notas del recinto, comentario de la observación, nombre del muro, corte, actividad, dibujo, alzado) no se guardaba: el borrador volvía como `value` con retraso y se daba por confirmado | Corregido: campos no controlados; `commitTracker` con test; verificado en la tableta | `ui/components/fields.tsx`, `ui/primitives/CommitTextInput.tsx` |
+| H-66 | P2 | Puertas | No se puede invertir el sentido de apertura (lado ni mano) de una puerta | Abierto: propuesta en docs/26 § 8 | `PropertiesPanel.tsx`, `door.ts` |
+| H-67 | P2 | Medida | Al aplicar una medida, las uniones en T conservan su posición RELATIVA sobre el muro anfitrión: si el anfitrión se alarga por el otro extremo, el tabique se inclina (cocina NARG29 quedó 9 cm torcida) | **Decisión**: al medir, conservar la posición absoluta de la T (recomendado) | `domain/topology/joints.ts` (`followTees`) |
+| H-68 | P3 | PDF | En el plano PDF los rótulos de recintos pequeños desbordan el recinto y el marco | Abierto | `application/report/planSvg.ts` |
 
 H-14 (rótulos del FAB): el rótulo «Foto» de Auditoría no activó la herramienta y el círculo sí; los rótulos «Puerta» y «Arrastre libre» sí respondieron. Queda **intermitente**, para la prueba a mano.
 
-Decisiones de producto abiertas: H-15 (encadenar muros), H-18 (cota alineada u ortogonal), H-45 y H-54. Opciones y recomendación en docs/26 § 5.
+Decisiones de producto abiertas: H-15 (encadenar muros), H-18 (cota alineada u ortogonal), H-45, H-54 y H-67. Opciones y recomendación en docs/26 § 5. H-64 a H-68 salieron de levantar un plano real (NARG29 · BRIS · B1) en la tableta horizontal: docs/26 § 8.
 
 ### 6.4 Datos de la prueba (ronda 2)
 
