@@ -98,10 +98,11 @@ Detalle fila por fila en `docs/25` § 6.
 | H-45 | Importar un paquete cuyo código BIM ya usa otro proyecto | (a) dejarlo duplicado, como hoy · (b) renombrar el importado (BIM002 → BIM002-2) y avisar · (c) rechazar la importación | **(b)**: no pierde datos y mantiene la unicidad del código |
 | H-54 | Puertas, ventanas y vanos en el plano PDF y en el PDF de avance | (a) como hoy, sin vanos · (b) dibujar los vanos (hueco y arco de puerta) en `planSvg` | **(b)**: el plano entregable debe coincidir con el IFC y el DXF (en NARG29 faltan 14 vanos) |
 | H-67 | Al medir, ¿la T de un tabique sigue la posición relativa o la absoluta sobre el muro que se alarga? | (a) relativa, como hoy (el tabique se inclina) · (b) absoluta al medir, relativa al arrastrar · (c) absoluta siempre | **(b)**: medir no debe torcer muros ortogonales; arrastrar a mano conserva el comportamiento actual |
+| H-70 | ¿Los vanos sin carpintería salen en el IFC? | (a) no, como hoy (solo viven en el alzado) · (b) `IfcOpeningElement` sin relleno, recortando el muro · (c) además, una `IfcDoor` «vano» para que Revit lo liste | **(b)**: el hueco existe en obra y en Revit; sin relleno no inventa una carpintería |
 
 ## 6. Hallazgos abiertos
 
-P1: ninguno · P2: H-45, H-54 y H-67 (decisión), H-66 (sentido de apertura de puertas) · P3: H-50, H-51, H-52, H-56 a H-63, H-68, y H-14 intermitente (lista en `docs/25`
+P1: ninguno · P2: H-45, H-54, H-67 y H-70 (decisión), H-66 (sentido de apertura de puertas) · P3: H-50, H-51, H-52, H-56 a H-63, H-68, H-71 a H-73, y H-14 intermitente (lista en `docs/25`
 § 6.3).
 
 ## 7. Qué está instalado y lista para tu prueba en campo
@@ -174,6 +175,38 @@ Plano: `NARG29-BRIS-B1-ARQ-A1 01-04-V02.1.pdf` (aula, cocina, bodega abierta, do
 Notas de método: en el dev client dos «R» seguidas recargan la app y la burbuja «Tools» del dev client intercepta
 toques en el borde (no existen en el APK de producción). Los toques que «se perdían» al principio eran del script de
 prueba (adb consumía la entrada del bucle), no de la app.
+
+## 9. Tres planos más: NARG29 · SUMB, MARA y MACO
+
+Cada sede en su proyecto (BIM004 «NARG29 SUMB», BIM005 «NARG29 MARA», BIM006 «NARG29 MACO»), levantada desde su
+PDF de arquitectura, exportada a `/sdcard/PolyLive-QA/` y abierta con ifcopenshell en el PC.
+
+| Sede | Tableta | Muros | Recintos (neto) | Puertas · ventanas | IFC |
+|---|---|---|---|---|---|
+| SUMB · B1 Aula | vertical | 4 (5 cm) | Aula 62,55 m² (interior 9,00 × 6,95 medido con láser) | 1 · 6 | válido |
+| MARA · B1 Primer piso | vertical | 10 | Aulas 89,37 · Comedor y cocina 39,09 · Batería sanitaria 6,57 | 5 · 11 | válido |
+| MACO · B1 Primer piso | horizontal | 11 | Aula 42,27 · Comedor 13,96 · Cocina 9,11 · Dormitorio 8,08 · Batería sanitaria 5,01 | 5 · 7 (+1 vano) | válido |
+
+Anchos y altos de puertas y ventanas salen en el IFC tal cual la tabla de carpintería de cada plano (MACO: P1
+0,80 × 2,23, P3 0,97 × 2,20, V1/V5 1,98–1,99 × 0,77, V2 1,89 × 0,20, V4 1,43 × 0,81). La zonificación de SUMB
+(64,19 m²) se mide a cara exterior; PolyLive da el área neta interior.
+
+**Un P1 nuevo, corregido (H-69):** en MACO el baño cuelga bajo el muro sur, y el muro sur se trazó después de los
+muros del baño. El grafo partía un muro cuando OTRO terminaba en su interior, pero no cuando el muro nuevo pasaba
+por extremos ya existentes: el baño no salía como recinto. Ahora el muro nuevo se parte también en esos nudos (dos
+tests nuevos); en la tableta el baño apareció al recargar. En MARA el tabique suelto entre aulas confirmó H-64 en un
+segundo plano: el recinto de aulas no se pierde.
+
+**Lo que confirman los tres planos** (además de la tabla del § 8):
+
+- Las fricciones 1, 2, 6 y 13 del § 8 se repiten en cada sede: dos toques por muro, «Aula» se escribe a mano, cada
+  vano nace a 0,90 / 1,20 y hay que corregirlo uno a uno, y los muros nacen a 2,80 cuando los planos dicen 2,22.
+- «Vano» existe y separa bien cocina y comedor sin unir los recintos, pero no llega al IFC (decisión H-70).
+- Ajustar la «Posición en el muro» tras cambiar el ancho es habitual: el vano crece desde su borde inicial, no desde
+  el centro donde se tocó. Propuesta: crecer desde el centro al cambiar el ancho.
+- Con la herramienta Muro, el borde izquierdo del lienzo no recibe toques en vertical (H-72); con vanos juntos, la
+  pulsación larga abre el vecino o el muro (H-73).
+- Re-exportar el CSV con el mismo nombre deja un archivo sin extensión `.csv` (H-71).
 
 ## Nota del build release
 
