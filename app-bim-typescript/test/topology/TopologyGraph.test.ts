@@ -6,6 +6,7 @@
 import { meters, Point2D } from '../../src/domain/geometry/types';
 import { arcShape } from '../../src/domain/geometry/shapes';
 import { TopologyGraph } from '../../src/domain/topology/TopologyGraph';
+import { signedArea } from '../../src/domain/geometry/polygon-utils';
 import { SpatialHash } from '../../src/domain/geometry/spatial-hash';
 import { Wall, revitObjectId, roomId } from '../../src/domain/objects';
 
@@ -169,6 +170,31 @@ describe('findMinimalCycles', () => {
     // Falta el cuarto muro que cerraría el rectángulo.
 
     expect(graph.findMinimalCycles()).toHaveLength(0);
+  });
+
+  // Regresión (docs/25 § 6, NARG29): un muro colgante en el contorno exterior impedía cerrar
+  // la cara exterior y se descartaba como "exterior" el recinto más grande.
+  it('un muro colgante junto a dos recintos no hace desaparecer el mayor', () => {
+    const graph = new TopologyGraph();
+    graph.addWalls(rectangleWalls()); // recinto grande 4×3
+    graph.addWall(wall({ x: 4, y: 0 }, { x: 6, y: 0 }));
+    graph.addWall(wall({ x: 6, y: 0 }, { x: 6, y: 2 }));
+    graph.addWall(wall({ x: 6, y: 2 }, { x: 4, y: 2 })); // recinto 2×2 en T sobre el muro x=4
+    graph.addWall(wall({ x: 6, y: 2 }, { x: 6, y: 3 })); // colgante hacia afuera
+
+    const areas = graph
+      .findMinimalCycles()
+      .map((c) => Math.abs(signedArea(c.fromNodeIds.map((id) => graph.nodePosition(id)!))))
+      .sort((a, b) => a - b);
+    expect(areas).toEqual([expect.closeTo(4, 6), expect.closeTo(12, 6)]);
+  });
+
+  it('un muro suelto dentro de un recinto no lo deshace', () => {
+    const graph = new TopologyGraph();
+    graph.addWalls(rectangleWalls());
+    graph.addWall(wall({ x: 2, y: 0 }, { x: 2, y: 1.5 })); // tabique incompleto desde el muro sur
+
+    expect(graph.findMinimalCycles()).toHaveLength(1);
   });
 
   it('detecta dos recintos separados por un tabique central', () => {

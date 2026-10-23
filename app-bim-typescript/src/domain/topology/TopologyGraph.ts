@@ -101,7 +101,7 @@ export class TopologyGraph {
    * se descarta antes de devolver: es el ciclo de mayor área absoluta.
    */
   findMinimalCycles(): TopologyCycle[] {
-    const wallEdges = [...this.edges.values()].filter((e) => e.objectType === 'wall');
+    const wallEdges = pruneFilaments([...this.edges.values()].filter((e) => e.objectType === 'wall'));
     if (wallEdges.length < 2) return [];
 
     const outAngles = this.buildRotationSystem(wallEdges);
@@ -403,6 +403,25 @@ export class TopologyGraph {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Quita los muros colgantes (y las cadenas que quedan colgando al quitarlos): no
+ * encierran nada. Sin esto, el recorrido de una cara se corta en su punta y la cara
+ * exterior no cierra; entonces se descartaba como "exterior" el recinto más grande.
+ */
+function pruneFilaments(edges: readonly TopologyEdge[]): TopologyEdge[] {
+  let kept = [...edges];
+  for (;;) {
+    const degree = new Map<string, number>();
+    for (const e of kept) {
+      degree.set(e.startNodeId, (degree.get(e.startNodeId) ?? 0) + 1);
+      degree.set(e.endNodeId, (degree.get(e.endNodeId) ?? 0) + 1);
+    }
+    const next = kept.filter((e) => degree.get(e.startNodeId)! > 1 && degree.get(e.endNodeId)! > 1);
+    if (next.length === kept.length) return kept;
+    kept = next;
+  }
+}
 
 /**
  * Clona un muro con un eje recto nuevo, PRESERVANDO su `id`.
