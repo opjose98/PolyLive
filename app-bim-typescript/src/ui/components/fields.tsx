@@ -62,14 +62,14 @@ export function NumberField({
   hint,
 }: NumberFieldProps) {
   const styles = useStyles();
-  const [text, setText] = useState(() => value.toFixed(decimals));
   const [error, setError] = useState<string | null>(null);
+  // El campo no se controla (ver TextField, H-65): se vuelve a montar con el valor de fuera
+  // cuando cambia (undo, otra vista) o para descartar un número no válido.
+  const [resets, setResets] = useState(0);
+  const shown = value.toFixed(decimals);
+  const revert = () => setResets((n) => n + 1);
 
-  // Si el valor cambia desde fuera (undo, o una edición desde otra vista), el
-  // campo tiene que reflejarlo — salvo que el usuario esté escribiendo algo
-  // distinto, caso en el que su edición manda.
   useEffect(() => {
-    setText(value.toFixed(decimals));
     setError(null);
   }, [value, decimals]);
 
@@ -80,17 +80,17 @@ export function NumberField({
 
     if (!Number.isFinite(parsed)) {
       setError('Introduce un número válido.');
-      setText(value.toFixed(decimals));
+      revert();
       return;
     }
     if (min !== undefined && parsed < min) {
       setError(`El mínimo es ${min}${unit ? ' ' + unit : ''}.`);
-      setText(value.toFixed(decimals));
+      revert();
       return;
     }
     if (max !== undefined && parsed > max) {
       setError(`El máximo es ${max}${unit ? ' ' + unit : ''}.`);
-      setText(value.toFixed(decimals));
+      revert();
       return;
     }
 
@@ -103,10 +103,10 @@ export function NumberField({
       <Text style={styles.fieldLabel}>{label}</Text>
       <View style={styles.fieldInputWrap}>
         <CommitTextInput
+          key={`${shown}#${resets}`}
           style={[styles.fieldInput, disabled && styles.fieldInputDisabled, !!error && styles.fieldInputError]}
-          value={text}
+          defaultValue={shown}
           onChangeText={(t) => {
-            setText(t);
             if (onDraft) {
               const n = Number(t.replace(',', '.'));
               onDraft(t.trim() !== '' && Number.isFinite(n) ? n : null);
@@ -165,23 +165,21 @@ export function TextField({
 }: TextFieldProps) {
   const styles = useStyles();
   const colors = useTheme();
-  const [draft, setDraft] = useState(value);
-
-  // En modo `blur` el campo mantiene su propio borrador. Se resincroniza cuando
-  // el valor cambia desde fuera (un undo, o seleccionar otro objeto).
-  useEffect(() => {
-    if (commitOn === 'blur') setDraft(value);
-  }, [value, commitOn]);
-
   const controlled = commitOn === 'change';
 
   return (
     <View style={styles.fieldRow}>
       <Text style={styles.fieldLabel}>{label}</Text>
       <CommitTextInput
+        // En modo `blur` el campo NO se controla: devolverle su propio borrador como `value`
+        // llegaba con retraso al teclear y CommitTextInput lo tomaba por un valor de fuera,
+        // así que lo tecleado nunca se guardaba (H-65). Un valor que cambia de verdad desde
+        // fuera (deshacer, otro objeto) lo vuelve a montar con el texto nuevo.
+        key={controlled ? undefined : value}
         style={[styles.fieldInput, styles.fieldInputBlock, multiline && styles.fieldInputMultiline, disabled && styles.fieldInputDisabled]}
-        value={controlled ? value : draft}
-        onChangeText={controlled ? onCommit : setDraft}
+        value={controlled ? value : undefined}
+        defaultValue={controlled ? undefined : value}
+        onChangeText={controlled ? onCommit : undefined}
         // En modo `blur` confirma también al ocultar el teclado o cerrar la hoja (ver CommitTextInput).
         onCommitText={(t) => {
           if (!controlled && t !== value) onCommit(t);
