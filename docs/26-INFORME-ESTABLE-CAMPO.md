@@ -98,11 +98,11 @@ Detalle fila por fila en `docs/25` § 6.
 | H-45 | Importar un paquete cuyo código BIM ya usa otro proyecto | (a) dejarlo duplicado, como hoy · (b) renombrar el importado (BIM002 → BIM002-2) y avisar · (c) rechazar la importación | **(b)**: no pierde datos y mantiene la unicidad del código |
 | H-54 | Puertas, ventanas y vanos en el plano PDF y en el PDF de avance | (a) como hoy, sin vanos · (b) dibujar los vanos (hueco y arco de puerta) en `planSvg` | **(b)**: el plano entregable debe coincidir con el IFC y el DXF (en NARG29 faltan 14 vanos) |
 | H-67 | Al medir, ¿la T de un tabique sigue la posición relativa o la absoluta sobre el muro que se alarga? | (a) relativa, como hoy (el tabique se inclina) · (b) absoluta al medir, relativa al arrastrar · (c) absoluta siempre | **(b)**: medir no debe torcer muros ortogonales; arrastrar a mano conserva el comportamiento actual |
-| H-70 | ¿Los vanos sin carpintería salen en el IFC? | (a) no, como hoy (solo viven en el alzado) · (b) `IfcOpeningElement` sin relleno, recortando el muro · (c) además, una `IfcDoor` «vano» para que Revit lo liste | **(b)**: el hueco existe en obra y en Revit; sin relleno no inventa una carpintería |
+| H-70 | ¿Los vanos sin carpintería salen en el IFC? | (a) no, como hoy (solo viven en el alzado) · (b) `IfcOpeningElement` sin relleno, recortando el muro · (c) además, una `IfcDoor` «vano» para que Revit lo liste | **Decidido (b) y corregido**: el hueco existe en obra y en Revit; sin relleno no inventa una carpintería |
 
 ## 6. Hallazgos abiertos
 
-P1: ninguno · P2: H-45, H-54, H-67 y H-70 (decisión), H-66 (sentido de apertura de puertas) · P3: H-50, H-51, H-52, H-56 a H-63, H-68, H-71 a H-73, y H-14 intermitente (lista en `docs/25`
+P1: ninguno · P2: H-45, H-54 y H-67 (decisión), H-66 (sentido de apertura de puertas) · P3: H-50, H-51, H-52, H-56 a H-63, H-68, H-71 a H-73, y H-14 intermitente (lista en `docs/25`
 § 6.3).
 
 ## 7. Qué está instalado y lista para tu prueba en campo
@@ -201,7 +201,8 @@ segundo plano: el recinto de aulas no se pierde.
 
 - Las fricciones 1, 2, 6 y 13 del § 8 se repiten en cada sede: dos toques por muro, «Aula» se escribe a mano, cada
   vano nace a 0,90 / 1,20 y hay que corregirlo uno a uno, y los muros nacen a 2,80 cuando los planos dicen 2,22.
-- «Vano» existe y separa bien cocina y comedor sin unir los recintos, pero no llega al IFC (decisión H-70).
+- «Vano» separa bien cocina y comedor sin unir los recintos; desde H-70 (b) también sale en el IFC como hueco sin
+  relleno que recorta el muro (verificado: MACO, muro 8).
 - Ajustar la «Posición en el muro» tras cambiar el ancho es habitual: el vano crece desde su borde inicial, no desde
   el centro donde se tocó. Propuesta: crecer desde el centro al cambiar el ancho.
 - Con la herramienta Muro, el borde izquierdo del lienzo no recibe toques en vertical (H-72); con vanos juntos, la

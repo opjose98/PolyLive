@@ -17,7 +17,7 @@ Fecha: 2026-10-07 · App: dev client Expo SDK 57 con Metro (rama `feat/mvp-audit
 
 Hallazgos: **42** — corregidos 30 · no reproducibles 3 · por verificar en el equipo 7 · decisión pendiente 2 · abiertos P1 0 / P2 0 / P3 0.
 
-**Ronda 2 (2026-10-22):** los 7 «Verificar en equipo» quedan cerrados (3 corregidos, 4 no se reproducen) y entran 29 hallazgos nuevos (H-45 a H-73): los 5 P1 (H-52, H-53, H-64, H-65, H-69) corregidos y verificados; P2 a decisión: H-45, H-54, H-67, H-70; P2 abierto: H-66. Estado actual y filas re-probadas en el § 6.
+**Ronda 2 (2026-10-22):** los 7 «Verificar en equipo» quedan cerrados (3 corregidos, 4 no se reproducen) y entran 29 hallazgos nuevos (H-45 a H-73): los 5 P1 (H-52, H-53, H-64, H-65, H-69) corregidos y verificados; P2 a decisión: H-45, H-54, H-67; H-70 decidido (b) y corregido; P2 abierto: H-66. Estado actual y filas re-probadas en el § 6.
 
 Leyenda: ✅ OK · 🟡 Parcial · ❌ Falla · ⬜ No probado · ➖ No aplica. Prioridad: **P1** corrompe datos o bloquea, **P2** funciona mal, **P3** pulido.
 
@@ -423,14 +423,14 @@ No re-probadas en esta ronda (corregidas con test en la ronda 1): B21, B22, C05,
 | H-67 | P2 | Medida | Al aplicar una medida, las uniones en T conservan su posición RELATIVA sobre el muro anfitrión: si el anfitrión se alarga por el otro extremo, el tabique se inclina (cocina NARG29 quedó 9 cm torcida) | **Decisión**: al medir, conservar la posición absoluta de la T (recomendado) | `domain/topology/joints.ts` (`followTees`) |
 | H-68 | P3 | PDF | En el plano PDF los rótulos de recintos pequeños desbordan el recinto y el marco | Abierto | `application/report/planSvg.ts` |
 | H-69 | **P1** | Topología | Un muro trazado DESPUÉS sobre extremos ya existentes no se partía en ellos: la T en orden inverso no cerraba y el recinto (baño de Maco) no aparecía; el resultado dependía del orden de trazado | Corregido: el muro nuevo se parte en los nudos que ya caen sobre él; tests; verificado en la tableta | `domain/topology/TopologyGraph.ts` |
-| H-70 | P2 | IFC | Los vanos sin carpintería (herramienta «Vano») viven solo en el alzado del muro y no salen en el IFC: el paso cocina–comedor de Maco no existe en Revit | **Decisión**: exportarlos como `IfcOpeningElement` sin relleno (recomendado) | `infrastructure/export/ifc/IFCSerializer.ts` |
+| H-70 | P2 | IFC | Los vanos sin carpintería (herramienta «Vano») viven solo en el alzado del muro y no salen en el IFC: el paso cocina–comedor de Maco no existe en Revit | Corregido (decisión del dueño, opción b): cada vano sale como `IfcOpeningElement` sin relleno que recorta su muro y descuenta su área neta; test; verificado con el IFC de MACO exportado en la tableta | `infrastructure/export/ifc/IFCSerializer.ts`, `ui/workspace/exportActions.ts` |
 | H-71 | P3 | Entregables | Re-exportar con el mismo nombre crea `…cuadro-de-areas.csv (1)`: el sufijo va tras la extensión y el archivo deja de abrir como CSV | Abierto: sufijo antes de la extensión o marca de hora como el IFC | `native/export/saveToUserFolder.ts` |
 | H-72 | P3 | Muro | Con la herramienta Muro activa, los rótulos del panel de restricciones («B · Nivel 0», «T · ∞») tapan el borde izquierdo del lienzo (vertical, x < 300 px) y se tragan el toque sin aviso | Abierto | `ui/workspace` (panel de restricciones) |
 | H-73 | P3 | Selección | La pulsación larga toma el objeto más cercano sin preferir el hueco: junto a una esquina abre el muro y con vanos a < 0,6 m (zoom 33 %) abre el vecino; en Maco así se borró el muro norte (se deshizo) | Abierto: preferir el hueco sobre el muro anfitrión | `application/canvas/SelectionService.ts` |
 
 H-14 (rótulos del FAB): el rótulo «Foto» de Auditoría no activó la herramienta y el círculo sí; los rótulos «Puerta» y «Arrastre libre» sí respondieron. Queda **intermitente**, para la prueba a mano.
 
-Decisiones de producto abiertas: H-15 (encadenar muros), H-18 (cota alineada u ortogonal), H-45, H-54 y H-67. Opciones y recomendación en docs/26 § 5. H-64 a H-68 salieron de levantar un plano real (NARG29 · BRIS · B1) en la tableta horizontal: docs/26 § 8; H-69 a H-73, de SUMB, MARA y MACO: docs/26 § 9. Decisión nueva: H-70.
+Decisiones de producto abiertas: H-15 (encadenar muros), H-18 (cota alineada u ortogonal), H-45, H-54 y H-67. Opciones y recomendación en docs/26 § 5. H-64 a H-68 salieron de levantar un plano real (NARG29 · BRIS · B1) en la tableta horizontal: docs/26 § 8; H-69 a H-73, de SUMB, MARA y MACO: docs/26 § 9. H-70 decidido y corregido.
 
 ### 6.4 Datos de la prueba (ronda 2)
 

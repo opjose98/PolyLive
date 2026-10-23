@@ -76,6 +76,13 @@ async execute(input: ExportRoomIfcInput): Promise<ExportRoomIfcOutput> {
 }
 ```
 
+## Vanos sin carpintería (H-70)
+
+Los huecos de la herramienta «Vano» viven en el alzado de su muro, no como Door/Window. `exportActions.ts`
+(`elevationOpenings`) los reúne junto con los antepechos y llegan como `bareOpenings`; `IFCSerializer.ts`
+escribe cada uno como `IfcOpeningElement` + `IfcRelVoidsElement` sin `IfcRelFillsElement`, y descuenta su área
+en `NetSideArea` del muro. Test: `test/ifc/IFCRevitExport.test.ts` («un vano sin carpintería recorta su muro…»).
+
 ---
 
 *Creada: 2026-09-14*
