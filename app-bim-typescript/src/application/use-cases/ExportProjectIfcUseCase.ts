@@ -16,13 +16,14 @@ import { Room } from '../../domain/objects/room';
 import { Wall } from '../../domain/objects/wall';
 import { Window } from '../../domain/objects/window';
 import type { IFCSerializer, ProjectSerializeInput, SpaceContent } from '../../infrastructure/export/ifc/IFCSerializer';
-import type { IfcMemberInput, IfcZoneInput } from '../../infrastructure/export/ifc/types';
+import type { IfcBareOpeningInput, IfcMemberInput, IfcZoneInput } from '../../infrastructure/export/ifc/types';
 
 interface ProjectSpaceInput {
   readonly roomId: RoomId;
   readonly placement?: SpaceContent['placement'];
   readonly zones?: readonly IfcZoneInput[];
   readonly openingSills?: ReadonlyMap<string, number>;
+  readonly bareOpenings?: readonly IfcBareOpeningInput[];
   readonly members?: readonly IfcMemberInput[];
 }
 
@@ -61,6 +62,7 @@ export class ExportProjectIfcUseCase {
         zoneFloors: floors.filter((f) => floorZoneId(f) !== null),
         zones: s.zones,
         openingSills: s.openingSills,
+        bareOpenings: s.bareOpenings,
         members: s.members,
         placement: s.placement,
       });

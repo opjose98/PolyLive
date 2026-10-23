@@ -41,6 +41,8 @@ export interface SerializeInput {
   readonly phaseNames?: ReadonlyMap<string, string>;
   /** Antepecho (m sobre la base del muro) de cada vano, por id de Door/Window. */
   readonly openingSills?: ReadonlyMap<string, number>;
+  /** Vanos sin carpintería (herramienta «Vano»): hueco en su muro, sin puerta ni ventana (H-70). */
+  readonly bareOpenings?: readonly IfcBareOpeningInput[];
   /** Autor del archivo (operador). */
   readonly author?: string;
   /** Clave estable del proyecto: fija el GUID de IfcProject entre exportaciones. */
@@ -97,6 +99,18 @@ export interface IfcMapConversionInput {
  * Recinto con identidad (T0) → un IfcSpace en el piso de su nivel, con su
  * contorno a cara interior (la habitación de Revit).
  */
+/** Un vano sin carpintería, en coordenadas de su muro (las del alzado). */
+export interface IfcBareOpeningInput {
+  readonly id: string;
+  readonly wallId: string;
+  /** Distancia desde el inicio del muro al borde del vano (m). */
+  readonly xOffset: number;
+  readonly width: number;
+  /** Antepecho sobre la base del muro (m). */
+  readonly sillHeight: number;
+  readonly height: number;
+}
+
 export interface IfcZoneInput {
   readonly id: string;
   /** Código corto (R-01): el `Name` del IfcSpace, el número de habitación en Revit. */

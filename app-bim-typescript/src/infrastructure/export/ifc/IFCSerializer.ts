@@ -41,7 +41,7 @@ interface SerializeResult {
 /** Contenido de un espacio (lo que va dentro del proyecto). */
 export type SpaceContent = Pick<
   SerializeInput,
-  'room' | 'walls' | 'doors' | 'windows' | 'columns' | 'floor' | 'zones' | 'zoneFloors' | 'members' | 'openingSills'
+  'room' | 'walls' | 'doors' | 'windows' | 'columns' | 'floor' | 'zones' | 'zoneFloors' | 'members' | 'openingSills' | 'bareOpenings'
 > & {
   /** Ubicación del espacio en el proyecto (amarre): x, y (m, Y arriba) y giro (rad). */
   readonly placement?: { readonly x: number; readonly y: number; readonly rotation: number };
@@ -290,9 +290,11 @@ export class IFCSerializer {
         const name = (wall.properties.name as string | undefined) ?? `Muro ${i + 1}`;
         const material = wall.material ?? (wall.isStructural ? 'Muro portante' : 'Tabique');
         // Huecos de puertas y ventanas de ESTE muro: el área lateral neta los descuenta.
-        const openingArea = [...doors, ...windows]
-          .filter((o) => (o.parentWallId as string) === (wall.id as string))
-          .reduce((a, o) => a + (o.width as number) * (o.height as number), 0);
+        const openingArea =
+          [...doors, ...windows]
+            .filter((o) => (o.parentWallId as string) === (wall.id as string))
+            .reduce((a, o) => a + (o.width as number) * (o.height as number), 0) +
+          (sp.bareOpenings ?? []).filter((o) => o.wallId === (wall.id as string)).reduce((a, o) => a + o.width * o.height, 0);
 
         const placement = w.placementAt(
           P(storey),
@@ -368,18 +370,16 @@ export class IFCSerializer {
       // ------------------------------------------------------------------
       // 4c. Puertas y ventanas (vano + relleno), relativos a su muro
       // ------------------------------------------------------------------
-      const writeFilling = (vano: Door | Window, kind: 'door' | 'window') => {
-        const host = hosts.get(vano.parentWallId as string);
-        if (!host) return;
-        const width = vano.width as number;
-        const height = vano.height as number;
-        const along = Math.max(0, Math.min(vano.offsetAlongWall as number, host.length - Math.min(width, host.length)));
+      // El hueco que recorta el muro; lo comparten puertas, ventanas y vanos sin carpintería.
+      const cutOpening = (id: string, wallId: string, offset: number, width: number, height: number, sill: number) => {
+        const host = hosts.get(wallId);
+        if (!host) return null;
+        const along = Math.max(0, Math.min(offset, host.length - Math.min(width, host.length)));
         // La base del muro puede subir o bajar a lo largo del eje: el antepecho
         // se mide desde la base en el centro del vano.
         const t = host.length > 0 ? (along + width / 2) / host.length : 0;
         const bottom = profileBottom(host.profile);
         const floorAt = host.profile.start.base + (host.profile.end.base - host.profile.start.base) * t - bottom;
-        const sill = sp.openingSills?.get(vano.id as string) ?? (kind === 'door' ? 0 : 0.9);
         const z = floorAt + sill;
         const clearance = 0.05;
 
@@ -389,9 +389,19 @@ export class IFCSerializer {
           w.extrusion(cut, w.wallPlaneAxis(0, host.thickness / 2 + clearance, 0), host.thickness + 2 * clearance),
         ]);
         const opening = w.add(
-          `IFCOPENINGELEMENT('${stableGuid(`opening:${vano.id}`)}',${oh},'Vano',$,$,${ref(openingPlacement)},${ref(w.productShape([openingBody]))},$,.OPENING.)`,
+          `IFCOPENINGELEMENT('${stableGuid(`opening:${id}`)}',${oh},'Vano',$,$,${ref(openingPlacement)},${ref(w.productShape([openingBody]))},$,.OPENING.)`,
         );
-        w.add(`IFCRELVOIDSELEMENT('${stableGuid(`voids:${vano.id}`)}',${oh},$,$,${ref(host.entity)},${ref(opening)})`);
+        w.add(`IFCRELVOIDSELEMENT('${stableGuid(`voids:${id}`)}',${oh},$,$,${ref(host.entity)},${ref(opening)})`);
+        return { host, along, opening, openingPlacement };
+      };
+
+      const writeFilling = (vano: Door | Window, kind: 'door' | 'window') => {
+        const width = vano.width as number;
+        const height = vano.height as number;
+        const sill = sp.openingSills?.get(vano.id as string) ?? (kind === 'door' ? 0 : 0.9);
+        const cutResult = cutOpening(vano.id as string, vano.parentWallId as string, vano.offsetAlongWall as number, width, height, sill);
+        if (!cutResult) return;
+        const { host, along, opening, openingPlacement } = cutResult;
 
         // El relleno: un panel delgado en el plano del muro, para que se vea.
         const panelDepth = Math.min(0.05, host.thickness);
@@ -432,6 +442,10 @@ export class IFCSerializer {
       };
       for (const d of doors) writeFilling(d, 'door');
       for (const win of windows) writeFilling(win, 'window');
+      // Vanos sin carpintería: solo el hueco, sin relleno (H-70).
+      for (const o of sp.bareOpenings ?? []) {
+        if (cutOpening(o.id, o.wallId, o.xOffset, o.width, o.height, o.sillHeight)) products += 1;
+      }
 
       // ------------------------------------------------------------------
       // 4d. Columnas

@@ -271,6 +271,22 @@ describe('IFCSerializer — Revit', () => {
     expect(ents.get(refsIn(axis.args[0])[0])!.args[0]).toBe('(1.5,0.,0.95)');
   });
 
+  it('un vano sin carpintería recorta su muro y no lleva relleno (H-70)', async () => {
+    const r = await serialize({
+      bareOpenings: [{ id: 'o1', wallId: 'w2', xOffset: 1, width: 0.85, sillHeight: 0, height: 2.1 }],
+    });
+    const ents = parseStep(r.content);
+    const [opening] = ofType(r.content, 'IFCOPENINGELEMENT');
+    expect(opening).toBeDefined();
+    const voids = ofType(r.content, 'IFCRELVOIDSELEMENT')[0];
+    const host = ents.get(refsIn(voids.args[4])[0])!;
+    expect(host.args[2]).toBe("'Muro 2'");
+    expect(refsIn(voids.args[5])).toEqual([opening.id]);
+    expect(ofType(r.content, 'IFCRELFILLSELEMENT')).toHaveLength(0);
+    expect(ofType(r.content, 'IFCDOOR')).toHaveLength(0);
+    expect(lintIfc(r.content)).toEqual([]);
+  });
+
   it('los GUIDs de los elementos son estables entre exportaciones', async () => {
     const a = await serialize();
     const b = await serialize();

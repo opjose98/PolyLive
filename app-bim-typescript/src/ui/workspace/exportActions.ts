@@ -28,6 +28,7 @@ import { modelToGrid } from '../../domain/geo/georeference';
 import { draftDxfEntities, draftIfcMembers } from '../../application/drafting/draftExport';
 import type { Point2D } from '../../domain/geometry/types';
 import type { DraftItem } from '../../domain/drafting/drafting';
+import type { WallElevation } from '../../domain/objects/wall-elevation';
 import { Wall } from '../../domain/objects/wall';
 import { Column } from '../../domain/objects/column';
 import { workspaceStore } from '../../state/workspaceStore';
@@ -92,6 +93,18 @@ async function loadDrafts(services: AppServices, ctx: ExportContext): Promise<Dr
   }
 }
 
+/** Del alzado de cada muro: antepecho de puertas y ventanas, y los vanos sin carpintería (H-70). */
+function elevationOpenings(elevs: readonly WallElevation[]) {
+  const sills = new Map<string, number>();
+  const bareOpenings = [];
+  for (const e of elevs)
+    for (const o of e.openings) {
+      if (o.vanoId) sills.set(o.vanoId, o.sillHeight);
+      else if (o.type === 'opening') bareOpenings.push({ id: o.id as string, wallId: e.wallId, xOffset: o.xOffset, width: o.width, sillHeight: o.sillHeight, height: o.height });
+    }
+  return { sills, bareOpenings };
+}
+
 const summarize = (n: number, one: string, many: string) => (n ? `, ${n} ${n === 1 ? one : many}` : '');
 
 /** IFC 4 para Revit: un piso por nivel, restricciones de base/tope, fases. */
@@ -111,14 +124,14 @@ export async function exportRevitIfc(services: AppServices, ctx: ExportContext):
       services.elevations.listElevations(ctx.roomId),
       services.zones.list(ctx.roomId as string),
     ]);
-    const sills = new Map<string, number>();
-    for (const e of elevs) for (const o of e.openings) if (o.vanoId) sills.set(o.vanoId, o.sillHeight);
+    const { sills, bareOpenings } = elevationOpenings(elevs);
     const members = draftIfcMembers(await loadDrafts(services, ctx));
     const out = await services.useCases.exportRoomIfc.execute({
       roomId: ctx.roomId,
       levels: lv.map((m) => ({ id: m.id, name: m.name, elevation: m.value, isBase: m.isBase })),
       phaseNames: new Map(ph.map((m) => [m.id, m.name] as [string, string])),
       openingSills: sills,
+      bareOpenings,
       projectName: ctx.projectName,
       projectKey: ctx.projectId,
       author: ctx.author,
@@ -230,11 +243,10 @@ export async function exportProjectIfc(
         services.zones.list(d.space.roomId as string),
         loadDrafts(services, spaceCtx),
       ]);
-      const sills = new Map<string, number>();
-      for (const e of elevs) for (const o of e.openings) if (o.vanoId) sills.set(o.vanoId, o.sillHeight);
+      const { sills, bareOpenings } = elevationOpenings(elevs);
       const members = draftIfcMembers(drafts);
       memberCount += members.length;
-      spaces.push({ roomId, placement: geo?.placements[d.space.roomId as string], zones: ifcZones(zones), openingSills: sills, members });
+      spaces.push({ roomId, placement: geo?.placements[d.space.roomId as string], zones: ifcZones(zones), openingSills: sills, bareOpenings, members });
     }
     if (!spaces.length) {
       const message = 'El proyecto no tiene espacios con datos para exportar.';
