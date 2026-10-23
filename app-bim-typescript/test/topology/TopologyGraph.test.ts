@@ -107,6 +107,18 @@ describe('edge splitting (uniones en T)', () => {
     expect(graph.nodeCount).toBe(4);
   });
 
+  it('parte el muro nuevo que pasa por extremos ya existentes (orden inverso, H-69)', () => {
+    const graph = new TopologyGraph();
+    // Primero los muros que llegan; después el que los atraviesa (Maco: baño bajo el muro sur).
+    graph.addWall(wall({ x: 1, y: 0 }, { x: 1, y: 3 }));
+    graph.addWall(wall({ x: 3, y: 0 }, { x: 3, y: -2 }));
+    graph.addWall(wall({ x: 0, y: 0 }, { x: 4, y: 0 }));
+
+    // El muro atravesado queda en tres fragmentos, más los dos que llegan = 5.
+    expect(graph.edgeCount).toBe(5);
+    expect(graph.nodeCount).toBe(6);
+  });
+
   it('NO parte una arista si el punto queda lejos del segmento', () => {
     const graph = new TopologyGraph({ snapTolerance: 0.05 });
     graph.addWall(wall({ x: 0, y: 0 }, { x: 4, y: 0 }));
@@ -209,6 +221,17 @@ describe('findMinimalCycles', () => {
     graph.addWall(wall({ x: 2, y: 0 }, { x: 2, y: 3 }));
 
     // La cara exterior se descarta; quedan las dos estancias.
+    expect(graph.findMinimalCycles()).toHaveLength(2);
+  });
+
+  it('cierra el recinto de un muro que llega antes que el muro que lo cierra (H-69)', () => {
+    const graph = new TopologyGraph();
+    // Baño colgado bajo el muro sur: sus muros se trazan antes que el muro sur.
+    graph.addWall(wall({ x: 4, y: 0 }, { x: 4, y: -2 }));
+    graph.addWall(wall({ x: 4, y: -2 }, { x: 2, y: -2 }));
+    graph.addWall(wall({ x: 2, y: -2 }, { x: 2, y: 0 }));
+    graph.addWalls(rectangleWalls());
+
     expect(graph.findMinimalCycles()).toHaveLength(2);
   });
 

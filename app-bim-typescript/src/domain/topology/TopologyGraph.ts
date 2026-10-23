@@ -86,6 +86,16 @@ export class TopologyGraph {
     this.edges.set(edge.id, edge);
     startNode.connectedEdgeIds.push(edge.id);
     endNode.connectedEdgeIds.push(edge.id);
+
+    // T en orden inverso: si el muro nuevo pasa por extremos ya existentes, también se
+    // parte; si no, el recinto depende del orden de trazado (H-69).
+    if (edge.geometryType !== 'line') return;
+    const a = startNode.position;
+    const b = endNode.position;
+    for (const node of [...this.nodes.values()]) {
+      if (node === startNode || node === endNode) continue;
+      if (distanceToSegment(node.position, a, b) < this.snapTolerance) this.splitEdgesAt(node);
+    }
   }
 
   /** Añade varios muros en orden. */
