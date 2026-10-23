@@ -20,6 +20,8 @@ import { RoomId, roomId as toRoomId } from '../../domain/objects/base';
 import { reportFailure } from '../../shared/diagnostics';
 import { ActionButton, alertDialog } from '../primitives';
 import { TextField } from '../components/fields';
+import { applySpaceSetup, defaultSpaceSetup, readSpaceSetup, type SpaceSetup } from '../../application/projects/spaceSetup';
+import { SpaceSetupFields, type SetupSource } from '../workspace/SpaceSetupFields';
 import { SpacePreview } from '../components/SpacePreview';
 import { spacing, radius } from '../design/tokens';
 import { type } from '../design/typography';
@@ -56,6 +58,8 @@ export function ProjectWorkspaceScreen({
   const [refreshing, setRefreshing] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
+  const [setup, setSetup] = useState<SpaceSetup>(defaultSpaceSetup);
+  const [sources, setSources] = useState<SetupSource[]>([]);
   const [renaming, setRenaming] = useState<SpaceDetail | null>(null);
   const [renameValue, setRenameValue] = useState('');
 
@@ -65,10 +69,44 @@ export function ProjectWorkspaceScreen({
 
   useEffect(() => {
     setLoading(true);
-    load()
+    services.projects
+      .listSpaceDetails(project.id)
+      .then((list) => {
+        setSpaces(list);
+        // Proyecto recién creado: lo primero es su espacio y su configuración (docs/23 § 7).
+        if (!list.length) setCreating(true);
+      })
       .catch(() => alertDialog('Error', 'No se pudieron cargar los espacios.'))
       .finally(() => setLoading(false));
-  }, [load]);
+  }, [services, project.id]);
+
+  // Espacios de todos los proyectos, para copiar sus niveles y fases al nuevo.
+  useEffect(() => {
+    if (!creating) return;
+    let cancelled = false;
+    (async () => {
+      const out: SetupSource[] = [];
+      for (const p of await services.projects.listProjects()) {
+        for (const d of await services.projects.listSpaceDetails(p.id)) {
+          out.push({ key: `${p.id as string}|${d.space.roomId as string}`, label: `${p.bimCode} ${p.name} · ${d.space.name}` });
+        }
+      }
+      if (!cancelled) setSources(out);
+    })().catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [services, creating]);
+
+  const copyFrom = useCallback(
+    (key: string) => {
+      const [projectId, spaceId] = key.split('|');
+      readSpaceSetup(services.markers, { projectId, spaceId })
+        .then(setSetup)
+        .catch((err) => alertDialog('Error', reportFailure('workspace', err, 'No se pudo leer la configuración de ese espacio.')));
+    },
+    [services],
+  );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -82,14 +120,16 @@ export function ProjectWorkspaceScreen({
 
     try {
       const { room } = await services.projects.createSpace({ projectId: project.id, name });
+      await applySpaceSetup(services.markers, { projectId: project.id as string, spaceId: room.roomId as string }, setup);
       setCreating(false);
       setNewName('');
+      setSetup(defaultSpaceSetup());
       await load();
       onOpenSpace(room.roomId);
     } catch (err) {
       alertDialog('Error', reportFailure('workspace', err, 'No se pudo crear el espacio.'));
     }
-  }, [services, project.id, newName, load, onOpenSpace]);
+  }, [services, project.id, newName, setup, load, onOpenSpace]);
 
   const handleRemove = useCallback(
     (detail: SpaceDetail) => {
@@ -272,6 +312,8 @@ export function ProjectWorkspaceScreen({
               placeholder="p. ej. Planta baja"
               onCommit={setNewName}
             />
+            <SpaceSetupFields value={setup} onChange={setSetup} sources={sources} onCopyFrom={copyFrom} />
+            <Text style={styles.muted}>Todo se puede cambiar después desde los selectores de nivel y fase del lienzo.</Text>
             <View style={styles.dialogActions}>
               <ActionButton
                 label="Cancelar"
@@ -279,6 +321,7 @@ export function ProjectWorkspaceScreen({
                 onPress={() => {
                   setCreating(false);
                   setNewName('');
+                  setSetup(defaultSpaceSetup());
                 }}
               />
               <ActionButton

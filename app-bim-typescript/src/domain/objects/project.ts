@@ -43,7 +43,7 @@ export function projectId(value: string): ProjectId {
  * "Arquitectura", "arquitectura" y "ARQ" se convierten en tres disciplinas
  * distintas al filtrar o exportar.
  */
-export const BIM_DISCIPLINES = [
+const BIM_DISCIPLINES = [
   'Arquitectura',
   'Estructuras',
   'Instalaciones',
