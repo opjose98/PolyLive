@@ -17,7 +17,7 @@ Fecha: 2026-10-07 · App: dev client Expo SDK 57 con Metro (rama `feat/mvp-audit
 
 Hallazgos: **42** — corregidos 30 · no reproducibles 3 · por verificar en el equipo 7 · decisión pendiente 2 · abiertos P1 0 / P2 0 / P3 0.
 
-**Ronda 2 (2026-10-22):** los 7 «Verificar en equipo» quedan cerrados (3 corregidos, 4 no se reproducen) y entran 34 hallazgos nuevos (H-45 a H-78): los 5 P1 (H-52, H-53, H-64, H-65, H-69) corregidos y verificados; P2 a decisión: H-45, H-54, H-67, H-74, H-78; H-70 decidido (b) y corregido; H-75 corregido; P2 abierto: H-66. Estado actual y filas re-probadas en el § 6.
+**Ronda 2 (2026-10-22):** los 7 «Verificar en equipo» quedan cerrados (3 corregidos, 4 no se reproducen) y entran 34 hallazgos nuevos (H-45 a H-78): los 5 P1 (H-52, H-53, H-64, H-65, H-69) corregidos y verificados; P2 a decisión: H-45, H-54, H-67, H-78; H-70 y H-74 decididos (b) y corregidos; H-75 corregido; P2 abierto: H-66. Estado actual y filas re-probadas en el § 6.
 
 Leyenda: ✅ OK · 🟡 Parcial · ❌ Falla · ⬜ No probado · ➖ No aplica. Prioridad: **P1** corrompe datos o bloquea, **P2** funciona mal, **P3** pulido.
 
@@ -427,7 +427,7 @@ No re-probadas en esta ronda (corregidas con test en la ronda 1): B21, B22, C05,
 | H-71 | P3 | Entregables | Re-exportar con el mismo nombre crea `…cuadro-de-areas.csv (1)`: el sufijo va tras la extensión y el archivo deja de abrir como CSV | Abierto: sufijo antes de la extensión o marca de hora como el IFC | `native/export/saveToUserFolder.ts` |
 | H-72 | P3 | Muro | Con la herramienta Muro activa, los rótulos del panel de restricciones («B · Nivel 0», «T · ∞») tapan el borde izquierdo del lienzo (vertical, x < 300 px) y se tragan el toque sin aviso | Abierto | `ui/workspace` (panel de restricciones) |
 | H-73 | P3 | Selección | La pulsación larga toma el objeto más cercano sin preferir el hueco: junto a una esquina abre el muro y con vanos a < 0,6 m (zoom 33 %) abre el vecino; en Maco así se borró el muro norte (se deshizo) | Abierto: preferir el hueco sobre el muro anfitrión | `application/canvas/SelectionService.ts` |
-| H-74 | P2 | Muro | No se puede partir un muro: una culata con cumbrera a media longitud obliga a borrar el muro y redibujarlo en dos, y se pierden sus vanos y sus mediciones láser (SUMB perdió la de 6,95 m) | **Decisión**: «Partir muro en un punto» que reparta vanos y mediciones (recomendado) o perfil de alzado con vértice intermedio (cambio de modelo) | `application/editor`, `domain/objects/wall-elevation.ts` |
+| H-74 | P2 | Muro | No se puede partir un muro: una culata con cumbrera a media longitud obliga a borrar el muro y redibujarlo en dos, y se pierden sus vanos y sus mediciones láser (SUMB perdió la de 6,95 m) | Corregido (decisión del dueño, opción b): botón «Partir» en la hoja del muro; cada vano va al tramo de su centro con su antepecho, el segundo tramo lleva copia de las mediciones, un paso de deshacer; tests. Pendiente verificar en la tableta | `application/use-cases/SplitWallUseCase.ts`, `domain/objects/wall-split.ts` |
 | H-75 | P2 | Selección | Lo que filtros y capas ocultan seguía siendo tocable: un muro oculto tapaba la columna embebida en él | Corregido: el editor solo toca lo visible (`setPickFilter`); test | `application/editor/EditorCore.ts`, `ui/screens/SurveyScreen.tsx` |
 | H-76 | P3 | Selección | Una columna embebida en un muro solo se elige ocultando los muros; en un muro corto con puertas, la puerta gana siempre el toque (amplía H-73) | Abierto: con varios candidatos, un toque repetido rota entre ellos | `application/canvas/SelectionService.ts` |
 | H-77 | P3 | Vanos | El antepecho solo se edita en el alzado, muro por muro; la hoja del vano en planta no lo muestra | Abierto: antepecho en la hoja de puerta/ventana en planta (ya propuesto en docs/26 § 8, fricción 5) | `ui/components/PropertiesPanel.tsx` |
@@ -435,7 +435,7 @@ No re-probadas en esta ronda (corregidas con test en la ronda 1): B21, B22, C05,
 
 H-14 (rótulos del FAB): el rótulo «Foto» de Auditoría no activó la herramienta y el círculo sí; los rótulos «Puerta» y «Arrastre libre» sí respondieron. Queda **intermitente**, para la prueba a mano.
 
-Decisiones de producto abiertas: H-15 (encadenar muros), H-18 (cota alineada u ortogonal), H-45, H-54 y H-67. Opciones y recomendación en docs/26 § 5. H-64 a H-68 salieron de levantar un plano real (NARG29 · BRIS · B1) en la tableta horizontal: docs/26 § 8; H-69 a H-73, de SUMB, MARA y MACO: docs/26 § 9; H-74 a H-78, de la ronda de altimetría y culatas: docs/26 § 10. H-70 decidido y corregido.
+Decisiones de producto abiertas: H-15 (encadenar muros), H-18 (cota alineada u ortogonal), H-45, H-54, H-67 y H-78. Opciones y recomendación en docs/26 § 5. H-64 a H-68 salieron de levantar un plano real (NARG29 · BRIS · B1) en la tableta horizontal: docs/26 § 8; H-69 a H-73, de SUMB, MARA y MACO: docs/26 § 9; H-74 a H-78, de la ronda de altimetría y culatas: docs/26 § 10. H-70 y H-74 decididos y corregidos.
 
 ### 6.4 Datos de la prueba (ronda 2)
 

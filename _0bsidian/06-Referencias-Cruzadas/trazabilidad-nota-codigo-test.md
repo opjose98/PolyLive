@@ -34,6 +34,7 @@ Si una fila no tiene test, es una decisión consciente y está dicho.
 | **[[GPS-promediado]]** | `domain/geo/gpsAverage.ts`, `native/location/GpsAverager.ts` | `test/geo/georeference.test.ts` |
 | **[[Restricciones-verticales]]** | `domain/objects/vertical.ts` | `test/domain/vertical.test.ts` |
 | **[[Niveles-y-fases]]** | `domain/objects/marker.ts`, `infrastructure/sqlite/MarkerStore.ts` | `test/application/workspace.test.ts` |
+| **[[SplitWallUseCase]]** | `domain/objects/wall-split.ts`, `application/use-cases/SplitWallUseCase.ts` | `test/application/SplitWall.test.ts` |
 
 ## Geometría
 

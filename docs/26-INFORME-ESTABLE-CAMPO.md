@@ -98,13 +98,13 @@ Detalle fila por fila en `docs/25` § 6.
 | H-45 | Importar un paquete cuyo código BIM ya usa otro proyecto | (a) dejarlo duplicado, como hoy · (b) renombrar el importado (BIM002 → BIM002-2) y avisar · (c) rechazar la importación | **(b)**: no pierde datos y mantiene la unicidad del código |
 | H-54 | Puertas, ventanas y vanos en el plano PDF y en el PDF de avance | (a) como hoy, sin vanos · (b) dibujar los vanos (hueco y arco de puerta) en `planSvg` | **(b)**: el plano entregable debe coincidir con el IFC y el DXF (en NARG29 faltan 14 vanos) |
 | H-67 | Al medir, ¿la T de un tabique sigue la posición relativa o la absoluta sobre el muro que se alarga? | (a) relativa, como hoy (el tabique se inclina) · (b) absoluta al medir, relativa al arrastrar · (c) absoluta siempre | **(b)**: medir no debe torcer muros ortogonales; arrastrar a mano conserva el comportamiento actual |
-| H-74 | ¿Cómo se parte un muro (culata con cumbrera a media longitud)? | (a) borrar y redibujar, como hoy (se pierden vanos y mediciones) · (b) «Partir muro en un punto» que reparte vanos y mediciones · (c) alzado con vértice intermedio (cambio de modelo) | **(b)**: resuelve las culatas sin tocar el modelo y sirve para cualquier muro |
+| H-74 | ¿Cómo se parte un muro (culata con cumbrera a media longitud)? | (a) borrar y redibujar, como hoy (se pierden vanos y mediciones) · (b) «Partir muro en un punto» que reparte vanos y mediciones · (c) alzado con vértice intermedio (cambio de modelo) | **Decidido (b) y hecho**: botón «Partir» en la hoja del muro (distancia desde A); vanos al tramo de su centro, copia de mediciones en el segundo tramo, un paso de deshacer |
 | H-78 | ¿Georreferencia por espacio (docs/23 § 7)? | (a) amarre del proyecto + ubicación de cada espacio, como hoy · (b) amarre propio por espacio | **(a)**: el IFC del proyecto necesita un solo sistema de coordenadas; cada espacio ya se ubica en él |
 | H-70 | ¿Los vanos sin carpintería salen en el IFC? | (a) no, como hoy (solo viven en el alzado) · (b) `IfcOpeningElement` sin relleno, recortando el muro · (c) además, una `IfcDoor` «vano» para que Revit lo liste | **Decidido (b) y corregido**: el hueco existe en obra y en Revit; sin relleno no inventa una carpintería |
 
 ## 6. Hallazgos abiertos
 
-P1: ninguno · P2: H-45, H-54, H-67, H-74 y H-78 (decisión), H-66 (sentido de apertura de puertas) · P3: H-50, H-51, H-52, H-56 a H-63, H-68, H-71 a H-73, H-76, H-77, y H-14 intermitente (lista en `docs/25`
+P1: ninguno · P2: H-45, H-54, H-67 y H-78 (decisión), H-66 (sentido de apertura de puertas) · P3: H-50, H-51, H-52, H-56 a H-63, H-68, H-71 a H-73, H-76, H-77, y H-14 intermitente (lista en `docs/25`
 § 6.3).
 
 ## 7. Qué está instalado y lista para tu prueba en campo
