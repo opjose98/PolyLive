@@ -224,8 +224,8 @@ export function ProjectWorkspaceScreen({
             {project.name}
           </Text>
           <Text style={styles.subtitle}>
-            {project.discipline}
-            {project.author ? ` · ${project.author}` : ''} · {spaces.length}{' '}
+            {project.author ? `${project.author} · ` : ''}
+            {spaces.length}{' '}
             {spaces.length === 1 ? 'espacio' : 'espacios'} · {closedArea.toFixed(2)} m²
           </Text>
         </View>

@@ -39,7 +39,7 @@ class Project {
   bimCode: string            // BIM001, ARC042 — único entre proyectos VIVOS
   name: string               // no vacío
   description: string
-  discipline: BimDiscipline  // lista cerrada, no texto libre
+  discipline: BimDiscipline  // lista cerrada; ya no se elige al crear (docs/23 § 7), queda el valor por defecto
   author: string
   created_at / updated_at / is_deleted
 }
