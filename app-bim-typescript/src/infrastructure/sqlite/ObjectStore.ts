@@ -346,6 +346,11 @@ export class ObjectStore implements IObjectStore {
     await this.db.run(`UPDATE measurements SET is_deleted = 1, updated_at = ? WHERE id = ?`, [now, id as string]);
   }
 
+  /** Revierte `deleteMeasurement` (rehacer una copia de medición). */
+  async restoreMeasurement(id: MeasurementId): Promise<void> {
+    await this.db.run(`UPDATE measurements SET is_deleted = 0, updated_at = ? WHERE id = ?`, [new Date().toISOString(), id as string]);
+  }
+
   private measurementRowToObject(row: MeasurementRow): Measurement {
     return new Measurement({
       id: measurementId(row.id),

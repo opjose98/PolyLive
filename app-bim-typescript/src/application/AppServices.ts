@@ -43,6 +43,7 @@ import {
 } from './use-cases';
 import { ExportRoomDxfUseCase } from './use-cases/ExportRoomDxfUseCase';
 import { ReshapeWallsUseCase } from './use-cases/ReshapeWallsUseCase';
+import { SplitWallUseCase } from './use-cases/SplitWallUseCase';
 import { CreateFloorUseCase } from './use-cases/CreateFloorUseCase';
 import { WallElevationService } from './elevation/WallElevationService';
 import { IFCSerializerAdapter } from '../infrastructure/export/ifc/IFCSerializerAdapter';
@@ -94,6 +95,8 @@ export interface AppServices {
     updateObjectProperty: UpdateObjectPropertyUseCase;
     /** Mover extremos de varios muros unidos en un paso de deshacer (uniones). */
     reshapeWalls: ReshapeWallsUseCase;
+    /** Partir un muro en un punto (H-74). */
+    splitWall: SplitWallUseCase;
     deleteObject: DeleteObjectUseCase;
     capturePhoto: CapturePhotoUseCase;
     linkPhotoToObject: LinkPhotoToObjectUseCase;
@@ -121,6 +124,7 @@ export function createAppServices(db: IDatabase): AppServices {
   const projectStore = new ProjectStore(db);
   const geoStore = new GeoStore(db);
   const defaultLevelId = levelId('level-1');
+  const elevations = new WallElevationService(db, store);
 
   return {
     db,
@@ -129,7 +133,7 @@ export function createAppServices(db: IDatabase): AppServices {
     validationService,
     projectStore,
     projects: new ProjectService(projectStore, store, defaultLevelId),
-    elevations: new WallElevationService(db, store),
+    elevations,
     defaultLevelId,
     markers: new MarkerStore(db),
     zones: new ZoneStore(db),
@@ -147,6 +151,7 @@ export function createAppServices(db: IDatabase): AppServices {
       moveObject: new MoveObjectUseCase(store, commandStack),
       updateObjectProperty: new UpdateObjectPropertyUseCase(store, commandStack, validationService),
       reshapeWalls: new ReshapeWallsUseCase(store, commandStack),
+      splitWall: new SplitWallUseCase(store, commandStack, elevations),
       deleteObject: new DeleteObjectUseCase(store, commandStack),
       capturePhoto: new CapturePhotoUseCase(store, commandStack),
       linkPhotoToObject: new LinkPhotoToObjectUseCase(store, commandStack),

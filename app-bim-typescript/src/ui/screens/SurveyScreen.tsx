@@ -58,6 +58,7 @@ import { useProgress } from '../workspace/progress/useProgress';
 import { ProgressSheets } from '../workspace/progress/ProgressSheets';
 import { planSvg, faceSvg } from '../../application/report/planSvg';
 import { MeasureDialog } from '../workspace/MeasureDialog';
+import { SplitWallDialog } from '../workspace/SplitWallDialog';
 import { useSurveyMenu } from '../workspace/useSurveyMenu';
 import { saveFieldPhoto } from '../workspace/fieldPhotos';
 import { useReview } from '../workspace/review/useReview';
@@ -199,6 +200,7 @@ export function SurveyScreen({
   const [panelOpen, setPanelOpen] = useState(false);
   const [zoneSheetOpen, setZoneSheetOpen] = useState(false);
   const [manualMeasureOpen, setManualMeasureOpen] = useState(false);
+  const [splitOpen, setSplitOpen] = useState(false);
   const [measurements, setMeasurements] = useState<readonly Measurement[]>([]);
 
   // --- Cromo del espacio de trabajo (FABs, BPC, herramientas de esquina) ---
@@ -1381,6 +1383,14 @@ export function SurveyScreen({
                   }
                 : undefined
             }
+            onSplit={
+              selected instanceof Wall
+                ? () => {
+                    setPanelOpen(false);
+                    setSplitOpen(true);
+                  }
+                : undefined
+            }
             onOpenPhotos={
               onOpenPhotos && selected
                 ? () => {
@@ -1471,6 +1481,16 @@ export function SurveyScreen({
           onClose={closeCamera}
         />
       </Modal>
+
+      {/* --- Partir el muro seleccionado (H-74) --- */}
+      {splitOpen && selected instanceof Wall ? (
+        <SplitWallDialog
+          open
+          length={selected.length as number}
+          onClose={() => setSplitOpen(false)}
+          onApply={(distance) => void editor.splitSelectedWall(meters(distance))}
+        />
+      ) : null}
 
       {/* --- Medida del muro (cara interior / exterior / eje) --- */}
       <MeasureDialog

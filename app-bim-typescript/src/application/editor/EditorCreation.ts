@@ -468,6 +468,33 @@ export abstract class EditorCreation extends EditorGestures {
     }
   }
 
+  /**
+   * Parte el muro seleccionado a `distance` m de su arranque (H-74): el primer
+   * tramo sigue seleccionado y el segundo es un muro nuevo con los vanos que
+   * caen en él. Devuelve `false` si no se pudo.
+   */
+  async splitSelectedWall(distance: Meters): Promise<boolean> {
+    const sel = this.selected;
+    if (!(sel instanceof Wall)) return false;
+    this.patch({ busy: true });
+    try {
+      const r = await this.services.useCases.splitWall.execute({
+        wallId: sel.id,
+        distance: distance as number,
+        vertical: this.wallVertical(sel),
+        levels: this.levelElevations,
+      });
+      await this.reload();
+      if (r.clamped > 0) this.notify('info', `${r.clamped} vano(s) quedaban sobre el corte y se arrimaron dentro de su tramo.`);
+      return true;
+    } catch (err) {
+      this.fail(err, 'No se pudo partir el muro.');
+      return false;
+    } finally {
+      this.patch({ busy: false });
+    }
+  }
+
   /** `also`: otras propiedades que cambian en el MISMO paso de deshacer. */
   async updateSelectedProperty(property: string, newValue: unknown, also?: Record<string, unknown>): Promise<void> {
     const sel = this.selected;

@@ -48,6 +48,8 @@ interface PropertiesPanelProps {
   onOpenElevation?: () => void;
   /** Marca este muro como destino de la próxima medición. */
   onMeasure?: () => void;
+  /** Parte este muro en un punto (H-74). */
+  onSplit?: () => void;
   /** Abre las fotos vinculadas a este objeto. */
   onOpenPhotos?: () => void;
 }
@@ -66,6 +68,7 @@ export function PropertiesPanel({
   onClose,
   onOpenElevation,
   onMeasure,
+  onSplit,
   onOpenPhotos,
 }: PropertiesPanelProps) {
   const styles = useStyles();
@@ -138,6 +141,9 @@ export function PropertiesPanel({
         ) : null}
         {object instanceof Wall && onMeasure ? (
           <ActionButton label="Medir" variant="secondary" onPress={onMeasure} disabled={busy} />
+        ) : null}
+        {object instanceof Wall && object.isStraight && onSplit ? (
+          <ActionButton label="Partir" variant="secondary" onPress={onSplit} disabled={busy} />
         ) : null}
         {onOpenPhotos ? (
           <ActionButton label="Fotos" variant="secondary" onPress={onOpenPhotos} disabled={busy} />

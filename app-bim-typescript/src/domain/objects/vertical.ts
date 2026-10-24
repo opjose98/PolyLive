@@ -114,6 +114,29 @@ export function resolveWallProfile(v: WallVertical, levels: LevelElevations): Wa
   return { start: resolveExtent(v.start, levels), end: resolveExtent(v.end, levels) };
 }
 
+/**
+ * Restricción en un punto intermedio del eje (`t` = fracción desde el inicio):
+ * la que deja el alzado igual al partir el muro ahí. Se ata a los niveles del
+ * inicio (o del fin si el inicio no tiene tope) con el desfase que haga falta.
+ */
+export function extentAt(v: WallVertical, t: number, levels: LevelElevations): VerticalExtent {
+  if (sameExtent(v.start, v.end)) return v.start;
+  const p = resolveWallProfile(v, levels);
+  const at = (a: number, b: number) => a + (b - a) * t;
+  const mm = (x: number) => Math.round(x * 1000) / 1000;
+  const base = at(p.start.base, p.end.base);
+  const top = at(p.start.top, p.end.top);
+  const topLevelId = v.start.topLevelId ?? v.end.topLevelId;
+  const topLevel = topLevelId !== null ? levels.get(topLevelId) : undefined;
+  return {
+    baseLevelId: v.start.baseLevelId,
+    baseOffset: mm(base - levelElevation(levels, v.start.baseLevelId)),
+    topLevelId: topLevel !== undefined ? topLevelId : null,
+    topOffset: topLevel !== undefined ? mm(top - topLevel) : 0,
+    unconnectedHeight: mm(top - base),
+  };
+}
+
 /** Un alzado es rectangular si base y tope son iguales en los dos extremos. */
 export function isRectangularProfile(p: WallProfile): boolean {
   return Math.abs(p.start.base - p.end.base) < EPS && Math.abs(p.start.top - p.end.top) < EPS;
