@@ -98,11 +98,13 @@ Detalle fila por fila en `docs/25` § 6.
 | H-45 | Importar un paquete cuyo código BIM ya usa otro proyecto | (a) dejarlo duplicado, como hoy · (b) renombrar el importado (BIM002 → BIM002-2) y avisar · (c) rechazar la importación | **(b)**: no pierde datos y mantiene la unicidad del código |
 | H-54 | Puertas, ventanas y vanos en el plano PDF y en el PDF de avance | (a) como hoy, sin vanos · (b) dibujar los vanos (hueco y arco de puerta) en `planSvg` | **(b)**: el plano entregable debe coincidir con el IFC y el DXF (en NARG29 faltan 14 vanos) |
 | H-67 | Al medir, ¿la T de un tabique sigue la posición relativa o la absoluta sobre el muro que se alarga? | (a) relativa, como hoy (el tabique se inclina) · (b) absoluta al medir, relativa al arrastrar · (c) absoluta siempre | **(b)**: medir no debe torcer muros ortogonales; arrastrar a mano conserva el comportamiento actual |
+| H-74 | ¿Cómo se parte un muro (culata con cumbrera a media longitud)? | (a) borrar y redibujar, como hoy (se pierden vanos y mediciones) · (b) «Partir muro en un punto» que reparte vanos y mediciones · (c) alzado con vértice intermedio (cambio de modelo) | **(b)**: resuelve las culatas sin tocar el modelo y sirve para cualquier muro |
+| H-78 | ¿Georreferencia por espacio (docs/23 § 7)? | (a) amarre del proyecto + ubicación de cada espacio, como hoy · (b) amarre propio por espacio | **(a)**: el IFC del proyecto necesita un solo sistema de coordenadas; cada espacio ya se ubica en él |
 | H-70 | ¿Los vanos sin carpintería salen en el IFC? | (a) no, como hoy (solo viven en el alzado) · (b) `IfcOpeningElement` sin relleno, recortando el muro · (c) además, una `IfcDoor` «vano» para que Revit lo liste | **Decidido (b) y corregido**: el hueco existe en obra y en Revit; sin relleno no inventa una carpintería |
 
 ## 6. Hallazgos abiertos
 
-P1: ninguno · P2: H-45, H-54 y H-67 (decisión), H-66 (sentido de apertura de puertas) · P3: H-50, H-51, H-52, H-56 a H-63, H-68, H-71 a H-73, y H-14 intermitente (lista en `docs/25`
+P1: ninguno · P2: H-45, H-54, H-67, H-74 y H-78 (decisión), H-66 (sentido de apertura de puertas) · P3: H-50, H-51, H-52, H-56 a H-63, H-68, H-71 a H-73, H-76, H-77, y H-14 intermitente (lista en `docs/25`
 § 6.3).
 
 ## 7. Qué está instalado y lista para tu prueba en campo
@@ -208,6 +210,46 @@ segundo plano: el recinto de aulas no se pierde.
 - Con la herramienta Muro, el borde izquierdo del lienzo no recibe toques en vertical (H-72); con vanos juntos, la
   pulsación larga abre el vecino o el muro (H-73).
 - Re-exportar el CSV con el mismo nombre deja un archivo sin extensión `.csv` (H-71).
+
+## 10. Altimetría, culatas y columnas · niveles y fases por espacio
+
+**Pedido del dueño:** los cuatro levantamientos tenían los muros a 2,80 (por defecto), sin culatas ni columnas, y la
+creación de proyecto y espacio debía configurar niveles y fases y quitar la disciplina.
+
+**En la app (rama `audit/estable-campo`):**
+
+- Niveles y fases son **de cada espacio** (migración v4: `project_markers` con clave `(space_id, id)`; cada espacio
+  recibe una copia con los mismos ids, sin reescribir objetos). El IFC del proyecto crea un piso por cota distinta;
+  los paquetes `.polylive` anteriores copian sus niveles a cada espacio al importarse. En la tableta la migración
+  corrió sola al recargar: 6 espacios, 12 niveles y fases, sin pérdidas.
+- **Crear espacio** abre niveles y fases: plantilla Piso · Muro · Viga · Cubierta con cotas editables, «+ Nivel»,
+  «+ Fase», y «Copiar niveles y fases de» cualquier espacio de cualquier proyecto. Un proyecto nuevo abre ese
+  diálogo directamente. **Disciplina** sale del alta, de la tarjeta y de la cabecera del proyecto.
+- La georreferencia **no** pasó a ser por espacio: el proyecto conserva un amarre y cada espacio su ubicación en él
+  (ya existía). Decisión H-78 en el § 5.
+- H-75 corregido (lo oculto no se toca); H-74, H-76, H-77 nuevos (docs/25 § 6.3).
+
+**En los levantamientos** (cotas de los cortes y fachadas de cada plano; culatas por la cumbrera de la planta de
+cubiertas; un muro culata se partió en dos en la cumbrera, H-74):
+
+| Sede | Niveles | Culatas (extremos → cumbrera) | Columnas | Antepechos |
+|---|---|---|---|---|
+| BRIS | Piso 0 · Muro 2,64 · Cubierta 3,24 | muros en A, D y E, cumbrera en el eje 3 (3,30 m): 2,78 / 2,73 → 3,24 | 13 de 0,25 × 0,25 hasta Muro | 0,83 (9 ventanas) |
+| SUMB | Piso 0 · Muro 2,50 · Cubierta 3,50 | muros oeste y este, cumbrera al centro: 2,50 → 3,50 | no tiene (postes del panel prefabricado) | V1/V3 0,70 · V2 1,40 |
+| MARA | Piso 0 · Muro 2,40 · Viga 2,70 · Cubierta 3,35 | x 0, 6,53 y 20,93, cumbrera a 3,74 m: 2,77 / 2,78 / 2,93 → 3,35 | 10 de 0,25 × 0,25 en comedor y cocina, hasta Viga | 1,10 (V7 del baño 2,10) |
+| MACO | Piso 0 · Muro 2,22 · Viga 2,42 · Cubierta 3,50 | ejes A y D, cumbrera a 4,05 m: 2,52 / 2,57 / 3,06 → 3,50; dormitorio a un agua 2,22 → 3,12 | 3 de 0,25 × 0,21 en el corredor, hasta Viga | 1,45 · 2,04 · 1,41 |
+
+Los IFC exportados en la tableta se revisaron con ifcopenshell: pisos por nivel, altura máxima de cada muro (las
+culatas llegan a la cumbrera), cota de cada vano y de cada columna. Puertas y ventanas también llevan el alto de la
+tabla de carpintería (MARA 2,20 / 1,10).
+
+**Supuestos a revisar con el plano en mano:** en MACO el punto de cumbrera del muro este enganchó al nudo del
+dormitorio (4,33 en vez de 4,05; su tope va a Cubierta −0,06) y el dormitorio se modeló a un agua hacia el norte; en
+BRIS el bloque de baños queda a Muro (su cubierta propia al 10 % no se modeló); en MARA la última ventana sur se
+corrió 0,2 m para no salirse del muro.
+
+**Incidencia de la prueba (no de la app):** los cuatro ventanales norte y sur de SUMB se habían borrado el 23-10 a
+las 12:28 con un deshacer del script de pruebas (la base de respaldo lo muestra); se repusieron en su posición.
 
 ## Nota del build release
 
