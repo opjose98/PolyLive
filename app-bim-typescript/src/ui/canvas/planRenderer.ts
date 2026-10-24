@@ -43,7 +43,7 @@ import { isPointInPolygon } from '../../domain/geometry/polygon-utils';
 import type { Handle } from '../../application/canvas/SelectionService';
 import { CANVAS_PALETTES, CanvasPalette } from '../design/canvasThemes';
 import { sizes, withAlpha } from '../design/tokens';
-import { buildWallOutlines, faceSegments, hatchSegments, WallOutline } from './wallGeometry';
+import { buildWallOutlines, faceSegments, hatchSegments, jointPatches, WallOutline } from './wallGeometry';
 import { drawSketch, SketchShape } from './sketch';
 
 // ---------------------------------------------------------------------------
@@ -331,10 +331,10 @@ function drawUnderlay(
   scale: number,
 ): void {
   const walls = objects.filter((o): o is Wall => o instanceof Wall && o.isStraight);
-  const outlines = buildWallOutlines(
-    walls.map((w) => ({ id: w.id as string, start: w.startPoint, end: w.endPoint, thickness: w.thickness as number })),
-  );
+  const inputs = walls.map((w) => ({ id: w.id as string, start: w.startPoint, end: w.endPoint, thickness: w.thickness as number }));
+  const outlines = buildWallOutlines(inputs);
   r.setFillStyle(pal.underlay);
+  for (const p of jointPatches(inputs, outlines)) r.fillPolygon(p.polygon.map(toScreen));
   for (const o of outlines.values()) r.fillPolygon(o.polygon.map(toScreen));
   for (const o of objects) {
     if (!(o instanceof Column)) continue;
@@ -436,6 +436,24 @@ function drawWalls(ctx: Ctx): void {
   const { r, pal, toScreen } = ctx;
   const cut = STROKE.cut * pal.lineScale;
   const thin = STROKE.thin * pal.lineScale;
+
+  // Nudos (T, cruz, ingletes abiertos): el poché bajo los muros cierra el triángulo entre extremos.
+  const inputs = ctx.walls
+    .filter((w) => w.isStraight)
+    .map((w) => ({ id: w.id as string, start: w.startPoint, end: w.endPoint, thickness: w.thickness as number }));
+  for (const patch of jointPatches(inputs, ctx.outlines)) {
+    const ws = patch.wallIds.map((id) => ctx.wallsById.get(id)).filter((w): w is Wall => !!w);
+    const existing = ws.every((w) => !!ctx.scene.existingIds?.has(w.id as string));
+    const solid = ws.some((w) => wallRendering(w.material, w.isStructural) === 'solid');
+    const poly = patch.polygon.map(toScreen);
+    r.setFillStyle(existing ? pal.existingFill : solid ? pal.wallFill : pal.background);
+    r.fillPolygon(poly);
+    if (!existing && !solid) {
+      r.setStrokeStyle(pal.partition);
+      r.setLineWidth(thin);
+      for (const [a, b] of hatchSegments(poly, HATCH_PX * pal.lineScale)) r.drawLine(a.x, a.y, b.x, b.y);
+    }
+  }
 
   for (const wall of ctx.walls) {
     const outline = ctx.outlines.get(wall.id as string);

@@ -227,3 +227,62 @@ export function hatchSegments(
   }
   return out;
 }
+
+/** Parche de un nudo: el hueco que dejan los ingletes entre los muros que llegan a él. */
+export interface JointPatch {
+  readonly polygon: readonly Point2D[];
+  readonly wallIds: readonly string[];
+}
+
+/**
+ * En un encuentro en T (o cruz, o un inglete que no se pudo cerrar) un muro
+ * acaba a inglete por un lado y recto por el otro: entre los extremos queda un
+ * triángulo sin poché. El parche es la envolvente convexa de las esquinas de
+ * todos los muros en ese nudo; dibujado bajo los muros, cierra el hueco.
+ */
+export function jointPatches(
+  walls: readonly WallInput[],
+  outlines: ReadonlyMap<string, WallOutline>,
+  tolerance = NODE_TOLERANCE,
+): JointPatch[] {
+  const nodes: { at: Vec; corners: Vec[]; ids: string[] }[] = [];
+  const nodeAt = (p: Vec) => {
+    let n = nodes.find((q) => len(sub(q.at, p)) <= tolerance);
+    if (!n) nodes.push((n = { at: p, corners: [], ids: [] }));
+    return n;
+  };
+  for (const w of walls) {
+    const o = outlines.get(w.id);
+    if (!o) continue;
+    const [sL, eL, eR, sR] = o.polygon;
+    const s = nodeAt(w.start);
+    s.corners.push(sL, sR);
+    s.ids.push(w.id);
+    const e = nodeAt(w.end);
+    e.corners.push(eL, eR);
+    e.ids.push(w.id);
+  }
+  const out: JointPatch[] = [];
+  for (const n of nodes) {
+    if (n.ids.length < 2) continue;
+    const hull = convexHull(n.corners);
+    if (hull.length >= 3) out.push({ polygon: hull, wallIds: n.ids });
+  }
+  return out;
+}
+
+/** Envolvente convexa (cadena monótona de Andrew), antihoraria. */
+function convexHull(points: readonly Vec[]): Vec[] {
+  const pts = [...points].sort((a, b) => a.x - b.x || a.y - b.y);
+  if (pts.length < 3) return pts;
+  const build = (src: Vec[]) => {
+    const h: Vec[] = [];
+    for (const p of src) {
+      while (h.length >= 2 && cross(sub(h[h.length - 1], h[h.length - 2]), sub(p, h[h.length - 2])) <= 1e-12) h.pop();
+      h.push(p);
+    }
+    h.pop();
+    return h;
+  };
+  return [...build(pts), ...build([...pts].reverse())];
+}
