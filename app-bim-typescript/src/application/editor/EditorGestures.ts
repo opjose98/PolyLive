@@ -57,6 +57,8 @@ export abstract class EditorGestures extends EditorCore {
         return this.addGenericOpening(world, tol);
       case 'measure':
         return this.pickMeasureTarget(world, tol);
+      case 'split':
+        return this.splitTap(world, tol);
       case 'photo':
         this.patch({ pendingPhotoPoint: world });
         return;

@@ -16,6 +16,7 @@ import { Column } from '../../domain/objects/column';
 import { Floor, floorZoneId } from '../../domain/objects/floor';
 
 import { ElevationSnapshotCommand } from '../commands/ElevationSnapshotCommand';
+import { splitSnapCandidates } from '../../domain/objects/wall-split';
 import {
   VerticalExtent,
   WallVertical,
@@ -475,7 +476,34 @@ export abstract class EditorCreation extends EditorGestures {
    */
   async splitSelectedWall(distance: Meters): Promise<boolean> {
     const sel = this.selected;
-    if (!(sel instanceof Wall)) return false;
+    return sel instanceof Wall ? this.splitWall(sel, distance) : false;
+  }
+
+  /**
+   * Herramienta Dividir muro: parte el muro bajo el dedo donde se toca. Se
+   * engancha a los cruces y encuentros en T con otros muros y a la mitad.
+   */
+  protected async splitTap(world: Point2D, tol: Meters): Promise<void> {
+    const wall = this.nearestWall(world, tol);
+    if (!wall) {
+      this.notify('info', 'Toca sobre el muro que quieres dividir.');
+      return;
+    }
+    if (!wall.isStraight) {
+      this.notify('info', 'Solo se pueden dividir muros rectos.');
+      return;
+    }
+    const along = this.projectOntoWall(world, wall);
+    const others = this.walls.filter((w) => w.id !== wall.id).map((w) => ({ start: w.startPoint, end: w.endPoint }));
+    const snaps = splitSnapCandidates(wall.startPoint, wall.endPoint, others);
+    const near = snaps.reduce<number | null>((b, d) => (Math.abs(d - along) <= Math.max(tol as number, 0.15) && (b === null || Math.abs(d - along) < Math.abs(b - along)) ? d : b), null);
+    const distance = near ?? Math.round(along * 100) / 100;
+    if (await this.splitWall(wall, meters(distance))) {
+      this.notify('success', `Muro dividido a ${distance.toFixed(2)} m de su inicio${near !== null ? ' (encuentro con otro muro)' : ''}.`);
+    }
+  }
+
+  protected async splitWall(sel: Wall, distance: Meters): Promise<boolean> {
     this.patch({ busy: true });
     try {
       const r = await this.services.useCases.splitWall.execute({

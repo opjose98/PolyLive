@@ -263,7 +263,7 @@ export function ElevationView(props: ElevationViewProps) {
             profileHandles: ws.workMode === 'levantamiento' ? editor.profileHandles : undefined,
           }
         : null,
-    [st, editor, width, height, severity, ws.grid, ws.filters.cotas, palette, visibleTypes, painting, ws.coordination, wallDbId, progress, reviewing, review, faceView, draftAnnotations, photoPins],
+    [st, editor, width, height, severity, ws.grid, ws.filters.cotas, palette, visibleTypes, painting, ws.coordination, wallDbId, progress, reviewing, review, faceView, draftAnnotations, photoPins, ws.workMode],
   );
 
   // Solo Levantamiento edita vanos; Avance y Revisión miran el alzado.

@@ -206,6 +206,29 @@ describe('EditorController', () => {
   // Herramienta: selección
   // -------------------------------------------------------------------------
 
+  describe('herramienta dividir muro', () => {
+    it('se engancha al encuentro en T con otro muro y parte en un paso de deshacer', async () => {
+      editor.setNodeSnapEnabled(false);
+      await drawWall(0, 0, 6, 0);
+      await drawWall(2.5, 0, 2.5, 3); // T sobre el primero
+      const before = editor.walls.length;
+      editor.setTool('split');
+      await editor.handleTap(px(2.4), px(0.05), TOL_PX);
+      expect(editor.walls).toHaveLength(before + 1);
+      const ends = editor.walls.filter((w) => w.startPoint.y === 0 && w.endPoint.y === 0).map((w) => [w.startPoint.x, w.endPoint.x].sort((a, b) => a - b));
+      expect(ends).toEqual(expect.arrayContaining([[0, 2.5], [2.5, 6]]));
+      await editor.undo();
+      expect(editor.walls).toHaveLength(before);
+    });
+
+    it('lejos de un encuentro parte donde se toca, al centímetro', async () => {
+      await drawWall(0, 0, 6, 0);
+      editor.setTool('split');
+      await editor.handleTap(px(4.123), px(0), TOL_PX);
+      expect(editor.walls.map((w) => w.endPoint.x).sort()).toEqual([4.12, 6]);
+    });
+  });
+
   describe('herramienta selección', () => {
     it('toca un muro y lo selecciona', async () => {
       await drawRectangle();

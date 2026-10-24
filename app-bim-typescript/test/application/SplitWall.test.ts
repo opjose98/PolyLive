@@ -21,7 +21,7 @@ import { Measurement } from '../../src/domain/objects/measurement';
 import { roomId, revitObjectId, levelId, measurementId, wallId, RoomId, RevitObjectId } from '../../src/domain/objects/base';
 import { meters } from '../../src/domain/geometry/types';
 import { extent, WallVertical } from '../../src/domain/objects/vertical';
-import { placeSpan, planWallSplit } from '../../src/domain/objects/wall-split';
+import { placeSpan, planWallSplit, splitSnapCandidates } from '../../src/domain/objects/wall-split';
 import { wallOpeningId } from '../../src/domain/objects/wall-elevation';
 
 const ROOM: RoomId = roomId('split-room');
@@ -59,6 +59,16 @@ describe('planWallSplit / placeSpan', () => {
     const plan = planWallSplit({ x: 0, y: 0 }, { x: 6, y: 0 }, v, LEVELS, 3)!;
     expect(plan.first).toEqual({ start: v.start, end: top, stations: [{ at: 1, ext: top }] });
     expect(plan.second).toEqual({ start: top, end: v.end, stations: [{ at: 2, ext: top }] });
+  });
+
+  it('candidatos de corte: cruce en X, encuentro en T y mitad', () => {
+    const c = splitSnapCandidates({ x: 0, y: 0 }, { x: 10, y: 0 }, [
+      { start: { x: 2, y: -1 }, end: { x: 2, y: 1 } }, // X
+      { start: { x: 7, y: 0 }, end: { x: 7, y: 3 } }, // T
+      { start: { x: 0, y: 0 }, end: { x: 0, y: 3 } }, // esquina: no cuenta
+      { start: { x: 4, y: 1 }, end: { x: 6, y: 1 } }, // paralelo: no cuenta
+    ]);
+    expect(c).toEqual([2, 5, 7]);
   });
 
   it('rechaza un tramo más corto que el mínimo', () => {

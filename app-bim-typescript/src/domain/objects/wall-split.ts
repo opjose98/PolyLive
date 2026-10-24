@@ -90,3 +90,41 @@ export function splitOpenings(
   }
   return { first, second };
 }
+
+/**
+ * Puntos del eje de un muro donde conviene partirlo: donde lo cruza el eje de
+ * otro muro (X) o donde otro muro lo toca con un extremo (T), y su mitad.
+ * Distancias desde el inicio, ordenadas, sin los extremos.
+ */
+export function splitSnapCandidates(
+  start: Point2D,
+  end: Point2D,
+  others: readonly { readonly start: Point2D; readonly end: Point2D }[],
+  touchTol = 0.02,
+): number[] {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const length = Math.hypot(dx, dy);
+  if (length < 2 * MIN_SPLIT_PIECE) return [];
+  const ux = dx / length;
+  const uy = dy / length;
+  const out: number[] = [length / 2];
+  for (const o of others) {
+    const ex = o.end.x - o.start.x;
+    const ey = o.end.y - o.start.y;
+    // Extremos del otro muro sobre este eje (encuentro en T).
+    for (const p of [o.start, o.end]) {
+      const along = (p.x - start.x) * ux + (p.y - start.y) * uy;
+      const off = Math.abs((p.x - start.x) * -uy + (p.y - start.y) * ux);
+      if (off <= touchTol) out.push(along);
+    }
+    // Cruce de ejes (X).
+    const den = dx * ey - dy * ex;
+    if (Math.abs(den) < 1e-9) continue;
+    const t = ((o.start.x - start.x) * ey - (o.start.y - start.y) * ex) / den;
+    const u = ((o.start.x - start.x) * dy - (o.start.y - start.y) * dx) / den;
+    if (t > 0 && t < 1 && u >= -1e-9 && u <= 1 + 1e-9) out.push(t * length);
+  }
+  const inside = out.filter((d) => d >= MIN_SPLIT_PIECE && d <= length - MIN_SPLIT_PIECE).sort((a, b) => a - b);
+  return inside.filter((d, i) => i === 0 || d - inside[i - 1] > 1e-3);
+}

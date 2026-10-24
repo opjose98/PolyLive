@@ -82,7 +82,7 @@ export interface PhotoMarkerView {
 // Herramientas y estado
 // ---------------------------------------------------------------------------
 
-export type EditorTool = 'select' | 'wall' | 'door' | 'window' | 'column' | 'floor' | 'opening' | 'measure' | 'photo';
+export type EditorTool = 'select' | 'wall' | 'door' | 'window' | 'column' | 'floor' | 'opening' | 'measure' | 'photo' | 'split';
 
 /** Valores por defecto de los objetos que el editor crea. Editables en Ajustes. */
 interface EditorDefaults {
@@ -284,6 +284,7 @@ export abstract class EditorCore {
   protected abstract addGenericOpening(world: Point2D, tol: Meters): Promise<void>;
   protected abstract addFloor(screenX: number, screenY: number): Promise<void>;
   protected abstract pickMeasureTarget(world: Point2D, tol: Meters): void;
+  protected abstract splitTap(world: Point2D, tol: Meters): Promise<void>;
 
   protected readonly services: AppServices;
   protected readonly roomId: RoomId;

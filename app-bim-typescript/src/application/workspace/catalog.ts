@@ -164,6 +164,7 @@ export const CATEGORIES_PLAN: readonly CategoryDef[] = [
       { id: 'ventana', label: 'Ventana', icon: 'window-closed-variant', props: { width: 120 }, binding: { kind: 'plan', tool: 'window' } },
       { id: 'suelo', label: 'Suelo', icon: 'floor-plan', props: { thickness: 10 }, binding: { kind: 'plan', tool: 'floor' } },
       { id: 'vano', label: 'Vano', icon: 'rectangle-outline', props: { width: 80 }, binding: { kind: 'plan', tool: 'opening' } },
+      { id: 'dividir', label: 'Dividir muro', icon: 'content-cut', binding: { kind: 'plan', tool: 'split' } },
     ],
   },
   {
