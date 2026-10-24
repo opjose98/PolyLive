@@ -216,6 +216,19 @@ describe('EditorController', () => {
       expect(editor.selected).toBeInstanceOf(Wall);
     });
 
+    it('lo que los filtros ocultan no se puede tocar (H-75)', async () => {
+      await drawRectangle();
+      editor.setTool('select');
+      editor.setPickFilter((o) => !(o instanceof Wall));
+
+      await editor.handleTap(px(2), px(0), TOL_PX);
+      expect(editor.selected).toBeNull();
+
+      editor.setPickFilter(null);
+      await editor.handleTap(px(2), px(0), TOL_PX);
+      expect(editor.selected).toBeInstanceOf(Wall);
+    });
+
     it('tocar el vacío deselecciona', async () => {
       await drawRectangle();
       editor.setTool('select');

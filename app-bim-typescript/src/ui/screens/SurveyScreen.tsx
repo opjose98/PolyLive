@@ -30,6 +30,7 @@ import { AxisGizmo } from '../workspace/AxisGizmo';
 import { resolveBpcContext, SelectionSummary } from '../../application/workspace/bpcContext';
 import { DEFAULT_SCALE } from '../../application/canvas/types';
 import { useShallow } from 'zustand/react/shallow';
+import type { RevitObjectBase } from '../../domain/objects/base';
 import { Column } from '../../domain/objects/column';
 import { Room } from '../../domain/objects/room';
 import { WorkspaceStatusBar } from '../workspace/WorkspaceStatusBar';
@@ -751,16 +752,18 @@ export function SurveyScreen({
 
   // --- Visibilidad: filtros y capas del FAB de vista ---
   const { filters, layers } = wsState;
-  const visibleObjects = useMemo(
-    () =>
-      displayObjects.filter((o) => {
-        if (o instanceof Wall) return filters.muros && (o.isStructural ? layers.estructural : layers.arquitectonico);
-        if (o instanceof Column) return filters.columnas && layers.estructural;
-        if (o instanceof Door || o instanceof Window) return layers.arquitectonico;
-        return true;
-      }),
-    [displayObjects, filters, layers],
+  const isVisible = useCallback(
+    (o: RevitObjectBase) => {
+      if (o instanceof Wall) return filters.muros && (o.isStructural ? layers.estructural : layers.arquitectonico);
+      if (o instanceof Column) return filters.columnas && layers.estructural;
+      if (o instanceof Door || o instanceof Window) return layers.arquitectonico;
+      return true;
+    },
+    [filters, layers],
   );
+  const visibleObjects = useMemo(() => displayObjects.filter(isVisible), [displayObjects, isVisible]);
+  // Lo oculto tampoco se toca: si no, un muro filtrado tapa la columna que hay en él.
+  useEffect(() => editor.setPickFilter(isVisible), [editor, isVisible]);
   const underlay = useMemo(
     () => (markersLoaded ? editor.underlayObjects : []),
     [editor, markersLoaded, state.objects, levelInfo],

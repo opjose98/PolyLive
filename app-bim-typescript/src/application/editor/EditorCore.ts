@@ -421,7 +421,17 @@ export abstract class EditorCore {
    * contenedor del levantamiento.
    */
   protected get pickable(): readonly RevitObjectBase[] {
-    return this.scopedObjects.filter((o) => !(o instanceof Room));
+    const show = this.pickFilter;
+    return this.scopedObjects.filter((o) => !(o instanceof Room) && (!show || show(o)));
+  }
+
+  private pickFilter: ((o: RevitObjectBase) => boolean) | null = null;
+
+  /** Qué se puede tocar: lo que la vista oculta con filtros o capas no se selecciona (H-75). */
+  setPickFilter(show: ((o: RevitObjectBase) => boolean) | null): void {
+    this.pickFilter = show;
+    const sel = this.selected;
+    if (sel && show && !show(sel)) this.patch({ selectedId: null });
   }
 
   protected scope(): NonNullable<EditorCore['scopeCache']> {
