@@ -13,7 +13,7 @@
 
 import type { Point2D } from '../geometry/types';
 import type { WallOpening } from './wall-elevation';
-import { LevelElevations, VerticalExtent, WallVertical, extentAt } from './vertical';
+import { LevelElevations, VerticalExtent, WallVertical, extentAt, stationsWithin } from './vertical';
 
 /** Longitud mínima de cada tramo. */
 export const MIN_SPLIT_PIECE = 0.1;
@@ -53,11 +53,15 @@ export function planWallSplit(
   const length = Math.hypot(end.x - start.x, end.y - start.y);
   if (distance < MIN_SPLIT_PIECE || length - distance < MIN_SPLIT_PIECE) return null;
   const t = distance / length;
-  const mid: VerticalExtent = extentAt(vertical, t, levels);
+  const mid: VerticalExtent = extentAt(vertical, distance, length, levels);
+  // Las estaciones van a su tramo; la que coincide con el corte pasa a ser el extremo común.
+  const inner = stationsWithin(vertical.stations, length).filter((s) => Math.abs(s.at - distance) > 1e-3);
+  const before = inner.filter((s) => s.at < distance);
+  const after = inner.filter((s) => s.at > distance).map((s) => ({ ...s, at: s.at - distance }));
   return {
     at: { x: start.x + (end.x - start.x) * t, y: start.y + (end.y - start.y) * t },
-    first: { start: vertical.start, end: mid },
-    second: { start: mid, end: vertical.end },
+    first: before.length ? { start: vertical.start, end: mid, stations: before } : { start: vertical.start, end: mid },
+    second: after.length ? { start: mid, end: vertical.end, stations: after } : { start: mid, end: vertical.end },
     secondLength: length - distance,
   };
 }

@@ -15,6 +15,12 @@
 //
 // PERFIL: si el muro tiene restricciones de nivel (vertical.ts), el alzado
 // dibuja y mide su perfil real, no la culata guardada con el alzado.
+//
+// PUNTOS DEL PERFIL (H-74): los extremos y las estaciones intermedias son
+// tocables. Tocar uno lo selecciona y la vista abre el selector de base y
+// tope (el mismo de la planta); la herramienta «Punto de altura» crea una
+// estación donde se toca, con la altura que el muro ya tenía ahí, y una
+// estación seleccionada se arrastra a lo largo del muro.
 // =============================================================================
 
 import { Wall } from '../../domain/objects/wall';
@@ -23,14 +29,20 @@ import { Window } from '../../domain/objects/window';
 import { ElevationSnapshot, ElevationSnapshotCommand, VanoSnapshot } from '../commands/ElevationSnapshotCommand';
 import { revitObjectId } from '../../domain/objects/base';
 import { LEVEL_PROP, ProjectMarker } from '../../domain/objects/marker';
-import { LevelElevations, WallProfile, WallVertical, profileBottom, profileHeight, profileProblem, resolveWallProfile, wallVerticalOf } from '../../domain/objects/vertical';
-import { OpeningType, WallElevation, WallOpening, WallOpeningId, WallQuantification, computeQuantification, effectiveLeftHeight, effectiveRightHeight, levelsFromProfile, openingEnd, openingTop, OPENING_DEFAULTS } from '../../domain/objects/wall-elevation';
+import { LevelElevations, VerticalExtent, WallProfile, WallVertical, extentAt, profileBottom, profileHeight, profileProblem, resolveWallProfile, wallVerticalOf, withStation, withoutStation } from '../../domain/objects/vertical';
+import { OpeningType, WallElevation, WallOpening, WallOpeningId, WallQuantification, computeQuantification, effectiveLeftHeight, effectiveRightHeight, levelsFromProfile, openingEnd, openingTop, OPENING_DEFAULTS, profileStations } from '../../domain/objects/wall-elevation';
 import { reportFailure } from '../../shared/diagnostics';
 import type { AppServices } from '../AppServices';
 import { ElevationSeverity, ElevationViewport, snapXSmart, snapYSmart } from './WallElevationService';
 
-export type ElevationTool = 'select' | OpeningType;
+export type ElevationTool = 'select' | OpeningType | 'station';
 export type WallSide = 'A' | 'B';
+
+/** Punto del perfil: un extremo del muro o una estación (por su posición). */
+export type ProfilePointRef = { readonly kind: 'start' } | { readonly kind: 'end' } | { readonly kind: 'station'; readonly at: number };
+
+/** Distancia mínima de una estación a los extremos y a otra estación. */
+const MIN_STATION_GAP = 0.05;
 
 interface LevelLine {
   readonly id: string;
@@ -56,6 +68,8 @@ export interface ElevationEditorState {
   readonly selectedId: WallOpeningId | null;
   /** Hueco arrastrado en su posición en vivo (no persistido). */
   readonly dragPreview: WallOpening | null;
+  /** Punto del perfil seleccionado (abre el selector de base y tope). */
+  readonly selectedPoint: ProfilePointRef | null;
   readonly busy: boolean;
   readonly notice: { kind: 'info' | 'error' | 'success'; message: string } | null;
 }
@@ -74,6 +88,10 @@ export class ElevationEditor {
   private levels: readonly ProjectMarker[] = [];
   private size = { w: 360, h: 480 };
   private drag: { origin: { x: number; y: number }; opening: WallOpening; moved: boolean } | null = null;
+  /** Estación arrastrada: su posición original y la actual. */
+  private stationDrag: { from: number; at: number; moved: boolean; base: WallVertical } | null = null;
+  /** Restricción en edición (selector o arrastre) aún sin guardar. */
+  private preview: WallVertical | null = null;
 
   constructor(params: { services: AppServices; wallId: string; levels?: readonly ProjectMarker[] }) {
     this.services = params.services;
@@ -91,6 +109,7 @@ export class ElevationEditor {
       viewport: { scale: 80, offsetX: 40, offsetY: 400 },
       selectedId: null,
       dragPreview: null,
+      selectedPoint: null,
       busy: false,
       notice: null,
     };
@@ -162,8 +181,8 @@ export class ElevationEditor {
 
   private publish(wall: Wall, stored: WallElevation): void {
     const base = this.levels.find((m) => m.isBase)?.id ?? '';
-    const vertical = wallVerticalOf(wall, base, LEVEL_PROP);
-    const profile = wall.vertical ? resolveWallProfile(vertical, this.levelElevations) : null;
+    const vertical = this.preview ?? wallVerticalOf(wall, base, LEVEL_PROP);
+    const profile = wall.vertical || this.preview ? resolveWallProfile(vertical, this.levelElevations) : null;
     const elevation = profile ? { ...stored, levels: levelsFromProfile(profile) } : stored;
     const baseElevation = profile ? profileBottom(profile) : this.levelElevations.get(vertical.start.baseLevelId) ?? 0;
     const selectedId = elevation.openings.some((o) => o.id === this.state.selectedId) ? this.state.selectedId : null;
@@ -260,7 +279,7 @@ export class ElevationEditor {
   }
 
   setTool(tool: ElevationTool): void {
-    this.patch({ tool, selectedId: tool === 'select' ? this.state.selectedId : null });
+    this.patch({ tool, selectedId: tool === 'select' ? this.state.selectedId : null, selectedPoint: tool === 'select' || tool === 'station' ? this.state.selectedPoint : null });
   }
 
   select(id: WallOpeningId | null): void {
@@ -299,6 +318,114 @@ export class ElevationEditor {
     return null;
   }
 
+  // --- Puntos del perfil (extremos y estaciones) ---------------------------
+
+  /** Vértices del perfil para dibujar: x, base y tope en CSL, y si es el seleccionado. */
+  get profileHandles(): { x: number; base: number; top: number; selected: boolean; station: boolean }[] {
+    const e = this.state.elevation;
+    if (!e) return [];
+    const L = this.wallLength;
+    const sel = this.state.selectedPoint;
+    const pts = profileStations(e.levels, L);
+    return pts.map((p, i) => {
+      const kind = i === 0 ? 'start' : i === pts.length - 1 ? 'end' : 'station';
+      const selected = !!sel && sel.kind === kind && (kind !== 'station' || Math.abs((sel as { at: number }).at - p.x) < 1e-3);
+      return { ...p, selected, station: kind === 'station' };
+    });
+  }
+
+  /** Punto del perfil bajo el dedo (su vértice de tope o de base). */
+  pointAt(x: number, y: number, tolPx: number): ProfilePointRef | null {
+    const handles = this.profileHandles;
+    let best: { ref: ProfilePointRef; d: number } | null = null;
+    handles.forEach((h, i) => {
+      for (const yy of [h.top, h.base]) {
+        const s = this.toScreen({ x: h.x, y: yy });
+        const d = Math.hypot(s.x - x, s.y - y);
+        if (d > tolPx || (best && d >= best.d)) continue;
+        const ref: ProfilePointRef = i === 0 ? { kind: 'start' } : i === handles.length - 1 ? { kind: 'end' } : { kind: 'station', at: h.x };
+        best = { ref, d };
+      }
+    });
+    return (best as { ref: ProfilePointRef } | null)?.ref ?? null;
+  }
+
+  selectPoint(ref: ProfilePointRef | null): void {
+    this.preview = null;
+    this.patch({ selectedPoint: ref, selectedId: ref ? null : this.state.selectedId });
+  }
+
+  /** Restricción del punto seleccionado (la de la vista previa si se está editando). */
+  get selectedPointExtent(): VerticalExtent | null {
+    const v = this.preview ?? this.state.vertical;
+    const ref = this.state.selectedPoint;
+    if (!v || !ref) return null;
+    if (ref.kind === 'start') return v.start;
+    if (ref.kind === 'end') return v.end;
+    return v.stations?.find((s) => Math.abs(s.at - ref.at) < 1e-3)?.ext ?? null;
+  }
+
+  private withPointExtent(v: WallVertical, ref: ProfilePointRef, ext: VerticalExtent): WallVertical {
+    if (ref.kind === 'start') return { ...v, start: ext };
+    if (ref.kind === 'end') return { ...v, end: ext };
+    return withStation(v, { at: ref.at, ext });
+  }
+
+  /**
+   * Cambia base y tope del punto seleccionado. Sin `commit` solo se ve (el
+   * deslizador se está arrastrando); con `commit` se guarda en un paso.
+   */
+  async setPointExtent(ext: VerticalExtent, commit: boolean): Promise<boolean> {
+    const { wall, vertical, selectedPoint } = this.state;
+    if (!wall || !vertical || !selectedPoint || !this.stored) return false;
+    const next = this.withPointExtent(this.preview ?? vertical, selectedPoint, ext);
+    if (!commit) {
+      this.preview = next;
+      this.publish(wall, this.stored);
+      return true;
+    }
+    this.preview = null;
+    const ok = await this.saveVertical(next);
+    if (!ok) this.publish(wall, this.stored);
+    return ok;
+  }
+
+  /** Nueva estación a `x` (CSL) con la altura que el muro ya tiene ahí. */
+  async addStationAt(x: number): Promise<boolean> {
+    const { wall, vertical } = this.state;
+    if (!wall || !vertical) return false;
+    const L = this.wallLength;
+    const at = Math.round(x * 100) / 100;
+    if (at < MIN_STATION_GAP || at > L - MIN_STATION_GAP) {
+      this.notify('info', 'Toca dentro del muro, lejos de sus extremos: los extremos ya son puntos del perfil.');
+      return false;
+    }
+    if ((vertical.stations ?? []).some((s) => Math.abs(s.at - at) < MIN_STATION_GAP)) {
+      this.selectPoint({ kind: 'station', at: (vertical.stations ?? []).find((s) => Math.abs(s.at - at) < MIN_STATION_GAP)!.at });
+      return false;
+    }
+    const ext = extentAt(vertical, at, L, this.levelElevations);
+    const ok = await this.saveVertical(withStation(vertical, { at, ext }));
+    if (ok) this.selectPoint({ kind: 'station', at });
+    return ok;
+  }
+
+  async removeSelectedStation(): Promise<boolean> {
+    const { vertical, selectedPoint } = this.state;
+    if (!vertical || selectedPoint?.kind !== 'station') return false;
+    const ok = await this.saveVertical(withoutStation(vertical, selectedPoint.at));
+    if (ok) this.selectPoint(null);
+    return ok;
+  }
+
+  /** X de una estación arrastrada: se engancha a huecos y centro del muro; al cm. */
+  private stationX(rawX: number, tolPx: number): number {
+    const e = this.state.elevation;
+    const L = this.wallLength;
+    const snapped = e ? snapXSmart(rawX, e, L, tolPx / this.state.viewport.scale) : rawX;
+    return clamp(Math.round(snapped * 100) / 100, MIN_STATION_GAP, L - MIN_STATION_GAP);
+  }
+
   // --- Gestos ---------------------------------------------------------------
 
   /**
@@ -308,8 +435,20 @@ export class ElevationEditor {
   async tap(x: number, y: number, tolPx: number, dims?: { width?: number; height?: number; sillHeight?: number }): Promise<void> {
     const { elevation, wall, tool } = this.state;
     if (!elevation || !wall || this.state.busy) return;
+    if (tool === 'station') {
+      const hit = this.pointAt(x, y, tolPx);
+      if (hit) this.selectPoint(hit);
+      else await this.addStationAt(this.stationX(this.toCsl(x, y).x, tolPx));
+      return;
+    }
     if (tool === 'select') {
-      this.patch({ selectedId: this.openingAt(x, y, tolPx)?.id ?? null });
+      const point = this.pointAt(x, y, tolPx);
+      if (point) {
+        this.selectPoint(point);
+        return;
+      }
+      this.patch({ selectedId: this.openingAt(x, y, tolPx)?.id ?? null, selectedPoint: null });
+      this.preview = null;
       return;
     }
     const width = dims?.width ?? OPENING_DEFAULTS[tool].width;
@@ -335,6 +474,14 @@ export class ElevationEditor {
 
   /** Empieza a arrastrar el hueco seleccionado si el dedo lo toca. */
   beginDrag(x: number, y: number, tolPx: number): boolean {
+    const point = this.state.selectedPoint;
+    if (point?.kind === 'station') {
+      const hit = this.pointAt(x, y, tolPx);
+      if (hit?.kind === 'station' && Math.abs(hit.at - point.at) < 1e-3 && this.state.vertical) {
+        this.stationDrag = { from: point.at, at: point.at, moved: false, base: this.state.vertical };
+        return true;
+      }
+    }
     const sel = this.selected;
     if (!sel || this.state.tool !== 'select') return false;
     const hit = this.openingAt(x, y, tolPx);
@@ -345,6 +492,22 @@ export class ElevationEditor {
   }
 
   updateDrag(x: number, y: number, tolPx: number): void {
+    const sd = this.stationDrag;
+    const wall = this.state.wall;
+    if (sd && wall && this.stored) {
+      const vertical = sd.base;
+      const at = this.stationX(this.toCsl(x, y).x, tolPx);
+      const others = (vertical.stations ?? []).filter((s) => Math.abs(s.at - sd.from) > 1e-3);
+      if (Math.abs(at - sd.at) < 1e-4 || others.some((s) => Math.abs(s.at - at) < MIN_STATION_GAP)) return;
+      const ext = vertical.stations?.find((s) => Math.abs(s.at - sd.from) < 1e-3)?.ext;
+      if (!ext) return;
+      sd.at = at;
+      sd.moved = true;
+      this.preview = withStation(withoutStation(vertical, sd.from), { at, ext });
+      this.patch({ selectedPoint: { kind: 'station', at } });
+      this.publish(wall, this.stored);
+      return;
+    }
     const d = this.drag;
     const e = this.state.elevation;
     if (!d || !e) return;
@@ -371,11 +534,28 @@ export class ElevationEditor {
   }
 
   cancelDrag(): void {
+    if (this.stationDrag) {
+      const from = this.stationDrag.from;
+      this.stationDrag = null;
+      this.preview = null;
+      this.patch({ selectedPoint: { kind: 'station', at: from } });
+      if (this.state.wall && this.stored) this.publish(this.state.wall, this.stored);
+    }
     this.drag = null;
     if (this.state.dragPreview) this.patch({ dragPreview: null });
   }
 
   async endDrag(): Promise<void> {
+    const sd = this.stationDrag;
+    if (sd) {
+      this.stationDrag = null;
+      const next = this.preview;
+      this.preview = null;
+      if (sd.moved && next) {
+        if (!(await this.saveVertical(next))) this.patch({ selectedPoint: { kind: 'station', at: sd.from } });
+      }
+      return;
+    }
     const d = this.drag;
     const preview = this.state.dragPreview;
     this.drag = null;

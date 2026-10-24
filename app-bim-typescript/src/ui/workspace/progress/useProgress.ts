@@ -16,6 +16,7 @@ import type { AppServices } from '../../../application/AppServices';
 import type { EditorController } from '../../../application/editor/EditorController';
 import { ProgressController, ProgressState, ProgressTool } from '../../../application/progress/ProgressController';
 import { faceSupport, ProgressTarget, Support, targetKey } from '../../../domain/progress/progress';
+import { elevationOutline, levelsFromProfile } from '../../../domain/objects/wall-elevation';
 import type { WallElevation } from '../../../domain/objects/wall-elevation';
 import { categoriesFor, findTool } from '../../../application/workspace/catalog';
 import { workspaceStore } from '../../../state/workspaceStore';
@@ -114,6 +115,7 @@ export function useProgress({ services, projectId, spaceId, editor, operatorName
         w.length as number,
         { leftBase: p.start.base - y0, rightBase: p.end.base - y0, leftTop: p.start.top - y0, rightTop: p.end.top - y0 },
         openingsOf.get(w.id as string) ?? [],
+        p.stations?.length ? elevationOutline(levelsFromProfile(p), w.length as number) : undefined,
       );
       map.set(targetKey({ kind: 'wallFace', wallId: w.id as string, side: 'A' }), s);
       map.set(targetKey({ kind: 'wallFace', wallId: w.id as string, side: 'B' }), s);

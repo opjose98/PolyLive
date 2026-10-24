@@ -4,7 +4,12 @@
 
 import {
   extent,
+  extentAt,
   hostLevelOf,
+  profileArea,
+  profileAt,
+  profileOutline,
+  profileTop,
   isRectangularProfile,
   parseWallVertical,
   profileProblem,
@@ -122,5 +127,39 @@ describe('alzado desde el perfil', () => {
     expect(Number(q.grossArea)).toBeCloseTo(16);
     // Centro del hueco en x=4 → base 1: el hueco útil va de 1 a 2 (1 m²).
     expect(Number(q.openingArea)).toBeCloseTo(1);
+  });
+});
+
+describe('estaciones (culatas sin partir el muro)', () => {
+  const muro = extent({ baseLevelId: 'n0', topLevelId: 'n1', unconnectedHeight: 3 });
+  const cumbrera = extent({ baseLevelId: 'n0', topLevelId: 'n2', topOffset: -1, unconnectedHeight: 5 });
+  const v = { start: muro, end: muro, stations: [{ at: 3, ext: cumbrera }] };
+  const p = resolveWallProfile(v, LV);
+
+  it('el perfil pasa por la estación: culata triangular', () => {
+    expect(profileTop(p)).toBe(5);
+    expect(profileAt(p, 6, 1.5)).toEqual({ base: 0, top: 4 });
+    expect(profileArea(p, 6)).toBeCloseTo(6 * 3 + (6 * 2) / 2);
+    expect(profileOutline(p, 6).map((q) => [q.x, q.z])).toEqual([
+      [0, 0], [3, 0], [6, 0], [6, 3], [3, 5], [0, 3],
+    ]);
+    expect(isRectangularProfile(p)).toBe(false);
+  });
+
+  it('Revit: perfil editado con el tope más alto en la estación', () => {
+    expect(revitConstraints(v, LV)).toMatchObject({ baseLevelId: 'n0', topLevelId: 'n2', topOffset: -1, profileEdited: true });
+  });
+
+  it('extentAt en una estación devuelve la suya; entre puntos, interpola', () => {
+    expect(extentAt(v, 3, 6, LV)).toBe(cumbrera);
+    expect(extentAt(v, 1.5, 6, LV)).toMatchObject({ topLevelId: 'n1', topOffset: 1 });
+  });
+
+  it('se guarda y se relee', () => {
+    expect(parseWallVertical(JSON.parse(JSON.stringify(v)))).toEqual(v);
+  });
+
+  it('una estación fuera del muro (se acortó) no cuenta', () => {
+    expect(profileArea(p, 2.5)).toBeCloseTo(2.5 * 3);
   });
 });

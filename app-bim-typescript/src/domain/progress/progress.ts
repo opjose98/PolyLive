@@ -323,14 +323,18 @@ export function faceSupport(
   length: number,
   profile: { leftBase: number; rightBase: number; leftTop: number; rightTop: number },
   openings: readonly { xOffset: number; width: number; sillHeight: number; height: number }[],
+  /** Contorno exacto (perfil con estaciones); sin él, el trapecio de los extremos. */
+  outline?: readonly Point2D[],
 ): Support {
   return {
-    outline: [
-      { x: 0, y: profile.leftBase },
-      { x: length, y: profile.rightBase },
-      { x: length, y: profile.rightTop },
-      { x: 0, y: profile.leftTop },
-    ],
+    outline: outline
+      ? [...outline]
+      : [
+          { x: 0, y: profile.leftBase },
+          { x: length, y: profile.rightBase },
+          { x: length, y: profile.rightTop },
+          { x: 0, y: profile.leftTop },
+        ],
     holes: openings
       .filter((o) => o.width > 0 && o.height > 0)
       .map((o) => [

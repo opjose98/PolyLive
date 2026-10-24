@@ -20,7 +20,7 @@ import { RevitObjectBase } from '../../../domain/objects/base';
 import { LEVEL_PROP, PHASE_PROP } from '../../../domain/objects/marker';
 import { floorZoneId } from '../../../domain/objects/floor';
 import { columnForExport, toLocal, wallForExport } from '../../../domain/geometry/handedness';
-import { LevelElevations, VerticalExtent, WallProfile, columnVerticalOf, isRectangularProfile, profileBottom, profileTop, resolveExtent, resolveWallProfile, revitConstraints, wallVerticalOf } from '../../../domain/objects/vertical';
+import { LevelElevations, VerticalExtent, WallProfile, columnVerticalOf, isRectangularProfile, profileArea, profileBottom, profileOutline, profileTop, resolveExtent, resolveWallProfile, revitConstraints, wallVerticalOf } from '../../../domain/objects/vertical';
 import { SerializeInput, GateValidationResult, IfcLevelInput } from './types';
 import { IfcValue, StepWriter, ref, stepReal, stepString } from './step-writer';
 import { stableGuid } from './guid-generator';
@@ -331,12 +331,7 @@ export class IFCSerializer {
           body = w.bodyShape([w.extrusion(plan, w.origin3Axis, profileTop(profile) - bottom)]);
         } else {
           // Alzado (trapecio) en el plano vertical del muro, extruido a través del espesor.
-          const elev = w.polygonProfile([
-            { x: 0, y: profile.start.base - bottom },
-            { x: length, y: profile.end.base - bottom },
-            { x: length, y: profile.end.top - bottom },
-            { x: 0, y: profile.start.top - bottom },
-          ]);
+          const elev = w.polygonProfile(profileOutline(profile, length).map((q) => ({ x: q.x, y: q.z - bottom })));
           body = w.bodyShape([w.extrusion(elev, w.wallPlaneAxis(0, thickness / 2, 0), thickness)]);
         }
         const shape = w.productShape([body, w.axisShape(length)]);
@@ -367,7 +362,7 @@ export class IFCSerializer {
           ...endProps('End', vertical.end, profile.end, levelName, (id) => elevations.has(id)),
           ['Phase', { label: phaseName(wall) }],
         ]);
-        const gross = (length * (profile.start.top - profile.start.base + (profile.end.top - profile.end.base))) / 2;
+        const gross = profileArea(profile, length);
         w.quantities(wall.id as string, 'Qto_WallBaseQuantities', entity, {
           lengths: [
             ['Length', length],

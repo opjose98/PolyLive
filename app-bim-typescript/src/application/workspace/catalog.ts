@@ -57,6 +57,8 @@ export type TopoAction = 'mojon' | 'punto-gps' | 'coordenada' | 'inverso' | 'are
 type ToolBinding =
   | { readonly kind: 'plan'; readonly tool: EditorTool }
   | { readonly kind: 'elevation'; readonly opening: OpeningType }
+  /** Punto de altura del perfil del muro (alzado, H-74). */
+  | { readonly kind: 'station' }
   /** Herramientas del modo Topografía (M2): no crean objetos BIM, crean mojones. */
   | { readonly kind: 'topo'; readonly action: TopoAction }
   /** Herramientas del modo Avance (M3): pintan sobre suelos y caras de muro. */
@@ -190,6 +192,7 @@ export const CATEGORIES_ELEVATION: readonly CategoryDef[] = [
       { id: 'vano', label: 'Vano', icon: 'rectangle-outline', props: { width: 80 }, binding: { kind: 'elevation', opening: 'opening' } },
       { id: 'puerta', label: 'Puerta', icon: 'door', props: { width: 90 }, binding: { kind: 'elevation', opening: 'door' } },
       { id: 'ventana', label: 'Ventana', icon: 'window-closed-variant', props: { width: 120 }, binding: { kind: 'elevation', opening: 'window' } },
+      { id: 'punto-altura', label: 'Punto de altura', icon: 'vector-polyline-plus', binding: { kind: 'station' } },
     ],
   },
   {

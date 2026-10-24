@@ -19,7 +19,7 @@
 // =============================================================================
 
 import type { ICanvasRenderer } from '../../native/canvas/SkiaCanvasAdapter';
-import { WallElevation, WallOpening, WallOpeningId, baseAt, effectiveLeftHeight, effectiveRightHeight, hasHeightProfile, openingEnd, openingTop, openingCenterX, openingCenterY, umbral, dintel, openingTypeLabel } from '../../domain/objects/wall-elevation';
+import { WallElevation, WallOpening, WallOpeningId, baseAt, effectiveLeftHeight, effectiveRightHeight, elevationOutline, hasHeightProfile, profileStations, openingEnd, openingTop, openingCenterX, openingCenterY, umbral, dintel, openingTypeLabel } from '../../domain/objects/wall-elevation';
 import type { ElevationSeverity, ElevationViewport } from '../../application/elevation/WallElevationService';
 import { CANVAS_PALETTES, CanvasPalette } from '../design/canvasThemes';
 import { drawSketch, SketchShape } from './sketch';
@@ -56,6 +56,8 @@ export interface ElevationScene {
   readonly annotations?: readonly SketchShape[];
   /** Trazo en curso (pincel o marca), en (u, v). Mejor por `liveSketch` del lienzo: no regraba el muro. */
   readonly sketch?: readonly SketchShape[];
+  /** Puntos del perfil (extremos y estaciones) tocables: base y tope en CSL. */
+  readonly profileHandles?: readonly { x: number; base: number; top: number; selected: boolean; station: boolean }[];
 }
 
 type ToScreen = (p: { x: number; y: number }) => { x: number; y: number };
@@ -96,6 +98,7 @@ export function drawElevation(r: ICanvasRenderer, scene: ElevationScene): void {
   if (scene.progressLayers?.length) drawFaceProgress(ctx);
   for (const o of openings) drawOpening(ctx, o);
   drawReferenceLines(ctx);
+  if (scene.profileHandles?.length) drawProfileHandles(ctx);
   if (scene.showLabels) drawElevationLabels(ctx);
   drawLevelLabels(ctx);
   if (scene.annotations?.length) drawSketch(r, scene.annotations, toScreen, viewport.scale);
@@ -122,20 +125,7 @@ function drawFaceProgress({ r, scene, toScreen }: Ctx): void {
 
 /** Contorno del muro en CSL: su perfil (base y tope de cada extremo). */
 function wallOutline(elevation: WallElevation, wallLength: number): { x: number; y: number }[] {
-  const lv = elevation.levels;
-  return hasHeightProfile(lv)
-    ? [
-        { x: 0, y: lv.leftBase ?? 0 },
-        { x: wallLength, y: lv.rightBase ?? 0 },
-        { x: wallLength, y: effectiveRightHeight(lv) },
-        { x: 0, y: effectiveLeftHeight(lv) },
-      ]
-    : [
-        { x: 0, y: 0 },
-        { x: wallLength, y: 0 },
-        { x: wallLength, y: lv.coronacion },
-        { x: 0, y: lv.coronacion },
-      ];
+  return elevationOutline(elevation.levels, wallLength);
 }
 
 // ---------------------------------------------------------------------------
@@ -253,6 +243,29 @@ function drawOpening({ r, scene, pal, toScreen }: Ctx, opening: WallOpening): vo
   }
 }
 
+/** Vértices del perfil: círculo en el tope, cuadrado en la base; la estación con su vertical. */
+function drawProfileHandles({ r, scene, pal, toScreen }: Ctx): void {
+  for (const h of scene.profileHandles ?? []) {
+    const top = toScreen({ x: h.x, y: h.top });
+    const base = toScreen({ x: h.x, y: h.base });
+    const color = h.selected ? pal.selection : pal.ink;
+    if (h.station) {
+      r.setStrokeStyle(withAlpha(color, 0.6));
+      r.setLineWidth(1);
+      for (let y = top.y; y < base.y; y += 8) r.drawLine(top.x, y, top.x, Math.min(y + 4, base.y));
+    }
+    const rad = h.selected ? 8 : 6;
+    r.setFillStyle(h.selected ? pal.selection : pal.handleFill);
+    r.fillCircle(top.x, top.y, rad);
+    r.setStrokeStyle(color);
+    r.setLineWidth(2);
+    r.strokeCircle(top.x, top.y, rad);
+    r.setFillStyle(h.selected ? pal.selection : pal.handleFill);
+    r.fillRect(base.x - rad, base.y - rad, rad * 2, rad * 2);
+    r.strokeRect(base.x - rad, base.y - rad, rad * 2, rad * 2);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // 5. Umbral y dintel
 // ---------------------------------------------------------------------------
@@ -297,6 +310,11 @@ function drawElevationLabels({ r, scene, pal, toScreen, openings }: Ctx): void {
     const [lp, lh, rp, rh] = startTop.x <= endTop.x ? [startTop, sh, endTop, eh] : [endTop, eh, startTop, sh];
     r.drawText(`${lh.toFixed(2)} m`, lp.x, lp.y - 8, 11, 'left');
     r.drawText(`${rh.toFixed(2)} m`, rp.x, rp.y - 8, 11, 'right');
+    // Estaciones: su altura neta sobre el vértice del tope.
+    for (const s of profileStations(lv, wallLength).slice(1, -1)) {
+      const q = toScreen({ x: s.x, y: s.top });
+      r.drawText(`${(s.top - s.base).toFixed(2)} m`, q.x, q.y - 8, 11, 'center');
+    }
   } else {
     const top = toScreen({ x: wallLength / 2, y: lv.coronacion });
     r.drawText(`${lv.coronacion.toFixed(2)} m`, top.x, top.y - 8, 11, 'center');

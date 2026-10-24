@@ -53,6 +53,14 @@ describe('planWallSplit / placeSpan', () => {
     expect(plan.second.start).toBe(SLOPED.start);
   });
 
+  it('las estaciones van a su tramo y la del corte pasa a ser el extremo común', () => {
+    const top = extent({ baseLevelId: 'piso', topLevelId: 'cubierta', unconnectedHeight: 3.5 });
+    const v = { start: SLOPED.start, end: SLOPED.start, stations: [{ at: 1, ext: top }, { at: 3, ext: top }, { at: 5, ext: top }] };
+    const plan = planWallSplit({ x: 0, y: 0 }, { x: 6, y: 0 }, v, LEVELS, 3)!;
+    expect(plan.first).toEqual({ start: v.start, end: top, stations: [{ at: 1, ext: top }] });
+    expect(plan.second).toEqual({ start: top, end: v.end, stations: [{ at: 2, ext: top }] });
+  });
+
   it('rechaza un tramo más corto que el mínimo', () => {
     expect(planWallSplit({ x: 0, y: 0 }, { x: 4, y: 0 }, SLOPED, LEVELS, 0.05)).toBeNull();
     expect(planWallSplit({ x: 0, y: 0 }, { x: 4, y: 0 }, SLOPED, LEVELS, 3.95)).toBeNull();

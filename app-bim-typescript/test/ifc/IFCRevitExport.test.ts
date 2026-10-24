@@ -250,6 +250,21 @@ describe('IFCSerializer — Revit', () => {
     expect(lintIfc(r.content)).toEqual([]);
   });
 
+  it('un muro con estación (culata con cumbrera) exporta el pentágono de su alzado', async () => {
+    const muro = extent({ baseLevelId: 'n0', topLevelId: 'n1', unconnectedHeight: 3 });
+    const v: WallVertical = { start: muro, end: muro, stations: [{ at: 2.5, ext: extent({ baseLevelId: 'n0', topLevelId: 'n2', unconnectedHeight: 6 }) }] };
+    const r = await serialize({ walls: [wall('w1', [0, 0], [5, 0], v)] });
+    const ents = parseStep(r.content);
+    const pentagon = ofType(r.content, 'IFCARBITRARYCLOSEDPROFILEDEF').find((p) => {
+      const poly = ents.get(refsIn(p.args[2])[0])!;
+      const pts = refsIn(poly.args[0]).map((id) => ents.get(id)!.args[0]);
+      return pts.join(' ') === '(0.,0.) (2.5,0.) (5.,0.) (5.,3.) (2.5,6.) (0.,3.) (0.,0.)';
+    });
+    expect(pentagon).toBeDefined();
+    expect(constraintsOf(r.content, ofType(r.content, 'IFCWALL')[0].id).TopConstraint).toBe("IFCLABEL('Nivel 2')");
+    expect(lintIfc(r.content)).toEqual([]);
+  });
+
   it('el vano se coloca relativo a su muro, al antepecho indicado', async () => {
     const win = new Window({
       id: revitObjectId('v1'),
