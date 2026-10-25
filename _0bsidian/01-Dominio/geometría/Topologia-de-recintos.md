@@ -17,7 +17,8 @@ Los recintos salen solos de los muros estructurales del nivel activo (`DetectRoo
 - **Caras**: cada cara mínima con área de signo positivo es un recinto; el contorno exterior de cada grupo de muros
   se descarta, también el de un segundo grupo suelto (H-82: batería aparte de SDGO).
 - **Recinto del espacio** (el que exportan IFC y DXF): el de la base; si la base no tiene muros (2.º piso con cotas
-  absolutas), el del nivel más bajo que los tiene (H-86). Un espacio sin ningún muro no exporta IFC (decisión abierta).
+  absolutas), el del nivel más bajo que los tiene (H-86). Un espacio sin muros y con suelos (exteriores) exporta sus
+  losas sin IfcSpace: no hay recinto interior que cerrar (`ExportRoomIfcUseCase`).
 
 Código: `domain/topology/TopologyGraph.ts`, `application/use-cases/DetectRoomsUseCase.ts`,
 `application/editor/EditorCore.ts` (`roomLevelOf`). Test: `test/topology/TopologyGraph.test.ts`,

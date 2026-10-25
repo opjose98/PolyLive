@@ -12,8 +12,8 @@ deja cada bloque en un espacio separado».
 
 Las **15 sedes** con planos de arquitectura en `NARG29/FASE01` están levantadas en la app: 15 proyectos y
 **22 espacios** (DECI en 7). Todas las sedes tienen un corte longitudinal y otro transversal guardados. De esos
-espacios, **21 exportan IFC** y la revisión con ifcopenshell da **0 alertas de altimetría**. El que no exporta es el
-de exteriores de DECI: solo tiene suelos (H-86, decisión abierta). Las pruebas pasan: 1041 tests, typecheck, lint
+espacios con muros, los 21 exportan IFC y la revisión con ifcopenshell da **0 alertas de altimetría**. El de exteriores
+de DECI (solo suelos) exporta ahora sus losas sin IfcSpace (H-86, decidido por el dueño). Las pruebas pasan: 1041 tests, typecheck, lint
 sin errores, knip y la validación de IFC/DXF.
 
 > En la carpeta hay planos de arquitectura de 15 sedes. Las 4 primeras ya estaban, así que faltaban **11 y no 13**:
@@ -54,10 +54,10 @@ Claude (Claude Code) ──MCP stdio──► polylive-bridge.mjs ◄──HTTP 
      las letras rotulan las líneas verticales o las horizontales (SALT las tiene al revés).
    - La escala se calibra con las cadenas de cotas: el raster sale a ~1:55 en lugar de 1:50, y DECI está a 1:75.
    - Los niveles, el cuadro de carpintería, los antepechos y las alturas salen de los cortes y las fachadas.
-2. **Escribir la especificación** de la sede: muros por ejes con niveles de base y tope, culatas con su estación en la
+1. **Escribir la especificación** de la sede: muros por ejes con niveles de base y tope, culatas con su estación en la
    cumbrera, vanos con antepecho, columnas, recintos con nombre y uso, suelos libres y los dos cortes.
-3. **Construir por el puente**: un script de 150 líneas manda los comandos y la app dibuja.
-4. **Revisar**:
+2. **Construir por el puente**: un script de 150 líneas manda los comandos y la app dibuja.
+3. **Revisar**:
    - `objects` para las alturas de cada muro (con sus estaciones) y los recintos con su área.
    - Captura de la tableta (planta y cortes).
    - `exportIfc` y ifcopenshell para la altimetría. Se marcan:
@@ -133,7 +133,7 @@ Alturas en m. «Culatas» son muros con estación en la cumbrera. Las cifras de 
 | VERD | B1 Primer piso | Muro 2,17 · Viga 2,40 · Cubierta 3,40 | 18 (2) · 8 · 9 · 8 | 7 | Baños (abiertos), andén existente, placa deportiva, placa | Culatas B y E: 2,40 → 3,30 → 2,76 |
 | PALA | B1 Primer piso | Exterior −0,10 · Muro 2,33 · Viga 2,57 · Cubierta 3,80 | 24 (1) · 11 · 5 · 1 | 10 | Pasillo aula, placa, circulación | Muro de la cumbrera a 3,68; cabinas cruzadas en X (H-83) |
 | BUEN | B1 Primer piso | Andén 0,18 · Baños 0,20 · Interior 0,54 · Dintel 2,38 · Muro 2,74 · Viga 2,94 · Cubierta 3,94 | 22 (3) · 9 · 11 · 12 | 10 | Andén existente, acceso a baños | Muro norte de la cocina en diagonal; división liviana de la habitación abierta |
-| DECI | B1 Primer piso · B1 Segundo piso · B2 Aulas y bodega · B3 Biblioteca y comedor · B4 Bodega · B5 Batería sanitaria · Exteriores | Muro 2,70/2,30 · Viga 2,60 · Losa 3,03 · Muro 2 5,12 · Cubierta 6,34 | 4 + 9 (2) + 6 + 7 + 4 + 9 · 17 puertas · 23 ventanas · 49 columnas | 1 + 4 + 3 + 2 + 1 + 5 | Placa deportiva, pasillo, placa disponible, circulación exterior (en Exteriores) | Un espacio por bloque y piso con **cotas absolutas** (los espacios encajan). Ejes 11 a 14 a escala. Franja de ventanas de B1 supuesta 1,60 × 0,90. Exteriores sin IFC (H-86) |
+| DECI | B1 Primer piso · B1 Segundo piso · B2 Aulas y bodega · B3 Biblioteca y comedor · B4 Bodega · B5 Batería sanitaria · Exteriores | Muro 2,70/2,30 · Viga 2,60 · Losa 3,03 · Muro 2 5,12 · Cubierta 6,34 | 4 + 9 (2) + 6 + 7 + 4 + 9 · 17 puertas · 23 ventanas · 49 columnas | 1 + 4 + 3 + 2 + 1 + 5 | Placa deportiva, pasillo, placa disponible, circulación exterior (en Exteriores) | Un espacio por bloque y piso con **cotas absolutas** (los espacios encajan). Ejes 11 a 14 a escala. Franja de ventanas de B1 supuesta 1,60 × 0,90. Exteriores: losas sin IfcSpace (H-86) |
 | COPA | B1 Primer piso | Muro 2,08 · Viga 2,28 · Cubierta 3,10 | 9 (2) · 4 · 7 · 13 | 3 | Andén | Sótano (−2,03) y escaleras no levantados; V3 y V4 sin medida (1,50 supuestas) |
 | LIMO | B1 Primer piso | Cubierta baja 2,02 · Muro 2,40 · Cubierta 3,35 | 14 (2) · 4 · 3 · 0 | 4 | Orinal, circulación exterior (con huecos) | Filas sin texto: y medida a escala del plano |
 | BOCA | B1 Primer piso | Muro 2,10 · Viga 2,30 · Cubierta 1 2,68 · 2 3,28 · 3 3,55 | 17 (2) · 6 · 5 · 4 | 7 | Circulación exterior, acceso a cocina | Culatas D y G: 2,30 → 3,45 → 2,58 |
@@ -164,7 +164,7 @@ plano cuando las hay (A-A, B-B, C-C…). En las cuatro primeras pasan por el cen
 | H-83 | Dos muros cruzados en X no cerraban recintos | Corregido, con test |
 | H-84 | `setLevels` no creaba un nivel con el nombre viejo de la base | Corregido, con test |
 | H-85 | El puente ignoraba `a`/`b` si venía `v` (puntas de culata) | Corregido, con test; SDGO, CEDR y VERD reajustadas |
-| H-86 | Espacio sin muros en la base: no cerraba su Recinto. Espacio sin muros: no exporta | Lo primero corregido, con test. **Lo segundo es decisión del dueño** |
+| H-86 | Espacio sin muros en la base: no cerraba su Recinto. Espacio sin muros: no exportaba | Corregido, con tests: el Recinto toma el nivel más bajo con muros; un espacio solo con suelos exporta sus losas sin IfcSpace (decidido por el dueño) |
 
 ## 7. Pruebas y auditoría
 
@@ -197,7 +197,8 @@ plano cuando las hay (A-A, B-B, C-C…). En las cuatro primeras pasan por el cen
 
 ### Qué está mal o queda abierto
 
-- **H-86**: un espacio solo con suelos (exteriores) no exporta IFC. Pide decisión.
+- El IFC de los exteriores de DECI (H-86) está probado con el serializador real, pero **no se exportó desde la tableta**:
+  se desconectó del USB antes de la prueba.
 - **Las lecturas de plano tienen supuestos**, listados en § 4: alturas de ventanas sin cota, ventanas sin rótulo
   (COPA), filas a escala (LIMO, DECI 11–14) y la franja de B1 en DECI. **Hay que confirmarlos en obra**: el
   levantamiento sirve de base, no de medición.
@@ -207,12 +208,10 @@ plano cuando las hay (A-A, B-B, C-C…). En las cuatro primeras pasan por el cen
 
 ### Qué se puede mejorar
 
-1. **H-86**: el recinto de un espacio sin muros podría ser el contorno de sus suelos, y así exportaría el espacio de
-   exteriores.
-2. **`ops` atómico**: el lote dentro de un solo paso de deshacer, o una opción `{ atomic: true }`.
-3. **Llevar al repo** las herramientas de lectura (`axes.py`, `build_site.py`, `check_all.py`) como
+1. **`ops` atómico**: el lote dentro de un solo paso de deshacer, o una opción `{ atomic: true }`.
+2. **Llevar al repo** las herramientas de lectura (`axes.py`, `build_site.py`, `check_all.py`) como
    `scripts/bridge/`, con una especificación de sede documentada. La próxima sede se haría sin rehacerlas.
-4. **Leer los vanos del plano de carpintería** de forma automática: el cuadro es texto y daría ancho, alto y antepecho
+3. **Leer los vanos del plano de carpintería** de forma automática: el cuadro es texto y daría ancho, alto y antepecho
    de cada V o P.
-5. **Un cuadro de alertas de altimetría en la app**: lo que hoy revisa `check_all.py` (dinteles sobre el muro,
+4. **Un cuadro de alertas de altimetría en la app**: lo que hoy revisa `check_all.py` (dinteles sobre el muro,
    columnas fuera de rango) también podría verse en la pantalla.

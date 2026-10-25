@@ -436,6 +436,21 @@ describe('IFCSerializer — suelos libres y vacíos', () => {
     expect(ofType(r.content, 'IFCARBITRARYPROFILEDEFWITHVOIDS')).toHaveLength(1);
     expect(r.content).toMatch(/IFCQUANTITYAREA\('NetArea',\$,\$,14\.5/);
   });
+
+  it('un espacio de exteriores (sin muros, solo suelos) sale con sus losas y sin IfcSpace (H-86)', async () => {
+    const placa = new Floor({
+      id: revitObjectId('placa'),
+      roomId: roomId('room-1'),
+      isImplicit: false,
+      thickness: meters(0.1),
+      outline: [{ x: 0, y: 0 }, { x: 15, y: 0 }, { x: 15, y: 21 }, { x: 0, y: 21 }],
+    });
+    const open = new Room({ id: revitObjectId('room-1'), roomId: roomId('room-1'), levelId: levelId('level-1'), geometry: [], isOpen: true });
+    const r = await serialize({ room: open, walls: [], zoneFloors: [placa] });
+    expect(lintIfc(r.content)).toEqual([]);
+    expect(ofType(r.content, 'IFCSLAB')).toHaveLength(1);
+    expect(ofType(r.content, 'IFCSPACE')).toHaveLength(0);
+  });
 });
 
 describe('IFCSerializer — georreferencia (M2b)', () => {

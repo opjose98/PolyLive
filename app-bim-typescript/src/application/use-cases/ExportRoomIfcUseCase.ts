@@ -56,14 +56,17 @@ export class ExportRoomIfcUseCase {
     const room = await this.store.readObject(revitObjectId(input.roomId));
     if (!room || !(room instanceof Room)) throw new Error('Room no existe');
 
-    const validationResult = this.validationService.validateExport(room);
-    if (!validationResult.valid) {
-      throw new ValidationError(validationResult.warnings);
-    }
-
     // 2. Recolectar objetos
     const allObjects = await this.store.listObjects(input.roomId);
     const walls = allObjects.filter((o) => o instanceof Wall) as Wall[];
+
+    // Un espacio sin muros y con suelos (exteriores: placas, andenes) no tiene Recinto que cerrar:
+    // sale con sus losas y sin IfcSpace (H-86). Con muros, el Recinto debe estar cerrado.
+    const floorsOnly = walls.length === 0 && allObjects.some((o) => o instanceof Floor);
+    const validationResult = floorsOnly ? { valid: true, warnings: [] } : this.validationService.validateExport(room);
+    if (!validationResult.valid) {
+      throw new ValidationError(validationResult.warnings);
+    }
     const doors = allObjects.filter((o) => o instanceof Door) as Door[];
     const windows = allObjects.filter((o) => o instanceof Window) as Window[];
     const columns = allObjects.filter((o) => o instanceof Column) as Column[];

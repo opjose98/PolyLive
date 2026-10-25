@@ -28,6 +28,8 @@ import { MoveObjectUseCase, MoveObjectInput } from '../../src/application/use-ca
 import { DeleteObjectUseCase } from '../../src/application/use-cases/DeleteObjectUseCase';
 import { UpdateObjectPropertyUseCase } from '../../src/application/use-cases/UpdateObjectPropertyUseCase';
 import { ExportRoomIfcUseCase } from '../../src/application/use-cases/ExportRoomIfcUseCase';
+import { ValidationService } from '../../src/infrastructure/validation/ValidationService';
+import { Floor } from '../../src/domain/objects/floor';
 
 // ---------------------------------------------------------------------------
 // Mock IObjectStore — in-memory con createMeasurement/createAuditPhoto
@@ -362,6 +364,24 @@ describe('UseCases — Integration', () => {
 
       // NO command emitido — export no es reversible
       expect(commandStack.size()).toBe(0);
+    });
+
+    it('un espacio solo con suelos (exteriores) exporta sin Recinto cerrado; con muros, no (H-86)', async () => {
+      const rid = ROOM_ID as unknown as RevitObjectId;
+      await store.createObject(new Room({ id: rid, roomId: ROOM_ID, levelId: LEVEL_ID, geometry: [], isOpen: true }));
+      const outline = [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 4 }, { x: 0, y: 4 }];
+      await store.createObject(new Floor({ id: revitObjectId('placa'), roomId: ROOM_ID, isImplicit: false, thickness: meters(0.1), outline }));
+      const exportUseCase = new ExportRoomIfcUseCase(store, new ValidationService(), createMockIFCSerializer());
+      await expect(exportUseCase.execute({ roomId: ROOM_ID })).resolves.toBeDefined();
+
+      await new CreateWallUseCase(store, commandStack, validationService).execute({
+        roomId: ROOM_ID,
+        startPoint: { x: 0, y: 0 },
+        endPoint: { x: 4, y: 0 },
+        thickness: meters(0.15),
+        height: meters(2.8),
+      });
+      await expect(exportUseCase.execute({ roomId: ROOM_ID })).rejects.toThrow('Validation failed');
     });
   });
 
