@@ -47,6 +47,7 @@ import { RevitObjectBase, RevitObjectId, RoomId, WallId, generateId } from '../.
 import { Wall } from '../../domain/objects/wall';
 import { Room } from '../../domain/objects/room';
 import { Column } from '../../domain/objects/column';
+import { Floor } from '../../domain/objects/floor';
 import { Door } from '../../domain/objects/door';
 import { Window } from '../../domain/objects/window';
 import { distanceToSegment, isPointInPolygon } from '../../domain/geometry/polygon-utils';
@@ -997,7 +998,11 @@ export abstract class EditorCore {
   zoomToFit(viewportWidth: number, viewportHeight: number, paddingPx = 32): void {
     const pts: Point2D[] = [];
     for (const w of this.walls) pts.push(w.startPoint, w.endPoint);
-    for (const o of this.scopedObjects) if (o instanceof Column) pts.push(o.position);
+    for (const o of this.scopedObjects) {
+      if (o instanceof Column) pts.push(o.position);
+      // Un suelo libre (andén) puede salirse de los muros: también entra en el encuadre.
+      else if (o instanceof Floor && o.outline) pts.push(...o.outline);
+    }
     this.fitPoints(pts, viewportWidth, viewportHeight, paddingPx);
   }
 

@@ -383,11 +383,9 @@ function drawFloors({ r, scene, pal, toScreen }: Ctx): void {
     }
     r.setLineWidth(STROKE.thin * pal.lineScale);
     r.strokePolygon(poly);
-    // Vacío: contorno de trazos y su diagonal (convención de hueco en planta).
-    for (const h of holes) {
-      r.strokePolygon(h);
-      if (h.length >= 3) r.drawLine(h[0].x, h[0].y, h[Math.floor(h.length / 2)].x, h[Math.floor(h.length / 2)].y);
-    }
+    // Vacío: su contorno (la trama ya se detiene en él). Sin diagonal: un vacío
+    // también puede ser el edificio dentro de un andén perimetral.
+    for (const h of holes) r.strokePolygon(h);
   }
 }
 

@@ -84,7 +84,8 @@ export function ProjectionView({ projection: p, levels, width, height, chromeTop
       selectedOpeningId: null,
       severityByOpening: new Map(),
       showGrid: grid,
-      showLabels: true,
+      // La columna desdoblada lleva sus medidas en la cabecera: la cota de altura taparía el nombre de las caras.
+      showLabels: !p.dividers,
       hideWall: p.silhouette === null,
       cuts: p.cuts,
       dividers: p.dividers,

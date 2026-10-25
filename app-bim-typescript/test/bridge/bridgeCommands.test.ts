@@ -64,7 +64,12 @@ describe('puente: comandos', () => {
     expect(objs.windows.find((x) => x.id === winId)?.sill).toBe(1.1);
     expect(objs.floors.find((f) => f.id === floorId)?.outline).toHaveLength(4);
 
-    await runBridgeCommand(ctx, 'undo');
+    await runBridgeCommand(ctx, 'ops', { list: [{ op: 'props', id: floorId, set: { name: 'Andén', thickness: 0.12 } }] });
+    const named = ((await runBridgeCommand(ctx, 'objects')) as { floors: { id: string; name?: string; thickness: number }[] }).floors.find((f) => f.id === floorId);
+    expect(named).toMatchObject({ name: 'Andén', thickness: 0.12 });
+    // Espesor y nombre son dos pasos; el tercero quita el andén.
+    for (let i = 0; i < 3; i++) await runBridgeCommand(ctx, 'undo');
+
     expect(((await runBridgeCommand(ctx, 'objects')) as { floors: unknown[] }).floors).toHaveLength(0);
   });
 

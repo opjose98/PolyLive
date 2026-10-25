@@ -57,6 +57,13 @@ export interface BridgeContext {
 }
 
 type Args = Record<string, unknown>;
+
+/** Campos con nombre propio en los objetos (se escriben directos); lo demás es una propiedad libre. */
+const OWN_FIELDS: ReadonlySet<string> = new Set([
+  'thickness', 'height', 'material', 'isStructural', 'vertical', 'notes',
+  'width', 'offsetAlongWall', 'offsetPerpendicular', 'doorType', 'windowType',
+  'rotation', 'dimensionY', 'sectionShape', 'outline', 'holes',
+]);
 type Xy = readonly [number, number];
 
 /** Restricción por nombres: { base: 'Piso', top: 'Muro', baseOffset?, topOffset?, height? }. */
@@ -275,6 +282,7 @@ async function objects(ctx: BridgeContext) {
       .filter((o): o is Floor => o instanceof Floor)
       .map((f) => ({
         id: f.id,
+        name: f.properties.name,
         zone: floorZoneId(f),
         thickness: f.thickness,
         ...(f.outline ? { outline: f.outline.map(xy) } : {}),
@@ -492,9 +500,17 @@ async function ops(ctx: BridgeContext, args: Args) {
       }
       case 'props': {
         const id = revitObjectId(String(o.id));
+        const obj = await ctx.services.store.readObject(id);
+        if (!obj) throw new Error(`No existe "${String(o.id)}".`);
+        // Campos propios del objeto van directos; el resto (nombre, nivel, fase…) a `properties`, como el panel.
+        const free: Record<string, unknown> = {};
         for (const [k, val] of Object.entries((o.set as Args) ?? {})) {
           const key = k === 'level' ? LEVEL_PROP : k === 'phase' ? PHASE_PROP : k;
-          await ctx.services.useCases.updateObjectProperty.execute({ objectId: id, property: key, newValue: val });
+          if (OWN_FIELDS.has(key)) await ctx.services.useCases.updateObjectProperty.execute({ objectId: id, property: key, newValue: val });
+          else free[key] = val;
+        }
+        if (Object.keys(free).length) {
+          await ctx.services.useCases.updateObjectProperty.execute({ objectId: id, property: 'properties', newValue: { ...obj.properties, ...free } });
         }
         return o.id;
       }
