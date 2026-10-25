@@ -201,8 +201,9 @@ plano cuando las hay (A-A, B-B, C-C…). En las cuatro primeras pasan por el cen
   y sin IfcSpace. Contra el plano de zonificación:
   - placa deportiva 326,18 m² (plano 325,20) y pasillo 52,02 (51,96): coinciden;
   - placa disponible 45,25 (41,90): su borde inclinado se leyó a escala, se pasa un 8 %;
-  - circulación exterior 1 124,27 (198,44): el polígono simplificado deja fuera parte de la franja. **Hay que
-    redibujarla con el plano.**
+  - circulación exterior 1 130,20 (rótulo 138,44; antes se leyó mal como 198,44): redibujada con el contorno de la
+    zonificación (relleno por color del raster y esquinas a escala). La forma calza (franja sobre la placa, vuelta a la
+    bodega, franja sobre la batería); el 6 % que falta es del grosor del borde de las franjas de 0,3–0,5 m.
 - **Las lecturas de plano tienen supuestos**, listados en § 4: alturas de ventanas sin cota, ventanas sin rótulo
   (COPA), filas a escala (LIMO, DECI 11–14) y la franja de B1 en DECI. **Hay que confirmarlos en obra**: el
   levantamiento sirve de base, no de medición.
