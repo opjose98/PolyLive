@@ -92,7 +92,7 @@ const HELP = {
     'door|window {wall, offset (arranque a lo largo del muro), width, height, sill} · ' +
     'opening {wall, offset, width, height, sill} (vano sin carpintería) · ' +
     'column {at:[x,y], w, d, circular, rotation, v:{base,top}} · ' +
-    'floor {zone | outline:[[x,y]…], holes, thickness} · void {floor, hole:[[x,y]…]} · ' +
+    'floor {zone | outline:[[x,y]…], holes, thickness, level} · void {floor, hole:[[x,y]…]} · ' +
     'vertical {id, v | a, b, stations} · station {wall, at, top, topOffset, base, baseOffset} (at sin top = quitarla) · ' +
     'sill {id (puerta/ventana), sill} · props {id, set:{clave: valor}} · delete {id} · split {wall, at} · merge {wall, with} · section {a, b, name} (corte guardado) · zone {id, name, use} (une tramos alineados; el común pasa a estación si quiebra)',
   undo: 'Deshace el último paso.',
@@ -309,7 +309,8 @@ async function objects(ctx: BridgeContext) {
         ...(f.outline ? { outline: f.outline.map(xy) } : {}),
         ...(f.holes?.length ? { holes: f.holes.map((h) => h.map(xy)) } : {}),
       })),
-    zones: zones.map((z) => ({ id: z.id, number: z.number, name: z.name, use: z.use, level: name(z.levelId), netArea: r3(z.netArea), polygon: z.polygon.map(xy) })),
+    // Solo los recintos ligados a un contorno: los desligados (se borró un muro) no se ven en la app.
+    zones: zones.filter((z) => z.bound).map((z) => ({ id: z.id, number: z.number, name: z.name, use: z.use, level: name(z.levelId), netArea: r3(z.netArea), polygon: z.polygon.map(xy) })),
     sections: (await ctx.services.drafts.list(spaceId as string))
       .filter((d) => d.kind === 'section')
       .map((d) => ({ id: d.id, name: d.text, a: xy(d.points[0]), b: xy(d.points[1]) })),
@@ -488,7 +489,8 @@ async function ops(ctx: BridgeContext, args: Args) {
           zoneId: o.zone as string | undefined,
           outline: (o.outline as Xy[] | undefined)?.map(([x, y]) => ({ x, y })),
           thickness: meters(Number(o.thickness ?? 0.1)),
-          properties: { ...editor.creationProps(), ...(o.name ? { name: String(o.name) } : {}) },
+          // `level`: la cara superior del suelo va a ese nivel (pisos a +0,18, +0,25…).
+          properties: { ...editor.creationProps(levelId(o.level as string | undefined, null) ?? undefined), ...(o.name ? { name: String(o.name) } : {}) },
         });
         if (o.holes) {
           await ctx.services.useCases.updateObjectProperty.execute({

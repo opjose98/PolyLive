@@ -252,7 +252,8 @@ export class IFCSerializer {
         const outline: readonly Point2D[] = z ? z.netPolygon : (f.outline as Point2D[]);
         const holes = f.holes ?? [];
         const ownLevel = f.properties[LEVEL_PROP];
-        const storey = storeyOf(z ? z.levelId : typeof ownLevel === 'string' ? ownLevel : baseLevel.id);
+        // El nivel propio del suelo manda (un piso a +0,25 en un recinto detectado en la base); si no, el del recinto.
+        const storey = storeyOf(typeof ownLevel === 'string' ? ownLevel : z ? z.levelId : baseLevel.id);
         const thickness = (f.thickness as number) || 0.1;
         const profile = w.polygonProfileWithVoids(outline.map(toLocal), holes.map((h) => h.map(toLocal)));
         const body = w.bodyShape([w.extrusion(profile, w.origin3Axis, thickness)]);

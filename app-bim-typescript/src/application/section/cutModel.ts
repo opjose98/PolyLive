@@ -117,7 +117,7 @@ export async function loadCutModel(
       id: f.id as string,
       outline,
       holes: f.holes ?? [],
-      top: lv(z ? z.levelId : typeof own === 'string' ? own : baseLevelId),
+      top: lv(typeof own === 'string' ? own : z ? z.levelId : baseLevelId),
       thickness: (f.thickness as number | undefined) || 0.1,
     });
   }

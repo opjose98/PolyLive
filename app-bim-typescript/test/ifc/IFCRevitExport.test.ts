@@ -403,6 +403,20 @@ describe('IFCSerializer — suelos de recinto (F6a)', () => {
   });
 });
 
+describe('IFCSerializer — suelo con nivel propio', () => {
+  it('un suelo de recinto con nivel propio (piso a otra cota) cuelga de ese piso', async () => {
+    const z = { id: 'za', code: 'R-01', name: 'Aula', levelId: 'n0', netPolygon: [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 3 }, { x: 0, y: 3 }], netArea: 12, grossArea: 12, perimeter: 14 };
+    const f = new Floor({ id: revitObjectId('f2'), roomId: roomId('room-1'), isImplicit: false, thickness: meters(0.1), properties: { zoneId: 'za', levelMarkerId: 'n1' } });
+    const r = await serialize({ zones: [z], zoneFloors: [f] });
+    const ents = parseStep(r.content);
+    const slab = ofType(r.content, 'IFCSLAB')[0];
+    const rel = ofType(r.content, 'IFCRELCONTAINEDINSPATIALSTRUCTURE').find((x) => x.args[4].includes(`#${slab.id}`))!;
+    const storey = ents.get(refsIn(rel.args[5])[0])!;
+    expect(storey.args[2]).toBe("'Nivel 1'");
+    expect(lintIfc(r.content)).toEqual([]);
+  });
+});
+
 describe('IFCSerializer — suelos libres y vacíos', () => {
   it('un andén (suelo libre) sale como IfcSlab con su contorno; sus vacíos, como huecos del perfil', async () => {
     const f = new Floor({

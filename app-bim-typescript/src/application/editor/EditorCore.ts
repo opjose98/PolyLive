@@ -578,6 +578,12 @@ export abstract class EditorCore {
       const e = resolveExtent(this.columnVertical(o), lv.elevations);
       return e.base <= cut && cut < e.top;
     }
+    // Un suelo algo más alto que el nivel (un piso a +0,25 sobre la base) sigue siendo de esta planta.
+    if (o instanceof Floor) {
+      const z = lv.elevations.get(this.levelOf(o, lv));
+      const base = lv.elevations.get(lv.active) ?? 0;
+      return z !== undefined && base <= z && z < cut;
+    }
     return false;
   }
 
