@@ -97,9 +97,11 @@ export interface PlanScene {
   /** Marcas de revisión (M4) y otros trazos guardados, encima de todo. */
   readonly markups?: readonly SketchShape[];
   /** Suelos (F6a): contorno neto de su recinto, con trama de piso. */
-  readonly floors?: readonly { readonly id: string; readonly polygon: readonly Point2D[] }[];
+  readonly floors?: readonly { readonly id: string; readonly polygon: readonly Point2D[]; readonly holes?: readonly (readonly Point2D[])[] }[];
   /** Muro en curso de trazado. */
   readonly wallDraft?: { start: Point2D | null; end: Point2D | null; snappedToNode: boolean } | null;
+  /** Suelo libre o vacío en trazado (capa viva). */
+  readonly shapeDraft?: { readonly points: readonly Point2D[]; readonly closed: boolean } | null;
   /** Espesor (m) con que se previsualiza el muro en curso. */
   readonly draftThickness?: number;
   /** Mostrar los nudos (extremos de muro) como puntos de enganche. */
@@ -205,6 +207,7 @@ export function drawPlanOverlay(r: ICanvasRenderer, scene: PlanScene): void {
     drawSelection(ctx);
   }
   drawWallDraft(ctx);
+  drawShapeDraft(ctx);
   if (scene.snapIndicator) drawSnapIndicator(r, ctx.toScreen(scene.snapIndicator), ctx.pal);
 }
 
@@ -372,13 +375,19 @@ const FLOOR_HATCH_PX = 14;
 function drawFloors({ r, scene, pal, toScreen }: Ctx): void {
   for (const f of scene.floors ?? []) {
     const poly = f.polygon.map(toScreen);
+    const holes = (f.holes ?? []).map((h) => h.map(toScreen));
     r.setStrokeStyle(pal.roomStroke);
     r.setLineWidth(STROKE.thin * 0.8 * pal.lineScale);
     for (const angle of [Math.PI / 4, -Math.PI / 4]) {
-      for (const [a, b] of hatchSegments(poly, FLOOR_HATCH_PX * pal.lineScale, angle)) r.drawLine(a.x, a.y, b.x, b.y);
+      for (const [a, b] of hatchSegments(poly, FLOOR_HATCH_PX * pal.lineScale, angle, holes)) r.drawLine(a.x, a.y, b.x, b.y);
     }
     r.setLineWidth(STROKE.thin * pal.lineScale);
     r.strokePolygon(poly);
+    // Vacío: contorno de trazos y su diagonal (convención de hueco en planta).
+    for (const h of holes) {
+      r.strokePolygon(h);
+      if (h.length >= 3) r.drawLine(h[0].x, h[0].y, h[Math.floor(h.length / 2)].x, h[Math.floor(h.length / 2)].y);
+    }
   }
 }
 
@@ -637,6 +646,23 @@ function drawNodes({ r, pal, toScreen, walls }: Ctx): void {
       r.fillCircle(s.x, s.y, 3.5);
     }
   }
+}
+
+/** Suelo libre o vacío en trazado: relleno de selección y borde de vista previa. */
+function drawShapeDraft({ r, scene, pal, toScreen }: Ctx): void {
+  const d = scene.shapeDraft;
+  if (!d || d.points.length === 0) return;
+  const pts = d.points.map(toScreen);
+  r.setStrokeStyle(pal.preview);
+  r.setLineWidth(1.5 * pal.lineScale);
+  if (pts.length >= 3) {
+    r.setFillStyle(pal.selectionFill);
+    r.fillPolygon(pts);
+  }
+  if (d.closed && pts.length >= 3) r.strokePolygon(pts);
+  else r.strokePolyline(pts);
+  r.setFillStyle(pal.preview);
+  for (const p of d.closed ? [] : pts) r.fillCircle(p.x, p.y, 4);
 }
 
 // ---------------------------------------------------------------------------

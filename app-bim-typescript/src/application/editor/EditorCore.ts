@@ -82,7 +82,7 @@ export interface PhotoMarkerView {
 // Herramientas y estado
 // ---------------------------------------------------------------------------
 
-export type EditorTool = 'select' | 'wall' | 'door' | 'window' | 'column' | 'floor' | 'opening' | 'measure' | 'photo' | 'split';
+export type EditorTool = 'select' | 'wall' | 'door' | 'window' | 'column' | 'floor' | 'opening' | 'measure' | 'photo' | 'split' | 'void';
 
 /** Valores por defecto de los objetos que el editor crea. Editables en Ajustes. */
 interface EditorDefaults {
@@ -118,6 +118,22 @@ type ColumnCreationMethod = 'rectangular' | 'circular';
 export interface CreationMethods {
   readonly wall: WallCreationMethod;
   readonly column: ColumnCreationMethod;
+  /** Suelo: de un recinto (tocándolo) o libre con una forma (andén, patio). */
+  readonly floor: FloorCreationMethod;
+  /** Vacío en un suelo: con una forma. */
+  readonly void: ShapeMethod;
+}
+
+export type ShapeMethod = 'polygon' | 'rect' | 'circle';
+export type FloorCreationMethod = 'zone' | ShapeMethod;
+
+/** Forma en trazado para un suelo libre o un vacío (no persistida). */
+export interface ShapeDraft {
+  readonly mode: 'floor' | 'void';
+  /** Polígono: vértices fijados. Rectángulo y círculo: [primera esquina | centro]. */
+  readonly points: readonly Point2D[];
+  /** Punto bajo el dedo (esquina opuesta, borde del círculo o siguiente vértice). */
+  readonly cursor: Point2D | null;
 }
 
 /** Muro en curso de trazado (no persistido). */
@@ -194,6 +210,7 @@ export interface EditorState {
   readonly objects: readonly RevitObjectBase[];
   readonly creation: CreationMethods;
   readonly wallDraft: WallDraft | null;
+  readonly shapeDraft: ShapeDraft | null;
   /** Recintos cerrados que forman los muros, recalculados en cada cambio. */
   readonly rooms: readonly DetectedRoom[];
   readonly selectedId: RevitObjectId | null;
@@ -285,6 +302,7 @@ export abstract class EditorCore {
   protected abstract addFloor(screenX: number, screenY: number): Promise<void>;
   protected abstract pickMeasureTarget(world: Point2D, tol: Meters): void;
   protected abstract splitTap(world: Point2D, tol: Meters): Promise<void>;
+  protected abstract shapeTap(screenX: number, screenY: number, tol: Meters): Promise<void>;
 
   protected readonly services: AppServices;
   protected readonly roomId: RoomId;
@@ -342,8 +360,9 @@ export abstract class EditorCore {
     this.state = {
       tool: 'wall',
       objects: [],
-      creation: { wall: 'drag', column: 'rectangular' },
+      creation: { wall: 'drag', column: 'rectangular', floor: 'zone', void: 'rect' },
       wallDraft: null,
+      shapeDraft: null,
       rooms: [],
       selectedId: null,
       selectedZoneId: null,
@@ -786,12 +805,13 @@ export abstract class EditorCore {
       dragSnappedToNode: false,
       dragLinked: [],
       wallDraft: null,
+      shapeDraft: null,
     });
     this.dragOrigin = null;
   }
 
   setCreationMethod<K extends keyof CreationMethods>(tool: K, method: CreationMethods[K]): void {
-    this.patch({ creation: { ...this.state.creation, [tool]: method }, wallDraft: null });
+    this.patch({ creation: { ...this.state.creation, [tool]: method }, wallDraft: null, shapeDraft: null });
   }
 
   /** Valores con que se crean los objetos nuevos (espesor de muro, ancho de vano…). */

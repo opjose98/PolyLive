@@ -6,7 +6,7 @@
 import { ValidationWarning } from '../../domain/geometry/types';
 import { revitObjectId, IObjectStore, Room, Wall, Door, Column, Floor, RoomId, Window } from '../../domain/objects';
 
-import { floorZoneId } from '../../domain/objects/floor';
+import { floorZoneId, isFreeFloor } from '../../domain/objects/floor';
 import { IValidationService, IIFCSerializer, ValidationError } from './types';
 import type { IfcBareOpeningInput, IfcMapConversionInput, IfcMemberInput, IfcZoneInput } from '../../infrastructure/export/ifc/types';
 
@@ -89,7 +89,7 @@ export class ExportRoomIfcUseCase {
       zones: input.zones,
       mapConversion: input.mapConversion,
       members: input.members,
-      zoneFloors: floors.filter((f) => floorZoneId(f) !== null),
+      zoneFloors: floors.filter((f) => floorZoneId(f) !== null || isFreeFloor(f)),
     });
 
     const exportTime = Date.now() - startTime;

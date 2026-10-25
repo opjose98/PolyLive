@@ -94,6 +94,15 @@ const WALL_METHODS: readonly MethodDef[] = [
   { id: 'points', label: 'Punto a punto', icon: 'vector-polyline' },
 ];
 
+const SHAPE_METHODS: readonly MethodDef[] = [
+  { id: 'polygon', label: 'Polígono', icon: 'vector-polygon' },
+  { id: 'rect', label: 'Rectángulo', icon: 'rectangle-outline' },
+  { id: 'circle', label: 'Círculo', icon: 'circle-outline' },
+];
+
+/** Suelo de un recinto (tocándolo) o libre: andenes, patios, losas sueltas. */
+const FLOOR_METHODS: readonly MethodDef[] = [{ id: 'zone', label: 'Por recinto', icon: 'floor-plan' }, ...SHAPE_METHODS];
+
 const COLUMN_METHODS: readonly MethodDef[] = [
   { id: 'rectangular', label: 'Rectangular', icon: 'square' },
   { id: 'circular', label: 'Circular', icon: 'circle' },
@@ -162,7 +171,8 @@ export const CATEGORIES_PLAN: readonly CategoryDef[] = [
       { id: 'columna', label: 'Columna', icon: 'square', props: { side: 30 }, binding: { kind: 'plan', tool: 'column' }, methods: COLUMN_METHODS },
       { id: 'puerta', label: 'Puerta', icon: 'door', props: { width: 90 }, binding: { kind: 'plan', tool: 'door' } },
       { id: 'ventana', label: 'Ventana', icon: 'window-closed-variant', props: { width: 120 }, binding: { kind: 'plan', tool: 'window' } },
-      { id: 'suelo', label: 'Suelo', icon: 'floor-plan', props: { thickness: 10 }, binding: { kind: 'plan', tool: 'floor' } },
+      { id: 'suelo', label: 'Suelo', icon: 'floor-plan', props: { thickness: 10 }, binding: { kind: 'plan', tool: 'floor' }, methods: FLOOR_METHODS },
+      { id: 'vacio', label: 'Vacío en suelo', icon: 'vector-difference-ab', binding: { kind: 'plan', tool: 'void' }, methods: SHAPE_METHODS },
       { id: 'vano', label: 'Vano', icon: 'rectangle-outline', props: { width: 80 }, binding: { kind: 'plan', tool: 'opening' } },
       { id: 'dividir', label: 'Dividir muro', icon: 'content-cut', binding: { kind: 'plan', tool: 'split' } },
     ],

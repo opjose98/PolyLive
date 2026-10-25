@@ -631,7 +631,7 @@ export class ObjectStore implements IObjectStore {
     // Column
     'position', 'diameter', 'embeddedInWallId', 'sectionShape', 'dimensionY', 'rotation',
     // Floor
-    'isImplicit',
+    'isImplicit', 'outline', 'holes',
     // Room
     'levelId', 'geometry', 'isClosed', 'isOpen', 'area', 'localOrigin',
   ]);
@@ -756,6 +756,8 @@ export class ObjectStore implements IObjectStore {
           isImplicit: props.isImplicit ?? true,
           material: props.material,
           thickness: props.thickness != null ? meters(props.thickness) : undefined,
+          outline: Array.isArray(props.outline) ? props.outline : undefined,
+          holes: Array.isArray(props.holes) ? props.holes : undefined,
           properties,
           notes: props.notes,
           geometry_json: row.geometry_json,
@@ -847,6 +849,8 @@ export class ObjectStore implements IObjectStore {
       props.isImplicit = obj.isImplicit;
       props.material = obj.material;
       props.thickness = obj.thickness;
+      if (obj.outline) props.outline = obj.outline;
+      if (obj.holes?.length) props.holes = obj.holes;
     } else if (obj instanceof Room) {
       props.levelId = obj.levelId;
       props.geometry = obj.geometry;

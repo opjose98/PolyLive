@@ -50,7 +50,10 @@ export function useSurveyMenu(i: SurveyMenuInput): MainMenuItem[] {
     () => ({ project: projectName, projectCode, space: spaceName, level: levelName, operator: operatorName, generatedAt: new Date() }),
     [projectName, projectCode, spaceName, levelName, operatorName],
   );
-  const areaRows = useCallback(() => areaRowsOf(rooms, levelName ?? ''), [rooms, levelName]);
+  const areaRows = useCallback(
+    () => areaRowsOf(rooms, levelName ?? '', editor.floorViews.filter((f) => f.zoneId === null)),
+    [rooms, levelName, editor],
+  );
   const handlePlanSheet = useCallback(
     () =>
       exportPlanSheet(

@@ -7,16 +7,23 @@
 // el espesor y el material.
 // =============================================================================
 
-import { Meters } from '../../domain/geometry/types';
+import { Meters, Point2D } from '../../domain/geometry/types';
 import { IObjectStore, RoomId, generateId } from '../../domain/objects';
-import { Floor, FLOOR_ZONE_PROP, floorZoneId } from '../../domain/objects/floor';
+import { Floor, FLOOR_ZONE_PROP, floorZoneId, netFloorArea } from '../../domain/objects/floor';
+
 import { CommandStack } from '../state/CommandStack';
 import { CreateFloorCommand } from '../commands/CreateFloorCommand';
 import { AppError, AppErrorCode } from '../../shared/errors/AppError';
 
+/** Área mínima de un suelo libre (m²): por debajo es un toque, no un andén. */
+const MIN_FREE_FLOOR_AREA = 0.01;
+
 interface CreateFloorInput {
   readonly roomId: RoomId;
-  readonly zoneId: string;
+  /** Suelo de un recinto (toma su contorno neto)… */
+  readonly zoneId?: string;
+  /** …o suelo libre (andén, patio) con contorno propio. */
+  readonly outline?: readonly Point2D[];
   readonly thickness: Meters;
   readonly material?: string;
   /** Nivel y fase (como los demás objetos). */
@@ -37,8 +44,15 @@ export class CreateFloorUseCase {
         userMessage: 'El espesor del suelo tiene que ser mayor que cero.',
       });
     }
+    if (!input.zoneId && netFloorArea(input.outline ?? []) < MIN_FREE_FLOOR_AREA) {
+      throw new AppError({
+        code: AppErrorCode.VALIDATION_FAILED,
+        technicalDetail: 'CreateFloor: suelo libre sin contorno o sin área',
+        userMessage: 'El suelo necesita un contorno cerrado con área.',
+      });
+    }
     const existing = await this.store.listObjects(input.roomId);
-    if (existing.some((o) => o instanceof Floor && floorZoneId(o) === input.zoneId)) {
+    if (input.zoneId && existing.some((o) => o instanceof Floor && floorZoneId(o) === input.zoneId)) {
       throw new AppError({
         code: AppErrorCode.VALIDATION_FAILED,
         technicalDetail: `CreateFloor: el recinto ${input.zoneId} ya tiene suelo`,
@@ -51,7 +65,8 @@ export class CreateFloorUseCase {
       isImplicit: false,
       thickness: input.thickness,
       material: input.material,
-      properties: { ...input.properties, [FLOOR_ZONE_PROP]: input.zoneId },
+      outline: input.zoneId ? undefined : input.outline?.map((p) => ({ x: p.x, y: p.y })),
+      properties: input.zoneId ? { ...input.properties, [FLOOR_ZONE_PROP]: input.zoneId } : { ...input.properties },
     });
     await this.store.createObject(floor);
     await this.commandStack.execute(new CreateFloorCommand(floor.id));

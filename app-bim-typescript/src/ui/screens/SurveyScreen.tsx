@@ -283,6 +283,8 @@ export function SurveyScreen({
     if (binding?.kind !== 'plan') return;
     editor.setTool(binding.tool);
     if (binding.tool === 'wall' && activeTool.methodId) editor.setCreationMethod('wall', activeTool.methodId as 'drag' | 'points');
+    if (binding.tool === 'floor' && activeTool.methodId) editor.setCreationMethod('floor', activeTool.methodId as 'zone' | 'polygon' | 'rect' | 'circle');
+    if (binding.tool === 'void' && activeTool.methodId) editor.setCreationMethod('void', activeTool.methodId as 'polygon' | 'rect' | 'circle');
     if (binding.tool === 'column' && activeTool.methodId) {
       editor.setCreationMethod('column', activeTool.methodId as 'rectangular' | 'circular');
     }
@@ -1022,6 +1024,10 @@ export function SurveyScreen({
   if (state.tool === 'wall' && state.wallDraft?.start) {
     bpcActions.push({ icon: 'close-circle-outline', label: 'Soltar inicio', onPress: () => editor.clearWallDraft() });
   }
+  if (state.shapeDraft && editor.shapeMethodActive === 'polygon') {
+    if (state.shapeDraft.points.length >= 3) bpcActions.push({ icon: 'vector-polygon', label: 'Cerrar', onPress: () => void editor.closeShape() });
+    bpcActions.push({ icon: 'undo-variant', label: 'Quitar punto', onPress: () => editor.undoShapePoint() });
+  }
   if (state.tool === 'measure' && state.measureTargetId) {
     bpcActions.push({ icon: 'pencil', label: 'Ingresar medida', onPress: () => setManualMeasureOpen(true) });
   }
@@ -1251,7 +1257,7 @@ export function SurveyScreen({
           palette={canvasPalette}
           grid={{ show: gridLines || gridDots, lines: gridLines, dots: gridDots }}
           dragEnabled={editable && state.tool === 'select' && !state.busy}
-          drawEnabled={(editable && state.tool === 'wall') || progress.drawEnabled || review.drawEnabled || drafting.drawEnabled}
+          drawEnabled={(editable && (state.tool === 'wall' || editor.shapeDragActive)) || progress.drawEnabled || review.drawEnabled || drafting.drawEnabled}
           sketch={planSketch}
           doubleTapEnabled={state.tool === 'select' && wsState.workMode !== 'topografia'}
           rotationSnaps={topo.rotationSnaps}

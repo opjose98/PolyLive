@@ -11,7 +11,7 @@
 import { revitObjectId, type IObjectStore, type RoomId } from '../../domain/objects/base';
 import { Column } from '../../domain/objects/column';
 import { Door } from '../../domain/objects/door';
-import { Floor, floorZoneId } from '../../domain/objects/floor';
+import { Floor, floorZoneId, isFreeFloor } from '../../domain/objects/floor';
 import { Room } from '../../domain/objects/room';
 import { Wall } from '../../domain/objects/wall';
 import { Window } from '../../domain/objects/window';
@@ -62,7 +62,7 @@ export class ExportProjectIfcUseCase {
         windows: objects.filter((o): o is Window => o instanceof Window),
         columns: objects.filter((o): o is Column => o instanceof Column),
         floor: floors.find((f) => floorZoneId(f) === null) ?? null,
-        zoneFloors: floors.filter((f) => floorZoneId(f) !== null),
+        zoneFloors: floors.filter((f) => floorZoneId(f) !== null || isFreeFloor(f)),
         zones: s.zones,
         openingSills: s.openingSills,
         bareOpenings: s.bareOpenings,

@@ -14,11 +14,12 @@
 // entidad se explica en step-writer.ts.
 // =============================================================================
 
+import type { Point2D } from '../../../domain/geometry/types';
 import { Door } from '../../../domain/objects/door';
 import { Window } from '../../../domain/objects/window';
 import { RevitObjectBase } from '../../../domain/objects/base';
 import { LEVEL_PROP, PHASE_PROP } from '../../../domain/objects/marker';
-import { floorZoneId } from '../../../domain/objects/floor';
+import { floorZoneId, isFreeFloor, netFloorArea, polygonArea } from '../../../domain/objects/floor';
 import { columnForExport, toLocal, wallForExport } from '../../../domain/geometry/handedness';
 import { LevelElevations, VerticalExtent, WallProfile, columnVerticalOf, isRectangularProfile, profileArea, profileBottom, profileOutline, profileTop, resolveExtent, resolveWallProfile, revitConstraints, wallVerticalOf } from '../../../domain/objects/vertical';
 import { SerializeInput, GateValidationResult, IfcLevelInput } from './types';
@@ -244,21 +245,29 @@ export class IFCSerializer {
       let zoneSlabs = 0;
       for (const f of sp.zoneFloors ?? []) {
         if (f.is_deleted) continue;
+        // Suelo de recinto (contorno neto del recinto) o libre (andén, patio: contorno propio).
         const z = zonesById.get(floorZoneId(f) ?? '');
-        if (!z) continue;
-        const storey = storeyOf(z.levelId);
+        const free = !z && isFreeFloor(f);
+        if (!z && !free) continue;
+        const outline: readonly Point2D[] = z ? z.netPolygon : (f.outline as Point2D[]);
+        const holes = f.holes ?? [];
+        const ownLevel = f.properties[LEVEL_PROP];
+        const storey = storeyOf(z ? z.levelId : typeof ownLevel === 'string' ? ownLevel : baseLevel.id);
         const thickness = (f.thickness as number) || 0.1;
-        const body = w.bodyShape([w.extrusion(w.polygonProfile(z.netPolygon.map(toLocal)), w.origin3Axis, thickness)]);
+        const profile = w.polygonProfileWithVoids(outline.map(toLocal), holes.map((h) => h.map(toLocal)));
+        const body = w.bodyShape([w.extrusion(profile, w.origin3Axis, thickness)]);
         const placement = w.placementAt(P(storey), 0, 0, -thickness);
-        const name = (f.properties.name as string | undefined) ?? `Suelo ${z.code}`;
+        const name = (f.properties.name as string | undefined) ?? (z ? `Suelo ${z.code}` : 'Suelo libre');
+        const netArea = z ? Math.max(0, z.netArea - holes.reduce((a, h) => a + polygonArea(h), 0)) : netFloorArea(outline, holes);
+        const perimeter = outline.reduce((a, p, i) => a + Math.hypot(outline[(i + 1) % outline.length].x - p.x, outline[(i + 1) % outline.length].y - p.y), 0);
         const slab = w.add(
           `IFCSLAB('${stableGuid(f.id as string)}',${oh},${stepString(name)},$,$,${ref(placement)},${ref(w.productShape([body]))},$,.FLOOR.)`,
         );
         storey.elements.push(slab);
         if (f.material) w.associateMaterial(f.id as string, [slab], w.materialLayerSet(f.material, thickness));
         w.quantities(f.id as string, 'Qto_SlabBaseQuantities', slab, {
-          lengths: [['Depth', thickness], ['Perimeter', z.perimeter]],
-          areas: [['NetArea', z.netArea]],
+          lengths: [['Depth', thickness], ['Perimeter', z ? z.perimeter : perimeter]],
+          areas: [['NetArea', netArea]],
         });
         zoneSlabs++;
         products++;

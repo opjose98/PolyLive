@@ -229,6 +229,60 @@ describe('EditorController', () => {
     });
   });
 
+  describe('suelos libres y vacíos', () => {
+    const floors = () => editor.floorViews;
+
+    it('rectángulo arrastrado: suelo libre con su contorno; se selecciona tocándolo', async () => {
+      editor.setNodeSnapEnabled(false);
+      editor.setSnapEnabled(false);
+      editor.setTool('floor');
+      editor.setCreationMethod('floor', 'rect');
+      expect(editor.shapeDragActive).toBe(true);
+      editor.drawBegin(px(0), px(0));
+      editor.drawMove(px(4), px(1.5));
+      await editor.drawEnd(px(4), px(1.5));
+      expect(floors()).toHaveLength(1);
+      expect(floors()[0].zoneId).toBeNull();
+      expect(floors()[0].polygon).toHaveLength(4);
+
+      editor.setTool('select');
+      await editor.handleTap(px(2), px(0.7), TOL_PX);
+      expect(editor.selected?.type).toBe('Floor');
+    });
+
+    it('polígono por toques: tocar el primer vértice lo cierra; un vacío se agrega al suelo que lo contiene', async () => {
+      editor.setNodeSnapEnabled(false);
+      editor.setSnapEnabled(false);
+      editor.setTool('floor');
+      editor.setCreationMethod('floor', 'polygon');
+      for (const [x, y] of [[0, 0], [5, 0], [5, 3], [0, 3]]) await editor.handleTap(px(x), px(y), TOL_PX);
+      expect(editor.getState().shapeDraft?.points).toHaveLength(4);
+      await editor.handleTap(px(0), px(0), TOL_PX);
+      expect(editor.getState().shapeDraft).toBeNull();
+      expect(floors()).toHaveLength(1);
+
+      editor.setTool('void');
+      editor.setCreationMethod('void', 'circle');
+      editor.drawBegin(px(2.5), px(1.5));
+      editor.drawMove(px(3), px(1.5));
+      await editor.drawEnd(px(3), px(1.5));
+      expect(floors()[0].holes).toHaveLength(1);
+
+      // Deshacer quita el vacío; el suelo sigue.
+      await editor.undo();
+      expect(floors()[0].holes).toHaveLength(0);
+    });
+
+    it('un vacío fuera de cualquier suelo no se crea', async () => {
+      editor.setTool('void');
+      editor.setCreationMethod('void', 'rect');
+      editor.drawBegin(px(10), px(10));
+      editor.drawMove(px(11), px(11));
+      await editor.drawEnd(px(11), px(11));
+      expect(editor.getState().notice?.message).toMatch(/dentro de un suelo/);
+    });
+  });
+
   describe('herramienta selección', () => {
     it('toca un muro y lo selecciona', async () => {
       await drawRectangle();

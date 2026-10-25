@@ -52,7 +52,9 @@ export abstract class EditorGestures extends EditorCore {
       case 'column':
         return this.addColumn(world);
       case 'floor':
-        return this.addFloor(screenX, screenY);
+        return this.state.creation.floor === 'zone' ? this.addFloor(screenX, screenY) : this.shapeTap(screenX, screenY, tol);
+      case 'void':
+        return this.shapeTap(screenX, screenY, tol);
       case 'opening':
         return this.addGenericOpening(world, tol);
       case 'measure':

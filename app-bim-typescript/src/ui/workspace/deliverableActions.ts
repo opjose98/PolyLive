@@ -7,14 +7,33 @@ import type { DetectedRoom } from '../../application/editor/EditorController';
 import { AreaRow, PhotoEntry, SheetMeta, areaScheduleCsv, photoRegisterHtml, planSheetHtml } from '../../application/report/deliverables';
 import type { RoomId } from '../../domain/objects/base';
 import { zoneCode } from '../../domain/objects/zone';
+import { netFloorArea, polygonArea } from '../../domain/objects/floor';
+import type { Point2D } from '../../domain/geometry/types';
 import { uint8ArrayToBase64 } from '../../shared/encoding/base64';
 import { diagnostics } from '../../shared/diagnostics';
 import { toast } from '../primitives';
 import { shortHash, verifySeal } from '../../domain/evidence/seal';
 import { safeName, saveCsv, savePdf } from './reportActions';
 
-/** Filas del cuadro de áreas desde los recintos del nivel. */
-export function areaRowsOf(rooms: readonly DetectedRoom[], level: string): AreaRow[] {
+/** Filas del cuadro de áreas: los recintos del nivel y, aparte, los suelos libres (andenes, patios). */
+export function areaRowsOf(
+  rooms: readonly DetectedRoom[],
+  level: string,
+  freeFloors: readonly { readonly polygon: readonly Point2D[]; readonly holes: readonly (readonly Point2D[])[] }[] = [],
+): AreaRow[] {
+  const free = freeFloors.map((f, i) => ({
+    code: `S-${String(i + 1).padStart(2, '0')}`,
+    name: 'Suelo libre',
+    use: 'Andén / exterior',
+    level,
+    netArea: netFloorArea(f.polygon, f.holes),
+    perimeter: f.polygon.reduce((a, p, k) => a + Math.hypot(f.polygon[(k + 1) % f.polygon.length].x - p.x, f.polygon[(k + 1) % f.polygon.length].y - p.y), 0),
+    axisArea: polygonArea(f.polygon),
+  }));
+  return [...roomRows(rooms, level), ...free];
+}
+
+function roomRows(rooms: readonly DetectedRoom[], level: string): AreaRow[] {
   return rooms
     .filter((r) => (r.netArea ?? 0) > 0 || r.area > 0)
     .map((r) => ({

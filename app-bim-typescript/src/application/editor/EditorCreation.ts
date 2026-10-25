@@ -13,10 +13,11 @@ import { wallId } from '../../domain/objects/base';
 import { Wall } from '../../domain/objects/wall';
 import { Room } from '../../domain/objects/room';
 import { Column } from '../../domain/objects/column';
-import { Floor, floorZoneId } from '../../domain/objects/floor';
+import { Floor, circlePolygon, floorZoneId, netFloorArea, rectPolygon } from '../../domain/objects/floor';
 
 import { ElevationSnapshotCommand } from '../commands/ElevationSnapshotCommand';
 import { splitSnapCandidates } from '../../domain/objects/wall-split';
+import { isPointInPolygon } from '../../domain/geometry/polygon-utils';
 import {
   VerticalExtent,
   WallVertical,
@@ -32,8 +33,18 @@ import { diagnostics } from '../../shared/diagnostics';
 import {
   EditorState,
   MIN_WALL_LENGTH,
+  ShapeMethod,
 } from './EditorCore';
 import { EditorGestures } from './EditorGestures';
+
+/** Suelo tal como se dibuja: el de un recinto (`zoneId`) o uno libre, con sus vacíos. */
+export interface FloorView {
+  readonly id: string;
+  readonly zoneId: string | null;
+  readonly polygon: readonly Point2D[];
+  readonly holes: readonly (readonly Point2D[])[];
+  readonly thickness: number;
+}
 
 export abstract class EditorCreation extends EditorGestures {
   // -------------------------------------------------------------------------
@@ -48,6 +59,11 @@ export abstract class EditorCreation extends EditorGestures {
   // El muro se crea con snap a nodo (primero) o angular respecto al inicio.
 
   drawBegin(screenX: number, screenY: number): void {
+    if (this.shapeDragActive) {
+      const { point } = this.snapDrawPoint(screenX, screenY, undefined);
+      this.patch({ shapeDraft: { mode: this.state.tool === 'void' ? 'void' : 'floor', points: [point], cursor: point } });
+      return;
+    }
     // No se bloquea con `busy`: trazar el muro siguiente mientras se guarda el
     // anterior es el ritmo normal de campo; perder ese trazo sería peor.
     if (this.state.tool !== 'wall') return;
@@ -60,6 +76,12 @@ export abstract class EditorCreation extends EditorGestures {
   }
 
   drawMove(screenX: number, screenY: number): void {
+    const shape = this.state.shapeDraft;
+    if (shape && this.shapeDragActive) {
+      const { point } = this.snapDrawPoint(screenX, screenY, this.shapeMethodActive === 'rect' ? undefined : shape.points[0]);
+      this.patch({ shapeDraft: { ...shape, cursor: point } });
+      return;
+    }
     const draft = this.state.wallDraft;
     if (!draft || this.state.tool !== 'wall') return;
     const { point, snappedToNode } = this.snapDrawPoint(screenX, screenY, draft.start ?? undefined);
@@ -67,6 +89,14 @@ export abstract class EditorCreation extends EditorGestures {
   }
 
   async drawEnd(screenX: number, screenY: number): Promise<void> {
+    if (this.shapeDragActive) {
+      this.drawMove(screenX, screenY);
+      const poly = this.shapeDraftPolygon;
+      const mode = this.state.shapeDraft?.mode ?? 'floor';
+      this.patch({ shapeDraft: null });
+      if (poly && netFloorArea(poly) >= 0.01) await this.commitShape(mode, poly);
+      return;
+    }
     if (this.state.tool !== 'wall') return;
     this.drawMove(screenX, screenY);
     const draft = this.state.wallDraft;
@@ -83,6 +113,7 @@ export abstract class EditorCreation extends EditorGestures {
 
   /** El gesto se abandonó (entró un segundo dedo, o el sistema lo canceló). */
   drawCancel(): void {
+    if (this.shapeDragActive && this.state.shapeDraft) this.patch({ shapeDraft: null });
     const draft = this.state.wallDraft;
     if (!draft) return;
     // En punto a punto se conserva el inicio ya fijado: cancelar un gesto no
@@ -356,15 +387,19 @@ export abstract class EditorCreation extends EditorGestures {
    * Suelos a dibujar: los del alcance cuyo recinto está cerrado, con el
    * contorno NETO de ese recinto (el suelo no tiene contorno propio).
    */
-  get floorViews(): { id: string; zoneId: string; polygon: readonly Point2D[]; thickness: number }[] {
-    const out: { id: string; zoneId: string; polygon: readonly Point2D[]; thickness: number }[] = [];
+  get floorViews(): FloorView[] {
+    const out: FloorView[] = [];
     for (const o of this.scopedObjects) {
       if (!(o instanceof Floor)) continue;
+      if (o.outline && o.outline.length >= 3 && !floorZoneId(o)) {
+        out.push({ id: o.id as string, zoneId: null, polygon: o.outline, holes: o.holes ?? [], thickness: (o.thickness as number | undefined) ?? 0 });
+        continue;
+      }
       const zoneId = floorZoneId(o);
       const room = zoneId ? this.state.rooms.find((r) => r.id === zoneId) : undefined;
       const polygon = room?.netPolygon?.length ? room.netPolygon : room?.polygon;
       if (!zoneId || !polygon || polygon.length < 3) continue;
-      out.push({ id: o.id as string, zoneId, polygon, thickness: (o.thickness as number | undefined) ?? 0 });
+      out.push({ id: o.id as string, zoneId, polygon, holes: o.holes ?? [], thickness: (o.thickness as number | undefined) ?? 0 });
     }
     return out;
   }
@@ -437,6 +472,120 @@ export abstract class EditorCreation extends EditorGestures {
       return;
     }
     this.patch({ measureTargetId: wallId(host.id as string), selectedId: host.id });
+  }
+
+  // --- Suelos libres y vacíos (formas) -----------------------------------
+  //
+  // Polígono: cada toque fija un vértice (con el enganche del muro) y tocar el
+  // primero, o «Cerrar», lo termina. Rectángulo y círculo: un arrastre de una
+  // esquina a la opuesta, o del centro al borde. Un vacío se agrega al suelo
+  // (libre o de recinto) que contiene su centro.
+
+  /** Herramienta de forma activa: suelo libre o vacío, con su método. */
+  get shapeMethodActive(): ShapeMethod | null {
+    const { tool, creation } = this.state;
+    if (tool === 'void') return creation.void;
+    if (tool === 'floor' && creation.floor !== 'zone') return creation.floor;
+    return null;
+  }
+
+  /** Rectángulo y círculo se trazan arrastrando (la vista no debe panear). */
+  get shapeDragActive(): boolean {
+    const m = this.shapeMethodActive;
+    return m === 'rect' || m === 'circle';
+  }
+
+  /** Polígono que resultaría de la forma en trazado (para dibujarla y para crearla). */
+  get shapeDraftPolygon(): Point2D[] | null {
+    const d = this.state.shapeDraft;
+    const m = this.shapeMethodActive;
+    if (!d || !m || d.points.length === 0) return null;
+    if (m === 'polygon') return d.cursor ? [...d.points, d.cursor] : [...d.points];
+    if (!d.cursor) return null;
+    if (m === 'rect') return rectPolygon(d.points[0], d.cursor);
+    const r = Math.hypot(d.cursor.x - d.points[0].x, d.cursor.y - d.points[0].y);
+    return r > 0.01 ? circlePolygon(d.points[0], r) : null;
+  }
+
+  protected async shapeTap(screenX: number, screenY: number, tol: Meters): Promise<void> {
+    const m = this.shapeMethodActive;
+    if (!m) return;
+    if (m !== 'polygon') {
+      this.notify('info', m === 'rect' ? 'Arrastra de una esquina a la opuesta.' : 'Arrastra del centro al borde.');
+      return;
+    }
+    const mode = this.state.tool === 'void' ? 'void' : 'floor';
+    const d = this.state.shapeDraft;
+    const pts = d?.points ?? [];
+    const { point } = this.snapDrawPoint(screenX, screenY, pts[pts.length - 1]);
+    if (pts.length >= 3 && Math.hypot(point.x - pts[0].x, point.y - pts[0].y) <= (tol as number)) {
+      await this.closeShape();
+      return;
+    }
+    this.patch({ shapeDraft: { mode, points: [...pts, point], cursor: null } });
+  }
+
+  /** Termina el polígono en trazado (botón «Cerrar» o tocar el primer vértice). */
+  async closeShape(): Promise<void> {
+    const d = this.state.shapeDraft;
+    if (!d || d.points.length < 3) return;
+    this.patch({ shapeDraft: null });
+    await this.commitShape(d.mode, [...d.points]);
+  }
+
+  undoShapePoint(): void {
+    const d = this.state.shapeDraft;
+    if (!d) return;
+    this.patch({ shapeDraft: d.points.length > 1 ? { ...d, points: d.points.slice(0, -1) } : null });
+  }
+
+  /** Suelo (libre o de recinto) que contiene el punto, para recibir un vacío. */
+  floorAtPoint(p: Point2D): Floor | null {
+    for (const o of this.scopedObjects) {
+      if (!(o instanceof Floor)) continue;
+      const poly = o.outline?.length ? o.outline : this.floorViews.find((f) => f.id === (o.id as string))?.polygon;
+      if (poly && poly.length >= 3 && isPointInPolygon(p, poly)) return o;
+    }
+    return null;
+  }
+
+  protected async commitShape(mode: 'floor' | 'void', poly: Point2D[]): Promise<void> {
+    if (netFloorArea(poly) < 0.01) {
+      this.notify('info', 'La forma no tiene área.');
+      return;
+    }
+    this.patch({ busy: true });
+    try {
+      if (mode === 'floor') {
+        const { floor } = await this.services.useCases.createFloor.execute({
+          roomId: this.roomId,
+          outline: poly,
+          thickness: this.defaults.floorThickness,
+          properties: this.scopeProps(),
+        });
+        await this.reload();
+        this.patch({ selectedId: floor.id });
+        this.notify('success', `Suelo libre de ${netFloorArea(poly).toFixed(2)} m².`);
+        return;
+      }
+      const c = poly.reduce((a, q) => ({ x: a.x + q.x / poly.length, y: a.y + q.y / poly.length }), { x: 0, y: 0 });
+      const host = this.floorAtPoint(c);
+      if (!host) {
+        this.notify('info', 'Dibuja el vacío dentro de un suelo (de recinto o libre).');
+        return;
+      }
+      await this.services.useCases.updateObjectProperty.execute({
+        objectId: host.id,
+        property: 'holes',
+        newValue: [...(host.holes ?? []), poly],
+      });
+      await this.reload();
+      this.notify('success', `Vacío de ${netFloorArea(poly).toFixed(2)} m² en el suelo.`);
+    } catch (err) {
+      this.fail(err, mode === 'floor' ? 'No se pudo crear el suelo.' : 'No se pudo crear el vacío.');
+    } finally {
+      this.patch({ busy: false });
+    }
   }
 
   // -------------------------------------------------------------------------

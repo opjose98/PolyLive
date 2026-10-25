@@ -306,6 +306,7 @@ export function PlanCanvas(props: PlanCanvasProps) {
           handles: liveState.handles,
           showLabels: false,
           wallDraft: liveState.wallDraft,
+          shapeDraft: liveState.shapeDraft,
           draftThickness,
           snapIndicator: liveState.snapIndicator,
           existingIds,

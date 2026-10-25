@@ -102,11 +102,15 @@ export function useProgress({ services, projectId, spaceId, editor, operatorName
     };
   }, [services, spaceId, objectsVersion]);
 
-  const floors = useMemo(() => editor.floorViews, [editor, objectsVersion]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Un suelo libre no tiene recinto: su soporte de avance se identifica por el id del suelo.
+  const floors = useMemo(
+    () => editor.floorViews.map((f) => ({ ...f, zoneId: f.zoneId ?? `floor:${f.id}` })),
+    [editor, objectsVersion], // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
   const supports = useMemo(() => {
     const map = new Map<string, Support>();
-    for (const f of floors) map.set(targetKey({ kind: 'floor', zoneId: f.zoneId }), { outline: f.polygon, holes: [] });
+    for (const f of floors) map.set(targetKey({ kind: 'floor', zoneId: f.zoneId }), { outline: f.polygon, holes: f.holes });
     const openingsOf = new Map(elevations.map((e) => [e.wallId, e.openings]));
     for (const w of editor.walls) {
       const p = editor.wallProfile(w);

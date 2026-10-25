@@ -199,12 +199,16 @@ export function hatchSegments(
   polygon: readonly Point2D[],
   spacing: number,
   angle = Math.PI / 4,
+  /** Huecos (par/impar con el contorno): la trama no los cruza. */
+  holes: readonly (readonly Point2D[])[] = [],
 ): [Point2D, Point2D][] {
   if (polygon.length < 3 || spacing <= 0) return [];
   // Se trabaja en un marco girado: las líneas de trama son horizontales.
   const c = Math.cos(-angle);
   const s = Math.sin(-angle);
-  const rot = polygon.map((p) => ({ x: p.x * c - p.y * s, y: p.x * s + p.y * c }));
+  const rotate = (ring: readonly Point2D[]) => ring.map((p) => ({ x: p.x * c - p.y * s, y: p.x * s + p.y * c }));
+  const rot = rotate(polygon);
+  const rings = [rot, ...holes.filter((h) => h.length >= 3).map(rotate)];
   let minY = Infinity;
   let maxY = -Infinity;
   for (const p of rot) {
@@ -217,10 +221,12 @@ export function hatchSegments(
   // vecinos comparten la misma trama y se leen como uno.
   for (let y = Math.ceil(minY / spacing) * spacing; y <= maxY; y += spacing) {
     const xs: number[] = [];
-    for (let i = 0; i < rot.length; i++) {
-      const a = rot[i];
-      const b = rot[(i + 1) % rot.length];
-      if ((a.y <= y && b.y > y) || (b.y <= y && a.y > y)) xs.push(a.x + ((y - a.y) / (b.y - a.y)) * (b.x - a.x));
+    for (const ring of rings) {
+      for (let i = 0; i < ring.length; i++) {
+        const a = ring[i];
+        const b = ring[(i + 1) % ring.length];
+        if ((a.y <= y && b.y > y) || (b.y <= y && a.y > y)) xs.push(a.x + ((y - a.y) / (b.y - a.y)) * (b.x - a.x));
+      }
     }
     xs.sort((m, n) => m - n);
     for (let k = 0; k + 1 < xs.length; k += 2) out.push([back(xs[k], y), back(xs[k + 1], y)]);

@@ -195,6 +195,14 @@ export class StepWriter {
     return this.add(`IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,$,${ref(this.polyline2(points, true))})`);
   }
 
+  /** Polígono con huecos (suelo con vacíos). Sin huecos, el perfil cerrado simple. */
+  polygonProfileWithVoids(outer: readonly Vec2[], holes: readonly (readonly Vec2[])[]): number {
+    const inner = holes.filter((h) => h.length >= 3);
+    if (inner.length === 0) return this.polygonProfile(outer);
+    const curves = inner.map((h) => ref(this.polyline2(h, true))).join(',');
+    return this.add(`IFCARBITRARYPROFILEDEFWITHVOIDS(.AREA.,$,${ref(this.polyline2(outer, true))},(${curves}))`);
+  }
+
   /**
    * Sistema para extruir un perfil dibujado en el plano VERTICAL de un muro:
    * X del perfil = a lo largo del muro, Y del perfil = altura, extrusión hacia

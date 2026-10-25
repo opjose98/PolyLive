@@ -403,6 +403,27 @@ describe('IFCSerializer — suelos de recinto (F6a)', () => {
   });
 });
 
+describe('IFCSerializer — suelos libres y vacíos', () => {
+  it('un andén (suelo libre) sale como IfcSlab con su contorno; sus vacíos, como huecos del perfil', async () => {
+    const f = new Floor({
+      id: revitObjectId('anden'),
+      roomId: roomId('room-1'),
+      isImplicit: false,
+      thickness: meters(0.1),
+      outline: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 1.5 }, { x: 0, y: 1.5 }],
+      holes: [[{ x: 2, y: 0.5 }, { x: 3, y: 0.5 }, { x: 3, y: 1 }, { x: 2, y: 1 }]],
+      properties: { levelId: 'n1' },
+    });
+    const r = await serialize({ zoneFloors: [f] });
+    expect(lintIfc(r.content)).toEqual([]);
+    const slabs = ofType(r.content, 'IFCSLAB');
+    expect(slabs).toHaveLength(1);
+    expect(slabs[0].args[2]).toBe("'Suelo libre'");
+    expect(ofType(r.content, 'IFCARBITRARYPROFILEDEFWITHVOIDS')).toHaveLength(1);
+    expect(r.content).toMatch(/IFCQUANTITYAREA\('NetArea',\$,\$,14\.5/);
+  });
+});
+
 describe('IFCSerializer — georreferencia (M2b)', () => {
   it('escribe IfcProjectedCRS e IfcMapConversion contra el contexto del modelo', async () => {
     const r = await serialize({
