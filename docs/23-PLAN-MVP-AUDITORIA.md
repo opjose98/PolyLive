@@ -175,13 +175,20 @@ que trabaja hoy sobre `audit/estable-campo`; irá en su propia rama (`feat/impor
 IFC4 **Reference View** no sirve: exporta geometría teselada, sin eje ni capas, y no hay espesor
 fiable del muro.
 
-### 6.2 Modelo de datos (sin migración)
+### 6.2 Modelo de datos (sin migración propia; requiere la de §7)
 
 - Cada objeto importado guarda en `properties_json`: `ifcGuid` (GlobalId de Revit), `origin: 'ifc'`
   y el nombre o tipo de Revit. `ObjectProperties` es abierto: no cambia el esquema SQLite.
 - Lo creado en PolyLive no lleva `origin` (o `'polylive'`); su GUID sigue saliendo de su id
   (`guid-generator.ts`), como hoy.
-- Niveles: cada `IfcBuildingStorey` → marcador `level` del proyecto (`project_markers`), con su cota.
+- Niveles: cada `IfcBuildingStorey` → nivel del espacio (por espacio, ver §7), con su cota.
+  Cada espacio importado recibe **todos** los niveles del IFC, no solo el suyo: un muro con base en
+  N1 y tope en N2 (o una culata atada a la cubierta) debe encontrar su nivel de tope en su espacio.
+  Se fusionan con los niveles que ya tenga el espacio por nombre y cota (no se duplican).
+- **Alzado de los muros (culatas, trapecios)**: cada muro importado lleva su `WallVertical`
+  (`domain/objects/vertical.ts`), una restricción por extremo atada a los niveles importados, y su
+  `wall_elevations.levels_json` (`leftHeight`/`rightHeight`/`leftBase`/`rightBase`). Así se ve y se
+  corrige en la vista altimétrica y con el selector de nivel, como un muro creado en la app.
 - Espacios: cada planta importada → un espacio (`project_spaces`), y cada `IfcSpace` → `Room`.
 
 ### 6.3 Fases
@@ -191,15 +198,25 @@ fiable del muro.
   referencias `#n`, unidades (`IfcSIUnit`, prefijos) y `IfcLocalPlacement` encadenado a 2D de planta.
 - Mapeo: `IfcBuildingStorey` → nivel · `IfcWall`/`IfcWallStandardCase` → `Wall` (eje por la
   representación `Axis`, espesor por `IfcMaterialLayerSetUsage`; si no hay, desde el perfil
-  extruido) · `IfcDoor`/`IfcWindow` → vanos en su muro (vía `IfcRelVoidsElement` +
+  extruido). Restricciones verticales: del Pset de Revit (Restricción de base/superior, desfases,
+  altura desconectada — exige marcar «Exportar conjuntos de propiedades de Revit» en el perfil de
+  exportación); si no vienen, base = piso contenedor y alturas por extremo leídas de la geometría
+  (perfil editado como `IfcExtrudedAreaSolid` en el plano del muro, o recorte
+  `IfcBooleanClippingResult` cuando el muro está unido a una cubierta) · `IfcDoor`/`IfcWindow` → vanos en su muro (vía `IfcRelVoidsElement` +
   `IfcRelFillsElement`) · `IfcSpace` → `Room` · `IfcSlab` y columnas: fuera de la fase 1.
+- **Límite conocido — culata con cumbrera**: la app modela el alzado como trapecio (altura por
+  extremo). Una culata triangular o pentagonal (pico a media longitud) no cabe en un muro: se parte
+  en dos muros en la cumbrera y se avisa en el resumen. Las mitades guardan `ifcSourceGuid` (solo
+  trazabilidad), **no** `ifcGuid`: al exportar usan el GUID derivado de su id, porque dos elementos
+  con el mismo GlobalId hacen inválido el IFC. Si es frecuente en tus levantamientos, se reabre extender `VerticalLevels` a un perfil
+  con vértices intermedios (cambio de modelo: se acuerda antes).
 - Lo que no se reconozca se cuenta y se informa («n elementos ignorados por tipo»); nunca se aborta
   el archivo entero por un elemento.
 - Caso de uso `ImportIfcUseCase` en `application/` (el dominio no ve el parser); entrada por el
   selector de archivos existente (`native/files`), con confirmación (resumen por tipo y nivel)
   antes de escribir, en una transacción.
 - Georreferencia: si trae `IfcMapConversion`, se ofrece usarla; si no, coordenadas locales.
-- Tests jest con IFC de muestra reales del dueño (anonimizados) en `test/fixtures/ifc/`, más un
+- Tests jest con IFC de muestra reales (incluida al menos una culata y muros en dos niveles) del dueño (anonimizados) en `test/fixtures/ifc/`, más un
   ida y vuelta: IFC exportado por PolyLive → importado → mismas geometrías (tolerancia en mm).
 
 **Fase 2 — Editar y levantar sobre lo importado**
@@ -209,8 +226,10 @@ fiable del muro.
 **Fase 3 — Exportar solo lo creado en PolyLive** (toca código compartido: después de integrar la
 sesión de revisión)
 - Filtro por `origin` en los casos de uso de exportación IFC/DXF; los objetos importados se omiten.
-- **Pendiente de decisión**: un vano creado en PolyLive sobre un muro importado — (a) exportar el
-  vano suelto, (b) exportar también su muro anfitrión, (c) no exportarlo. Propuesta: (b).
+- **Decidido (2026-10-22)**: un vano creado en PolyLive sobre un muro importado se exporta **junto
+  con su muro anfitrión** (el muro sale con su `ifcGuid` de Revit si lo tiene —una mitad de culata
+  partida, con el GUID de su id, ver 6.3—, para que no quede un vano huérfano
+  y Revit lo reconozca al comparar). El resto de lo importado se sigue omitiendo.
 - Validación con `scripts/validate_exports.py` como hoy.
 
 **Más adelante (fuera de alcance):** informe de diferencias diseño ↔ levantado por `ifcGuid`, BCF
@@ -220,5 +239,26 @@ para devolver observaciones a Revit, y el IFC como capa de referencia de solo le
 
 1. Uno o dos IFC reales de levantamientos (IFC2x3 CV 2.0), con al menos un muro compuesto, una
    puerta y un espacio.
-2. La decisión de 6.3 (vanos en muros importados).
-3. La sesión de revisión integrada en `main`.
+2. La sesión de revisión integrada en `main`.
+3. La migración de niveles/fases/GPS por espacio (§7) hecha antes de la fase 1.
+
+
+## 7. Pendiente — Creación de proyecto y de espacio (pedido 2026-10-22, para la próxima ronda)
+
+Sin código aún; se hace cuando se integre la sesión de revisión, en su propia rama.
+
+- **Crear proyecto**: quitar el selector «Disciplina» (Arquitectura / Estructuras / Instalaciones)
+  del diálogo (`ui/screens/ProjectsScreen.tsx`). El campo `discipline` del modelo se conserva con
+  su valor por defecto (`DEFAULT_DISCIPLINE`): no cambia el esquema ni rompe paquetes `.polylive`.
+- **Crear espacio**: la primera pantalla tras «+ Nuevo espacio»
+  (`ui/screens/ProjectWorkspaceScreen.tsx`) deja configurar lo que se sabe de antemano: GPS /
+  georreferencia, niveles, fases, actividades de avance y demás opciones; todo se puede saltar y
+  editar después. Reutiliza las hojas que ya existen (Topografía, niveles/fases, Avance), sin
+  componentes nuevos.
+- **Decidido (2026-10-22): niveles, fases y GPS son POR ESPACIO.** Hoy son del proyecto
+  (`project_markers`, `project_georeference`), así que es un **cambio de modelo de datos**: hace falta
+  una migración que copie lo actual a cada espacio existente, ajustar `MarkerStore`/`GeoStore`, el
+  IFC (un `IfcBuildingStorey`/`IfcMapConversion` por espacio), el paquete `.polylive` (paquetes v1
+  se leen copiando lo del proyecto a sus espacios) y el importador IFC (§6.2: los niveles importados
+  van al espacio, no al proyecto). Al crear un espacio se ofrece copiar la configuración de otro
+  espacio del proyecto, para no reescribirla.
