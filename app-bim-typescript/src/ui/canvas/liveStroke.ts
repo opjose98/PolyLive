@@ -30,6 +30,8 @@ export function useLiveStroke(stroke: LiveStroke | null | undefined, pxPerMeter:
   const on = useSharedValue(0);
   const widthM = useSharedValue(0);
   const pts = useSharedValue<number[]>([]);
+  /** 1 mientras el dedo está en pantalla: el efecto de `clearKey` del trazo anterior no borra un trazo nuevo. */
+  const active = useSharedValue(0);
   /** El trazo en curso ya se guardó o se rechazó: no se sigue dibujando hasta el próximo gesto. */
   const veto = useSharedValue(0);
   const enabled = !!stroke;
@@ -40,11 +42,12 @@ export function useLiveStroke(stroke: LiveStroke | null | undefined, pxPerMeter:
     if (!enabled) pts.value = [];
   }, [enabled, w, on, widthM, pts]);
   const clearKey = stroke?.clearKey;
-  // shortcut: si se empieza otro trazo antes de que llegue este efecto (<50 ms), ese trazo no se ve en vivo (sí se guarda).
   useEffect(() => {
-    pts.value = [];
-    veto.value = 1;
-  }, [clearKey, pts, veto]);
+    if (!active.value) {
+      pts.value = [];
+      veto.value = 1;
+    }
+  }, [clearKey, active, pts, veto]);
 
   const path = useDerivedValue(() => {
     const p = Skia.Path.Make();
@@ -66,6 +69,7 @@ export function useLiveStroke(stroke: LiveStroke | null | undefined, pxPerMeter:
         .minDistance(minDistance)
         .onStart((e) => {
           'worklet';
+          active.value = 1;
           veto.value = 0;
           if (!on.value) return;
           pts.value = [e.x - e.translationX, e.y - e.translationY, e.x, e.y];
@@ -85,9 +89,10 @@ export function useLiveStroke(stroke: LiveStroke | null | undefined, pxPerMeter:
         })
         .onFinalize((_e, ok) => {
           'worklet';
+          active.value = 0;
           if (!ok) pts.value = [];
         }),
-    [on, pts, veto, minDistance],
+    [on, active, pts, veto, minDistance],
   );
 
   return { gesture, path, width, color: stroke?.color ?? '#000000' };

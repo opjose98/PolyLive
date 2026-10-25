@@ -4,6 +4,8 @@
 //
 // Un archivo pequeño en la carpeta privada de la app (no en la base: las
 // preferencias son del teléfono, no del proyecto, y no viajan en el paquete).
+// Las escrituras van en cola (una tras otra): teclear en el encabezado de la
+// memoria no pisa lo escrito un instante antes.
 // =============================================================================
 
 import * as FileSystem from 'expo-file-system/legacy';
@@ -33,6 +35,8 @@ export interface AppPrefs {
   autoBackup?: boolean;
 }
 
+let queue: Promise<void> = Promise.resolve();
+
 async function read(): Promise<PrefsFile> {
   try {
     const info = await FileSystem.getInfoAsync(FILE);
@@ -43,14 +47,18 @@ async function read(): Promise<PrefsFile> {
   }
 }
 
-async function write(patch: Partial<PrefsFile>): Promise<void> {
-  const cur = await read();
-  await FileSystem.writeAsStringAsync(FILE, JSON.stringify({ ...cur, ...patch }));
+function enqueue(fn: (cur: PrefsFile) => PrefsFile): Promise<void> {
+  const next = queue.then(async () => {
+    const cur = await read();
+    await FileSystem.writeAsStringAsync(FILE, JSON.stringify(fn(cur)));
+  });
+  queue = next.catch(() => undefined);
+  return next;
 }
 
 export const workspacePrefsFile: PrefsStorage = {
   load: async () => (await read()).workspace ?? null,
-  save: (workspace) => write({ workspace }),
+  save: (workspace) => enqueue((cur) => ({ ...cur, workspace })),
 };
 
 export async function loadAppPrefs(): Promise<AppPrefs> {
@@ -58,8 +66,7 @@ export async function loadAppPrefs(): Promise<AppPrefs> {
 }
 
 export async function saveAppPrefs(app: AppPrefs): Promise<void> {
-  const cur = await read();
-  await write({ app: { ...cur.app, ...app } });
+  await enqueue((cur) => ({ ...cur, app: { ...cur.app, ...app } }));
 }
 
 export async function loadMemoriaPrefs(projectKey: string): Promise<MemoriaPrefs> {
@@ -67,12 +74,14 @@ export async function loadMemoriaPrefs(projectKey: string): Promise<MemoriaPrefs
 }
 
 export async function saveMemoriaPrefs(projectKey: string, patch: MemoriaPrefs): Promise<void> {
-  const cur = await read();
-  const prev = cur.memoria?.[projectKey] ?? {};
-  await write({
-    memoria: {
-      ...cur.memoria,
-      [projectKey]: { header: { ...prev.header, ...patch.header }, items: { ...prev.items, ...patch.items } },
-    },
+  await enqueue((cur) => {
+    const prev = cur.memoria?.[projectKey] ?? {};
+    return {
+      ...cur,
+      memoria: {
+        ...cur.memoria,
+        [projectKey]: { header: { ...prev.header, ...patch.header }, items: { ...prev.items, ...patch.items } },
+      },
+    };
   });
 }

@@ -42,7 +42,14 @@ export interface SheetImage {
 }
 
 const EMU_PER_PX = 9525;
-const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+/** Quita caracteres de control que XML 1.0 no admite (p. ej. si se pega texto con NUL/BEL). */
+const esc = (s: string) =>
+  s
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 
 /** Letra(s) de columna de un índice 0-based (0 → A, 26 → AA). */
 export function colName(i: number): string {

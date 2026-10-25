@@ -81,8 +81,18 @@ Dev client por WiFi (`192.168.40.5:8081`: el túnel `adb reverse` corta el bundl
 
 **Queda para la prueba a mano** (la tableta no acepta toques por `adb`): sensación del pincel con el dedo, doble toques, arrastre de vértices y aristas del suelo, de los manejadores del corte y del punto de altura, toque sobre elementos en el alzado y el corte, cámara de la foto de avance, compartir PDF/Excel.
 
-## 6. Pendiente y riesgos
+## 6. Revisión de la auditoría y riesgos
 
-- Si se empieza otro trazo antes de ~50 ms de soltar el anterior, ese trazo no se ve en vivo (sí se guarda) — `ui/canvas/liveStroke.ts`.
+En la revisión estática antes del APK final se cerraron estos riesgos de campo:
+
+- **`native/export/raster.ts`**: cada imagen, superficie y snapshot de Skia se libera con `.dispose()` apenas se codifica (antes quedaban hasta el GC y con 15–30 fotos de 12 MP podían agotar la memoria nativa), y el lado mayor de un dibujo rasterizado se limita a 2400 px.
+- **`ui/workspace/progress/useProgressReport.ts`**: si el downscale de una foto no está disponible, solo se incluye el binario original si tiene cabecera JPEG (`FF D8 FF`), para que Excel no reciba un archivo no-JPEG declarado como `.jpeg`.
+- **`native/prefs/prefsFile.ts`**: las escrituras a `prefs.json` van en cola (una tras otra), de modo que teclear en el encabezado de la memoria no pisa una escritura en vuelo.
+- **`infrastructure/export/xlsx/xlsxWriter.ts`**: se filtran los caracteres de control que XML 1.0 no admite (p. ej. si se pega texto con NUL/BEL) antes de escapar las celdas.
+- **`ui/canvas/liveStroke.ts`**: el efecto de `clearKey` del trazo anterior ya no borra un trazo nuevo si el dedo ya volvió a tocar la pantalla.
+
+Riesgos que quedan anotados:
+
+- **Borrar en un corte anterior ya reportado**: si en un corte posterior se pintó un trazo que pisaba en parte al corte anterior, la parte pisada quedó guardada en la marca y solo se descuenta mientras el corte anterior la cubra; si después se borra esa zona en el corte anterior, pasa a contarse en el corte posterior. Para no mover un corte ya facturado, corregir en el corte donde se hizo el trazo.
 - El encabezado de la memoria vive en el teléfono (no en el paquete del proyecto).
 - El PDF de un proyecto con muchos cortes y fotos crece rápido (las fotos van reducidas).

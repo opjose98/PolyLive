@@ -20,7 +20,7 @@ import { planSvg, faceSvg } from '../../../application/report/planSvg';
 import { targetOfKey } from '../../../domain/progress/progress';
 import { centroid } from '../../../domain/geometry/polygon-utils';
 import type { RoomId } from '../../../domain/objects/base';
-import { downscaleJpeg, svgToPng } from '../../../native/export/raster';
+import { downscaleJpeg, isJpeg, svgToPng } from '../../../native/export/raster';
 import { uint8ArrayToBase64 } from '../../../shared/encoding/base64';
 import { record } from '../../../shared/diagnostics';
 import type { Progress } from './useProgress';
@@ -49,7 +49,11 @@ export function useProgressReport({ services, roomId, editor, rooms, progress, s
       try {
         const p = await services.store.readAuditPhoto(id as never);
         if (!p?.foto) return null;
-        return downscaleJpeg(p.foto as Uint8Array) ?? { data: p.foto as Uint8Array, width: 1280, height: 960 };
+        const raw = p.foto as Uint8Array;
+        const scaled = downscaleJpeg(raw);
+        if (scaled) return scaled;
+        // Sin Skia (o si falla el downscale) solo vale si los bytes ya son un JPEG real.
+        return isJpeg(raw) ? { data: raw, width: 1280, height: 960 } : null;
       } catch (err) {
         // Sin la foto el reporte igual sale (dice «Foto no disponible»).
         record('warn', 'progress-report', `Foto ${id} no disponible`, err);
