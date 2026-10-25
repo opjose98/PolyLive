@@ -4,7 +4,7 @@ Monorepo de levantamientos BIM en campo. Contiene el motor activo en desarrollo
 (`app-bim-typescript`), un proyecto de referencia (`_LevON`) cuya esencia de
 motor 2D está guiando la refactorización actual, la bóveda de documentación
 viva (`_0bsidian`) y los informes narrativos del experimento
-Claude+Obsidian que originó el proyecto (`docs/`, `Claude outputs/`).
+Claude+Obsidian que originó el proyecto (`docs/`; las salidas originales en `docs/archivo/`).
 
 ## Estructura del repositorio
 
@@ -13,8 +13,9 @@ PolyLive/
 ├── app-bim-typescript/   ← código activo: React Native + Expo + TypeScript
 ├── _LevON/LevON/          ← referencia: proyecto Flutter/Dart (no se compila desde aquí)
 ├── _0bsidian/             ← bóveda Obsidian: fuente de verdad de la arquitectura de PolyLive
-├── docs/                  ← informes del experimento (numerados 01–13)
-├── Claude outputs/        ← salidas originales del experimento, previas a docs/
+├── docs/                  ← documentación numerada 01–26 (01–13 históricos; 14+ fases, QA y campo)
+├── docs/archivo/          ← salidas originales del experimento (histórico, no se edita)
+├── CLAUDE.md              ← reglas del repo para agentes (scripts, convenciones, build local)
 └── setup-app-bim-vault.ps1
 ```
 
@@ -41,11 +42,13 @@ npm ci
 ### 3. Verificar
 
 ```bash
-npx tsc --noEmit
-npx jest
+npm run typecheck
+npm run lint
+npx jest --ci
 ```
 
-Ambos deben terminar limpios antes de cualquier commit (`strict: true`).
+Los tres deben terminar limpios antes de cualquier commit (es lo que corre la CI).
+Build local del APK y dev client en Windows: ver `CLAUDE.md`.
 
 ### 4. Correr la app en el teléfono (Expo Dev Client)
 
@@ -123,10 +126,15 @@ sincronizada con el código (ver `06-Referencias-Cruzadas/trazabilidad-nota-codi
 ## `docs/`
 
 Documentación numerada: del `01` al `13`, los informes del experimento que
-originó el proyecto; del `14` en adelante, cada fase de la reconstrucción
-(modos, topografía, avance, revisión, dibujo técnico) y las pruebas en teléfono
-(`21-QA-TELEFONO.md`, `22-F6B-DIBUJO-Y-CONMUTADORES.md`). La auditoría técnica
-integral está en `AUDITORIA_INTEGRAL_POLYLIVE.md`, en la raíz.
+originó el proyecto (históricos, no se editan); del `14` en adelante, cada fase de
+la reconstrucción (modos, topografía, avance, revisión, dibujo técnico) y las
+pruebas en equipo (`21-QA-TELEFONO.md`, `22-F6B-DIBUJO-Y-CONMUTADORES.md`). El MVP
+desde la auditoría está en `23-PLAN-MVP-AUDITORIA.md`; el criterio de medida en
+`24-CRITERIO-ACEPTACION-CAMPO.md`; la matriz de pruebas en tableta (rondas 1 y 2) en
+`25-MATRIZ-PRUEBAS-CAMPO.md`, y el informe de la versión estable para campo en
+`26-INFORME-ESTABLE-CAMPO.md`. `docs/archivo/` guarda las salidas originales del
+experimento. La auditoría técnica integral (línea base histórica) está en
+`AUDITORIA_INTEGRAL_POLYLIVE.md`, en la raíz.
 
 ## Historial previo
 

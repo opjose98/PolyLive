@@ -17,6 +17,8 @@ Fecha: 2026-10-07 · App: dev client Expo SDK 57 con Metro (rama `feat/mvp-audit
 
 Hallazgos: **42** — corregidos 30 · no reproducibles 3 · por verificar en el equipo 7 · decisión pendiente 2 · abiertos P1 0 / P2 0 / P3 0.
 
+**Ronda 2 (2026-10-22):** los 7 «Verificar en equipo» quedan cerrados (3 corregidos, 4 no se reproducen) y entran 34 hallazgos nuevos (H-45 a H-78): los 5 P1 (H-52, H-53, H-64, H-65, H-69) corregidos y verificados; P2 a decisión: H-45, H-54, H-67, H-78; H-70 y H-74 decididos (b) y corregidos; H-75 corregido; P2 abierto: H-66. Estado actual y filas re-probadas en el § 6.
+
 Leyenda: ✅ OK · 🟡 Parcial · ❌ Falla · ⬜ No probado · ➖ No aplica. Prioridad: **P1** corrompe datos o bloquea, **P2** funciona mal, **P3** pulido.
 
 ### Qué NO se pudo probar (y por qué)
@@ -337,3 +339,114 @@ Nota: los ids H-04 y H-05 no se usaron (se descartaron al verificarlos).
 - Archivos exportados en la tableta (`/sdcard/PolyLive-QA/`) y validados en el PC: IFC del espacio (ifcopenshell, 15 geometrías), IFC del proyecto con 2 espacios (1 `IfcProject`, 8 muros, 2 `IfcSpace`), DXF (ezdxf, 11 capas), paquete `.polylive` (esquema 3), plano PDF, registro fotográfico PDF, acta de revisión PDF/CSV, CSV de áreas y de avance.
 - Entorno: Metro por `adb reverse` con un reenviador IPv4→IPv6 (Metro escucha solo en `::1` en este equipo).
 
+## 6. Ronda 2 (2026-10-22) · dev client Expo 57 en la TB370FU
+
+App: dev client `com.polylivebim.qa` (build debug local, `assembleDebug`) con Metro, rama `audit/estable-campo`. Equipo: Lenovo TB370FU, 1840 × 2944, **vertical a pantalla completa** (sin ventana angosta). Proyecto de prueba `QA2 Estructuras` (BIM002) y operador `QA`. Informe completo: `docs/26-INFORME-ESTABLE-CAMPO.md`.
+
+### 6.1 Los 7 «Verificar en equipo»
+
+| ID | Resultado ronda 2 | Evidencia |
+|---|---|---|
+| H-10 | ✅ Corregido y verificado | Se reproducía (dígitos de «Escala 1:» recortados); `paddingVertical: 0` en `ConfigDrawer`; captura tras recarga completa |
+| H-13 | ✅ No se reproduce | El ← del selector de Niveles termina por encima del gizmo |
+| H-19 | ✅ No se reproduce | Foto: tras el obturador y los permisos vuelve a la MISMA actividad (mismo registro `MainActivity`), sin reinicio |
+| H-25 | ✅ Corregido y verificado (era **alto**) | Causa: los callbacks de `Gesture.*` son worklets y cada uno tenía su copia de las variables `let`; el trazo se volvía paneo. Estado del gesto a `useRef` (como `PlanCanvas`); test `test/ui/gestureState.test.ts`; cercha de 2,41 m creada |
+| H-27 | ✅ Corregido y verificado | Casillas de Filtros/Capas dentro del panel; rótulos largos en dos líneas (`FabView`) |
+| H-34 | ✅ A pantalla completa | Todas las entradas del menú ☰ caben; la ventana angosta no se probó |
+| H-40 | ✅ No se reproduce | Con Filtros abierto, el modo cambia y el panel se cierra |
+
+### 6.2 Filas re-probadas (estado ronda 2)
+
+| Fila | Ronda 1 | Ronda 2 | Nota |
+|---|:-:|:-:|---|
+| A09 | ⬜ | ✅ | Proyecto con disciplina Estructuras; Editar a Instalaciones se guarda |
+| A10 | 🟡 | ✅ | Editar guarda; Eliminar pide confirmar y quita el proyecto (uno desechable) |
+| A12 / I09 / J11 | ✅ | ✅ | Importar `.polylive` con reemplazo: 19 filas, disciplina y amarre vuelven a los del paquete |
+| B06 | 🟡 | 🟡 | Galería, Cambiar de proyecto, Operador y Ajustes ✅; «Otros espacios» sin probar |
+| B07 | ❌ | ✅ | Con el volcado de accesibilidad (`--compressed`) el menú cerrado no expone entradas (H-06); desde H-53 ni se monta |
+| B14 | ✅ | ✅ | H-10 corregido |
+| B24 | ❌ | ✅ | H-13 |
+| C07 / C08 | ✅ | ✅ | Puerta (arco de giro) y ventana sobre muros del recinto |
+| C21 / J03 | ✅ / 🟡 | ✅ | Permiso de cámara y de ubicación al usarlos; FOT001 anclada; sin reinicio (H-19) |
+| E05 | ❌ | ✅ | H-25 |
+| E06 | 🟡 | 🟡 | Cercha ✅ (mismo gesto que cota, línea, viga y correa); el resto sin recorrer uno a uno |
+| E07 | ⬜ | ✅ | Foto anclada a la cara A del muro |
+| E10 / E11 | 🟡 / ❌ | ✅ | El alzado abre encuadrado; tras la cercha la vista se conserva |
+| F02 | 🟡 | ✅ | Origen Nacional (CTM12) y Oeste; Oeste-Oeste sin probar |
+| F05 | ⬜ | ✅ | Amarre por GPS (interior, ±13 m; la app avisa «impreciso»): N 1.833.058 / E 4.602.286 en CTM12 |
+| F06 | ⬜ | ✅ | 2 mojones por coordenadas colocados en los vértices: ajuste por mínimos cuadrados, **RMSE 0,002 m** |
+| F15 | 🟡 | ✅ | H-27 |
+| G04 | ⬜ | ✅ | Cambiar color, agregar actividad, quitar del catálogo (con confirmación) |
+| G09 | ⬜ | ✅ | Pincel sobre la cara A: 1,58 m² (15 % del soporte) |
+| G12 / I10 | ✅ / ❌ | ✅ | La carpeta se pide una vez; IFC del proyecto, plano, CSV, paquete, registro y PDF de avance la reutilizan (H-28) |
+| G13 | ⬜ | ✅ | PDF de avance revisado a ojo: planta, alzado pintado, resumen y detalle por soporte (10,18 m², 15,5 %) |
+| G14 | ❌ | ✅ | Reabrir el espacio abre en Levantamiento (H-29) |
+| H12 | ⬜ | ✅ | Nube en el alzado (modo Revisión) → Observación 1 |
+| I03 | 🟡 | ✅ | La pantalla muestra área neta 12,83 m² y al eje 13,93 m² (H-32) |
+| I05 | ✅ | 🟡 | Revisado a ojo: rótulo, escala gráfica y cuadro de áreas bien; **sin puertas ni ventanas** (H-54) |
+| I07 | ✅ | ✅ | Revisado a ojo: foto, código, fecha, autor, planta, GPS y sello SHA-256 «íntegra» |
+| I11 | 🟡 | ✅ | H-34 a pantalla completa |
+| J06 | ❌ | ✅ | Encabezados de Galería, Exportar, Ajustes y Operador visibles (H-35) |
+| J08 | ❌ | ✅ | Consola de Metro sin avisos de SkPath ni SafeAreaView (queda uno de la dependencia `@noble/hashes`) |
+| K13 / K15 | ⬜ | ✅ | Galería, Exportar, Ajustes y Operador legibles en Alto contraste y en Oscuro |
+| B03 | ⬜ | ⬜ | En el alzado ese lugar es «Volver a la planta»: queda para la prueba a mano |
+| J01 | 🟡 | ⬜ | Giro a horizontal: requiere cambiar el ajuste del sistema (pendiente de autorización) o girar a mano |
+
+No re-probadas en esta ronda (corregidas con test en la ronda 1): B21, B22, C05, D02, D07, D13, D14, D17, D19, E04, E09, E14, F04, J02, J07, K01, K05.
+
+### 6.3 Hallazgos nuevos (ronda 2)
+
+| ID | Prio | Ámbito | Hallazgo | Estado | Archivo |
+|---|:-:|---|---|---|---|
+| H-45 | P2 | Paquete | Importar un `.polylive` cuyo código BIM ya usa OTRO proyecto deja dos proyectos con el mismo código (la unicidad solo se valida al crear y editar) | **Decisión**: renombrar al importar (recomendado) o rechazar | `infrastructure/package/projectPackage.ts` |
+| H-46 | P2 | Diagnóstico | Los fallos del editor, alzado y pantallas solo mostraban un aviso: «Enviar diagnóstico» no traía la causa | Corregido (`reportFailure`), test | `shared/diagnostics.ts` |
+| H-47 | P3 | Permisos | `SYSTEM_ALERT_WINDOW` en el manifiesto de release | Corregido (`blockedPermissions`); la variante debug lo sigue declarando | `app.json` |
+| H-48 | P3 | Textos | «este teléfono» en importar y en el permiso de cámara | Corregido | `projectPackageActions.ts`, `CameraCaptureView.tsx` |
+| H-49 | P3 | Código | knip volvía a reportar 14 exportaciones sin uso | Corregido | varios |
+| H-50 | P3 | Tests | Jest avisa a veces de un worker que no cierra; con `--detectOpenHandles` no aparece | Abierto (intermitente) | — |
+| H-51 | P3 | Rendimiento | Los `Picture` de Skia del lienzo no se liberan con `dispose` | Abierto: medir memoria en sesiones largas antes de tocarlo | `ui/canvas/PlanCanvas.tsx` |
+| H-52 | **P1** | Persistencia | Las transacciones de expo-sqlite no eran exclusivas: un BEGIN durante otra transacción fallaba y su ROLLBACK deshacía la primera (visto en la tableta: «cannot rollback - no transaction is active» al reabrir) | Corregido: transacciones en cola, test | `native/sqlite/ExpoSQLiteDatabase.ts` |
+| H-53 | **P1** | Menú ☰ | Tras el selector de carpetas el menú quedaba dibujado abierto sin responder y los toques atravesaban al lienzo | Corregido: el cajón cerrado se desmonta; verificado en la tableta | `ui/primitives/SideDrawer.tsx` |
+| H-54 | P2 | PDF | El plano PDF y el PDF de avance no dibujan puertas, ventanas ni vanos (el IFC y el DXF sí) | **Decisión**: dibujar los vanos en `planSvg` (recomendado) | `application/report/planSvg.ts` |
+| H-55 | P3 | Textos | «celular» en el GPS de Topografía | Corregido | `GpsCaptureSheet.tsx`, `TopographySetup.tsx` |
+| H-56 | P3 | Operador | Barra de estado ilegible (iconos claros sobre blanco) y el campo «Nuevo operador» queda bajo la barra de gestos | Abierto | `OperatorSelectorScreen.tsx` |
+| H-57 | P3 | Ajustes | Fecha de las copias en formato inglés («10/22/2026, 11:50:01 AM») y nivel por defecto como id interno («level-1») | Abierto | `SettingsScreen.tsx` |
+| H-58 | P3 | Fotos | El rótulo «FOT00n» sobre el punto del alzado casi no se lee; en planta sale espaciado («FO T001») | Abierto | `elevationRenderer.ts`, `planRenderer.ts` |
+| H-59 | P3 | Lienzo | Al reabrir un espacio la vista no se encuadra al dibujo | Abierto | `application/editor/EditorCore.ts` |
+| H-60 | P3 | Tema oscuro | «Guardar cambios» deshabilitado (Operador) casi invisible | Abierto | `OperatorProfileScreen.tsx` |
+| H-61 | P3 | FAB | El encabezado «ARQUITECTÓNICO» se parte en dos líneas (ya visto en docs/21) | Abierto | `FabCreate.tsx` |
+| H-62 | P3 | Accesibilidad | El obturador de la cámara no tiene etiqueta | Abierto | `CameraCaptureView.tsx` |
+| H-63 | P3 | PDF | El registro fotográfico rotula «ESCALA gráfica (ver barra)» sin barra | Abierto | `application/report/deliverables.ts` |
+| H-64 | **P1** | Topología | Un muro colgante (p. ej. el lado abierto de una bodega) impedía cerrar la cara exterior y se descartaba como «exterior» el recinto más grande: el aula desaparecía | Corregido: se podan los filamentos antes de buscar caras; tests; verificado en la tableta | `domain/topology/TopologyGraph.ts` |
+| H-65 | **P1** | Campos | Lo tecleado en 14 campos de texto (nombre, uso y notas del recinto, comentario de la observación, nombre del muro, corte, actividad, dibujo, alzado) no se guardaba: el borrador volvía como `value` con retraso y se daba por confirmado | Corregido: campos no controlados; `commitTracker` con test; verificado en la tableta | `ui/components/fields.tsx`, `ui/primitives/CommitTextInput.tsx` |
+| H-66 | P2 | Puertas | No se puede invertir el sentido de apertura (lado ni mano) de una puerta | Abierto: propuesta en docs/26 § 8 | `PropertiesPanel.tsx`, `door.ts` |
+| H-67 | P2 | Medida | Al aplicar una medida, las uniones en T conservan su posición RELATIVA sobre el muro anfitrión: si el anfitrión se alarga por el otro extremo, el tabique se inclina (cocina NARG29 quedó 9 cm torcida) | **Decisión**: al medir, conservar la posición absoluta de la T (recomendado) | `domain/topology/joints.ts` (`followTees`) |
+| H-68 | P3 | PDF | En el plano PDF los rótulos de recintos pequeños desbordan el recinto y el marco | Abierto | `application/report/planSvg.ts` |
+| H-69 | **P1** | Topología | Un muro trazado DESPUÉS sobre extremos ya existentes no se partía en ellos: la T en orden inverso no cerraba y el recinto (baño de Maco) no aparecía; el resultado dependía del orden de trazado | Corregido: el muro nuevo se parte en los nudos que ya caen sobre él; tests; verificado en la tableta | `domain/topology/TopologyGraph.ts` |
+| H-70 | P2 | IFC | Los vanos sin carpintería (herramienta «Vano») viven solo en el alzado del muro y no salen en el IFC: el paso cocina–comedor de Maco no existe en Revit | Corregido (decisión del dueño, opción b): cada vano sale como `IfcOpeningElement` sin relleno que recorta su muro y descuenta su área neta; test; verificado con el IFC de MACO exportado en la tableta | `infrastructure/export/ifc/IFCSerializer.ts`, `ui/workspace/exportActions.ts` |
+| H-71 | P3 | Entregables | Re-exportar con el mismo nombre crea `…cuadro-de-areas.csv (1)`: el sufijo va tras la extensión y el archivo deja de abrir como CSV | Abierto: sufijo antes de la extensión o marca de hora como el IFC | `native/export/saveToUserFolder.ts` |
+| H-72 | P3 | Muro | Con la herramienta Muro activa, los rótulos del panel de restricciones («B · Nivel 0», «T · ∞») tapan el borde izquierdo del lienzo (vertical, x < 300 px) y se tragan el toque sin aviso | Abierto | `ui/workspace` (panel de restricciones) |
+| H-73 | P3 | Selección | La pulsación larga toma el objeto más cercano sin preferir el hueco: junto a una esquina abre el muro y con vanos a < 0,6 m (zoom 33 %) abre el vecino; en Maco así se borró el muro norte (se deshizo) | Abierto: preferir el hueco sobre el muro anfitrión | `application/canvas/SelectionService.ts` |
+| H-74 | P2 | Muro | No se puede partir un muro: una culata con cumbrera a media longitud obliga a borrar el muro y redibujarlo en dos, y se pierden sus vanos y sus mediciones láser (SUMB perdió la de 6,95 m) | Corregido: además de «Partir»/«Dividir muro» y «Unir», el muro admite **estaciones de altura** (culata con cumbrera en UN muro); las 4 sedes rehechas así; tests; verificado en la tableta | `application/use-cases/SplitWallUseCase.ts`, `domain/objects/wall-split.ts` |
+| H-75 | P2 | Selección | Lo que filtros y capas ocultan seguía siendo tocable: un muro oculto tapaba la columna embebida en él | Corregido: el editor solo toca lo visible (`setPickFilter`); test | `application/editor/EditorCore.ts`, `ui/screens/SurveyScreen.tsx` |
+| H-76 | P3 | Selección | Una columna embebida en un muro solo se elige ocultando los muros; en un muro corto con puertas, la puerta gana siempre el toque (amplía H-73) | Abierto: con varios candidatos, un toque repetido rota entre ellos | `application/canvas/SelectionService.ts` |
+| H-77 | P3 | Vanos | El antepecho solo se edita en el alzado, muro por muro; la hoja del vano en planta no lo muestra | Abierto: antepecho en la hoja de puerta/ventana en planta (ya propuesto en docs/26 § 8, fricción 5) | `ui/components/PropertiesPanel.tsx` |
+| H-78 | P2 | Niveles | Georreferencia por espacio (docs/23 § 7) no se migró: el proyecto mantiene un solo amarre y cada espacio su ubicación dentro de él | **Decisión**: mantener amarre del proyecto + ubicación por espacio (recomendado, el IFC del proyecto necesita un solo sistema de coordenadas) o amarre propio por espacio | `infrastructure/sqlite/GeoStore.ts` |
+| H-79 | P2 | Planta | En un encuentro en T (o cruz, o inglete que no cierra) quedaba un triángulo sin poché entre los tramos | Corregido: cada nudo rellena la envolvente de las esquinas de sus muros bajo ellos; test; verificado en la tableta | `ui/canvas/wallGeometry.ts`, `ui/canvas/planRenderer.ts` |
+| H-80 | P1 | Lienzo | Un lienzo de alzado sin capa viva (el corte, la columna) entraba en un bucle de renders («Maximum update depth»): la capa vacía devolvía un arreglo nuevo en cada lectura | Corregido: la capa vacía devuelve siempre el mismo arreglo; verificado en la tableta | `ui/canvas/sketch.ts` |
+| H-81 | P3 | Desarrollo | Tras editar código, la recarga en caliente de Metro deja la app con la base cerrada («No se pudo abrir la base de datos local» o NullPointerException en prepareAsync) | Corregido: la base se abre con conexión propia (no la de la caché de expo-sqlite, que el contexto viejo cerraba); verificado con una recarga en la tableta | `native/sqlite/ExpoSQLiteDatabase.ts` |
+| H-82 | P1 | Recintos | Con dos grupos de muros que no se tocan (la batería aparte de SDGO), el contorno exterior del segundo grupo salía como un recinto más | Corregido: solo cuentan los ciclos de área con signo positiva (giro a la izquierda); test | `domain/topology/TopologyGraph.ts` |
+| H-83 | P2 | Recintos | Dos muros que se cruzan en X sin extremo común (tabiques de cabinas de PALA) no se parten en el cruce: las cabinas no salen como recintos | Corregido: el punto de cruce se vuelve nudo de los dos muros, como en una T; test | `domain/topology/TopologyGraph.ts` |
+| H-84 | P3 | Puente | `setLevels` que renombra la base y luego pide un nivel con el nombre viejo de la base la volvía a tomar (no creaba el nivel) | Corregido: se releen los niveles tras renombrar; test | `application/bridge/bridgeCommands.ts` |
+| H-85 | P2 | Puente | En `ops` un muro con `v` y además `a`/`b` (culata con un extremo distinto) ignoraba los extremos: SDGO, CEDR y VERD quedaron con las culatas a la altura del muro en las puntas | Corregido: `a`/`b` mandan sobre `v`; test; las tres sedes se reajustaron por el puente | `application/bridge/bridgeCommands.ts` |
+| H-86 | P2 | Exportar | Un espacio sin muros en el nivel base (2.º piso con cotas absolutas) no cerraba su Recinto y no exportaba IFC; uno sin muros (solo suelos: exteriores de DECI) tampoco | Corregido: el Recinto toma el nivel más bajo con muros si la base no tiene; un espacio sin muros y con suelos exporta sus losas sin IfcSpace (decidido por el dueño, 2026-10-25); tests | `application/editor/EditorCore.ts`, `application/use-cases/ExportRoomIfcUseCase.ts` |
+
+H-14 (rótulos del FAB): el rótulo «Foto» de Auditoría no activó la herramienta y el círculo sí; los rótulos «Puerta» y «Arrastre libre» sí respondieron. Queda **intermitente**, para la prueba a mano.
+
+Decisiones de producto abiertas: H-15 (encadenar muros), H-18 (cota alineada u ortogonal), H-45, H-54, H-67 y H-78. Opciones y recomendación en docs/26 § 5. H-64 a H-68 salieron de levantar un plano real (NARG29 · BRIS · B1) en la tableta horizontal: docs/26 § 8; H-69 a H-73, de SUMB, MARA y MACO: docs/26 § 9; H-74 a H-78, de la ronda de altimetría y culatas: docs/26 § 10; H-79 a H-81, de la ronda de estaciones, suelos y cortes: docs/26 § 11; H-82 a H-86, del levantamiento de las sedes 5 a 15 por el puente: docs/27. H-70 y H-74 decididos y corregidos.
+
+### 6.4 Datos de la prueba (ronda 2)
+
+- Exportados a `/sdcard/PolyLive-QA/` y revisados en el PC: 3 IFC (espacio ×2 y proyecto) abiertos con ifcopenshell (IFC4: 4 `IfcWall`, 1 `IfcDoor`, 1 `IfcWindow`, 1 `IfcSpace`, 2 `IfcOpeningElement`), paquete `.polylive` (esquema 3, 7 objetos), CSV de áreas, plano PDF, registro fotográfico PDF y PDF de avance (los tres PDF leídos página por página).
+- Metro escucha en IPv4 con `--lan`: ya no hace falta el reenviador de la ronda 1.
+- En el dev client, dos «R» seguidas recargan la app: el texto por `adb shell input text` no debe llevar dos «r» seguidas rápidas (se tecleó por partes).

@@ -34,6 +34,11 @@ Si una fila no tiene test, es una decisión consciente y está dicho.
 | **[[GPS-promediado]]** | `domain/geo/gpsAverage.ts`, `native/location/GpsAverager.ts` | `test/geo/georeference.test.ts` |
 | **[[Restricciones-verticales]]** | `domain/objects/vertical.ts` | `test/domain/vertical.test.ts` |
 | **[[Niveles-y-fases]]** | `domain/objects/marker.ts`, `infrastructure/sqlite/MarkerStore.ts` | `test/application/workspace.test.ts` |
+| **[[SplitWallUseCase]]** | `domain/objects/wall-split.ts`, `application/use-cases/SplitWallUseCase.ts` | `test/application/SplitWall.test.ts` |
+| **[[Suelos-libres-y-vacios]]** | `domain/objects/floor.ts`, `application/use-cases/CreateFloorUseCase.ts` | `test/editor/EditorController.test.ts`, `test/ifc/IFCRevitExport.test.ts` |
+| **[[Cortes-y-alzados-de-columna]]** | `domain/section/sectionCut.ts`, `application/section/projection.ts` | `test/section/sectionCut.test.ts` |
+| **[[Puente-de-control]]** | `application/bridge/bridgeCommands.ts`, `scripts/bridge/polylive-bridge.mjs` | `test/bridge/bridgeCommands.test.ts` |
+| **[[Topologia-de-recintos]]** | `domain/topology/TopologyGraph.ts`, `application/editor/EditorCore.ts` | `test/topology/TopologyGraph.test.ts`, `test/editor/EditorController.test.ts` |
 
 ## Geometría
 
@@ -102,9 +107,9 @@ conocido que queda, y está acotado a propósito.
 ## Estado de la suite
 
 ```
-50 suites · 764 tests · 4 todo · 0 fallos
-src/  ~25 000 líneas
-test/ ~14 800 líneas
+81 suites · 978 tests · 4 todo · 0 fallos   (medido el 2026-10-22, docs/26)
+src/  ~43 000 líneas (240 archivos)
+test/ ~17 500 líneas
 ```
 
 Los 4 `it.todo` restantes están todos en `test/field/FieldScenarios.test.ts` y son **legítimos**:
@@ -124,7 +129,8 @@ de una hora) y uno requiere una capa de red que no existe.
 | [[TopographyService]] | `application/geo/TopographyService.ts`, `application/geo/coordinateText.ts` | `test/geo/TopographyService.test.ts`, `test/geo/coordinateText.test.ts` |
 | [[modos-de-trabajo]] · [[catalogo-herramientas]] | `application/workspace/catalog.ts` | `test/application/workspace.test.ts` |
 | [[alcance-nivel-fase]] | `application/workspace/levelScope.ts` | `test/application/levelScope.test.ts` |
-| [[capa-viva-y-camara]] | `ui/canvas/PlanCanvas.tsx`, `ui/canvas/liveOverlay.ts`, `ui/canvas/ElevationCanvas.tsx` | teléfono (no hay tests de render) |
+| [[capa-viva-y-camara]] | `ui/canvas/PlanCanvas.tsx`, `ui/canvas/liveOverlay.ts`, `ui/canvas/ElevationCanvas.tsx` | `test/ui/gestureState.test.ts` (estado de los gestos) · el resto en el equipo (no hay tests de render) |
+| [[registro-de-diagnostico]] | `shared/diagnostics.ts`, `native/diagnostics/diagnosticsLog.ts` | `test/shared/diagnostics.test.ts`, `test/sqlite/robustness.test.ts` |
 | [[convenciones-de-dibujo]] | `ui/canvas/planRenderer.ts`, `ui/canvas/wallGeometry.ts` | `test/ui/planRenderer.test.ts`, `test/ui/wallGeometry.test.ts` |
 | [[sistema-de-diseño]] | `ui/design/theme.ts` | teléfono |
 | [[uso-a-una-mano]] | `ui/workspace/ThumbUndo.tsx` | teléfono |

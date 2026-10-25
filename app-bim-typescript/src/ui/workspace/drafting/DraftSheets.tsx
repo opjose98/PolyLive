@@ -23,6 +23,7 @@ export const KIND_LABEL: Record<DraftItem['kind'], string> = {
   beam: 'Viga',
   truss: 'Cercha',
   purlin: 'Correa',
+  section: 'Corte',
 };
 
 export function DraftSheets({ drafting, open, onClose }: { drafting: Drafting; open: boolean; onClose: () => void }) {
@@ -59,7 +60,7 @@ function ItemBody({ drafting, item, onClose }: { drafting: Drafting; item: Draft
   return (
     <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
       <Text style={styles.title}>{KIND_LABEL[item.kind]}</Text>
-      {['dimension', 'line', 'beam', 'truss'].includes(item.kind) ? <ReadonlyRow label="Longitud" value={`${itemLength(item).toFixed(3)} m`} /> : null}
+      {['dimension', 'line', 'beam', 'truss', 'section'].includes(item.kind) ? <ReadonlyRow label="Longitud" value={`${itemLength(item).toFixed(3)} m`} /> : null}
       {item.kind === 'polygon' ? (
         <>
           <ReadonlyRow label="Área" value={`${m.area.toFixed(2)} m²`} />

@@ -13,6 +13,9 @@ Código: `src/domain/objects/vertical.ts` · UI: `ui/workspace/ConstraintSelecto
 
 - Cada **extremo** de un muro tiene su base y su tope: nivel + desplazamiento, o altura libre ("sin
   conexión"). Con extremos distintos, el alzado se dibuja **trapezoidal**.
+- **Estaciones** (H-74): puntos intermedios del eje con su propia base y tope (`WallVertical.stations`); el alzado
+  pasa a ser un polígono (culata con cumbrera o irregular) sin partir el muro. Se crean y editan en el alzado
+  («Punto de altura»; tocar un vértice abre el selector). `profileAt`, `profileOutline`, `profileArea`, `extentAt`.
 - Columnas: una sola extensión base/tope.
 - La altura del objeto se **deriva** de las cotas de los niveles (`resolveWallProfile`, `resolveExtent`).
 - `hostLevelOf`: nivel al que pertenece un muro (el de la base más baja).

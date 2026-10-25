@@ -19,10 +19,12 @@
 // =============================================================================
 
 import type { ICanvasRenderer } from '../../native/canvas/SkiaCanvasAdapter';
-import { WallElevation, WallOpening, WallOpeningId, baseAt, effectiveLeftHeight, effectiveRightHeight, hasHeightProfile, openingEnd, openingTop, openingCenterX, openingCenterY, umbral, dintel, openingTypeLabel } from '../../domain/objects/wall-elevation';
+import { WallElevation, WallOpening, WallOpeningId, baseAt, effectiveLeftHeight, effectiveRightHeight, elevationOutline, hasHeightProfile, profileStations, openingEnd, openingTop, openingCenterX, openingCenterY, umbral, dintel, openingTypeLabel } from '../../domain/objects/wall-elevation';
 import type { ElevationSeverity, ElevationViewport } from '../../application/elevation/WallElevationService';
 import { CANVAS_PALETTES, CanvasPalette } from '../design/canvasThemes';
-import { drawSketch, SketchShape, withAlpha } from './sketch';
+import { drawSketch, SketchShape } from './sketch';
+import { withAlpha } from '../design/tokens';
+import { hatchSegments } from './wallGeometry';
 
 export interface ElevationScene {
   readonly elevation: WallElevation;
@@ -55,6 +57,14 @@ export interface ElevationScene {
   readonly annotations?: readonly SketchShape[];
   /** Trazo en curso (pincel o marca), en (u, v). Mejor por `liveSketch` del lienzo: no regraba el muro. */
   readonly sketch?: readonly SketchShape[];
+  /** Elementos cortados (otros muros, columnas, vigas, losas): rectángulos en CSL, rayados. */
+  readonly cuts?: readonly { readonly x0: number; readonly x1: number; readonly y0: number; readonly y1: number; readonly kind: string }[];
+  /** Sin muro de fondo (corte de sección): solo lo cortado y los niveles. */
+  readonly hideWall?: boolean;
+  /** Divisiones verticales con rótulo (caras de una columna desdoblada). */
+  readonly dividers?: readonly { readonly x: number; readonly label: string }[];
+  /** Puntos del perfil (extremos y estaciones) tocables: base y tope en CSL. */
+  readonly profileHandles?: readonly { x: number; base: number; top: number; selected: boolean; station: boolean }[];
 }
 
 type ToScreen = (p: { x: number; y: number }) => { x: number; y: number };
@@ -91,11 +101,14 @@ export function drawElevation(r: ICanvasRenderer, scene: ElevationScene): void {
 
   if (scene.showGrid) drawHeightGrid(ctx);
   drawLevelLines(ctx);
-  drawWallSilhouette(ctx);
+  if (!scene.hideWall) drawWallSilhouette(ctx);
   if (scene.progressLayers?.length) drawFaceProgress(ctx);
   for (const o of openings) drawOpening(ctx, o);
-  drawReferenceLines(ctx);
-  if (scene.showLabels) drawElevationLabels(ctx);
+  if (scene.cuts?.length) drawCuts(ctx);
+  if (scene.dividers?.length) drawDividers(ctx);
+  if (!scene.hideWall) drawReferenceLines(ctx);
+  if (scene.profileHandles?.length) drawProfileHandles(ctx);
+  if (scene.showLabels && !scene.hideWall) drawElevationLabels(ctx);
   drawLevelLabels(ctx);
   if (scene.annotations?.length) drawSketch(r, scene.annotations, toScreen, viewport.scale);
   if (scene.markups?.length) drawSketch(r, scene.markups, toScreen, viewport.scale);
@@ -121,20 +134,7 @@ function drawFaceProgress({ r, scene, toScreen }: Ctx): void {
 
 /** Contorno del muro en CSL: su perfil (base y tope de cada extremo). */
 function wallOutline(elevation: WallElevation, wallLength: number): { x: number; y: number }[] {
-  const lv = elevation.levels;
-  return hasHeightProfile(lv)
-    ? [
-        { x: 0, y: lv.leftBase ?? 0 },
-        { x: wallLength, y: lv.rightBase ?? 0 },
-        { x: wallLength, y: effectiveRightHeight(lv) },
-        { x: 0, y: effectiveLeftHeight(lv) },
-      ]
-    : [
-        { x: 0, y: 0 },
-        { x: wallLength, y: 0 },
-        { x: wallLength, y: lv.coronacion },
-        { x: 0, y: lv.coronacion },
-      ];
+  return elevationOutline(elevation.levels, wallLength);
 }
 
 // ---------------------------------------------------------------------------
@@ -252,6 +252,67 @@ function drawOpening({ r, scene, pal, toScreen }: Ctx, opening: WallOpening): vo
   }
 }
 
+/** Lo cortado: relleno de fondo, trama a 45° y contorno grueso (convención de sección). */
+function drawCuts({ r, scene, pal, toScreen }: Ctx): void {
+  for (const c of scene.cuts ?? []) {
+    const poly = [
+      { x: c.x0, y: c.y0 },
+      { x: c.x1, y: c.y0 },
+      { x: c.x1, y: c.y1 },
+      { x: c.x0, y: c.y1 },
+    ].map(toScreen);
+    r.setFillStyle(c.kind === 'slab' ? pal.existingFill : pal.background);
+    r.fillPolygon(poly);
+    r.setStrokeStyle(pal.ink);
+    r.setLineWidth(0.8 * pal.lineScale);
+    for (const [a, b] of hatchSegments(poly, (c.kind === 'column' ? 5 : 8) * pal.lineScale, c.kind === 'column' ? -Math.PI / 4 : Math.PI / 4)) {
+      r.drawLine(a.x, a.y, b.x, b.y);
+    }
+    r.setLineWidth(2.2 * pal.lineScale);
+    r.strokePolygon(poly);
+  }
+}
+
+/** Aristas de la columna desdoblada, con el nombre de cada cara arriba. */
+function drawDividers({ r, scene, pal, toScreen }: Ctx): void {
+  const top = Math.max(scene.elevation.levels.coronacion, ...(scene.cuts ?? []).map((c) => c.y1));
+  r.setStrokeStyle(pal.ink);
+  r.setLineWidth(1.2 * pal.lineScale);
+  const xs = (scene.dividers ?? []).map((d) => d.x);
+  for (const [i, d] of (scene.dividers ?? []).entries()) {
+    const a = toScreen({ x: d.x, y: 0 });
+    const b = toScreen({ x: d.x, y: top });
+    if (i > 0) r.drawLine(a.x, a.y, b.x, b.y);
+    const next = xs[i + 1] ?? scene.wallLength;
+    const c = toScreen({ x: (d.x + next) / 2, y: top });
+    r.setFillStyle(pal.label);
+    r.drawText(d.label, c.x, c.y - 10, 11, 'center');
+  }
+}
+
+/** Vértices del perfil: círculo en el tope, cuadrado en la base; la estación con su vertical. */
+function drawProfileHandles({ r, scene, pal, toScreen }: Ctx): void {
+  for (const h of scene.profileHandles ?? []) {
+    const top = toScreen({ x: h.x, y: h.top });
+    const base = toScreen({ x: h.x, y: h.base });
+    const color = h.selected ? pal.selection : pal.ink;
+    if (h.station) {
+      r.setStrokeStyle(withAlpha(color, 0.6));
+      r.setLineWidth(1);
+      for (let y = top.y; y < base.y; y += 8) r.drawLine(top.x, y, top.x, Math.min(y + 4, base.y));
+    }
+    const rad = h.selected ? 8 : 6;
+    r.setFillStyle(h.selected ? pal.selection : pal.handleFill);
+    r.fillCircle(top.x, top.y, rad);
+    r.setStrokeStyle(color);
+    r.setLineWidth(2);
+    r.strokeCircle(top.x, top.y, rad);
+    r.setFillStyle(h.selected ? pal.selection : pal.handleFill);
+    r.fillRect(base.x - rad, base.y - rad, rad * 2, rad * 2);
+    r.strokeRect(base.x - rad, base.y - rad, rad * 2, rad * 2);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // 5. Umbral y dintel
 // ---------------------------------------------------------------------------
@@ -296,6 +357,11 @@ function drawElevationLabels({ r, scene, pal, toScreen, openings }: Ctx): void {
     const [lp, lh, rp, rh] = startTop.x <= endTop.x ? [startTop, sh, endTop, eh] : [endTop, eh, startTop, sh];
     r.drawText(`${lh.toFixed(2)} m`, lp.x, lp.y - 8, 11, 'left');
     r.drawText(`${rh.toFixed(2)} m`, rp.x, rp.y - 8, 11, 'right');
+    // Estaciones: su altura neta sobre el vértice del tope.
+    for (const s of profileStations(lv, wallLength).slice(1, -1)) {
+      const q = toScreen({ x: s.x, y: s.top });
+      r.drawText(`${(s.top - s.base).toFixed(2)} m`, q.x, q.y - 8, 11, 'center');
+    }
   } else {
     const top = toScreen({ x: wallLength / 2, y: lv.coronacion });
     r.drawText(`${lv.coronacion.toFixed(2)} m`, top.x, top.y - 8, 11, 'center');

@@ -18,11 +18,8 @@ import { Database } from '../../src/infrastructure/sqlite/database';
 import { ObjectStore } from '../../src/infrastructure/sqlite/ObjectStore';
 import {
   Wall,
-  
   Room,
   RevitObjectId,
-  
-  
   roomId,
   wallId,
   levelId,

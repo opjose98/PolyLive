@@ -16,6 +16,7 @@ import type { AppServices } from '../../../application/AppServices';
 import type { EditorController } from '../../../application/editor/EditorController';
 import { ProgressController, ProgressState, ProgressTool } from '../../../application/progress/ProgressController';
 import { faceSupport, ProgressTarget, Support, targetKey } from '../../../domain/progress/progress';
+import { elevationOutline, levelsFromProfile } from '../../../domain/objects/wall-elevation';
 import type { WallElevation } from '../../../domain/objects/wall-elevation';
 import { categoriesFor, findTool } from '../../../application/workspace/catalog';
 import { workspaceStore } from '../../../state/workspaceStore';
@@ -101,11 +102,15 @@ export function useProgress({ services, projectId, spaceId, editor, operatorName
     };
   }, [services, spaceId, objectsVersion]);
 
-  const floors = useMemo(() => editor.floorViews, [editor, objectsVersion]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Un suelo libre no tiene recinto: su soporte de avance se identifica por el id del suelo.
+  const floors = useMemo(
+    () => editor.floorViews.map((f) => ({ ...f, zoneId: f.zoneId ?? `floor:${f.id}` })),
+    [editor, objectsVersion], // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
   const supports = useMemo(() => {
     const map = new Map<string, Support>();
-    for (const f of floors) map.set(targetKey({ kind: 'floor', zoneId: f.zoneId }), { outline: f.polygon, holes: [] });
+    for (const f of floors) map.set(targetKey({ kind: 'floor', zoneId: f.zoneId }), { outline: f.polygon, holes: f.holes });
     const openingsOf = new Map(elevations.map((e) => [e.wallId, e.openings]));
     for (const w of editor.walls) {
       const p = editor.wallProfile(w);
@@ -114,6 +119,7 @@ export function useProgress({ services, projectId, spaceId, editor, operatorName
         w.length as number,
         { leftBase: p.start.base - y0, rightBase: p.end.base - y0, leftTop: p.start.top - y0, rightTop: p.end.top - y0 },
         openingsOf.get(w.id as string) ?? [],
+        p.stations?.length ? elevationOutline(levelsFromProfile(p), w.length as number) : undefined,
       );
       map.set(targetKey({ kind: 'wallFace', wallId: w.id as string, side: 'A' }), s);
       map.set(targetKey({ kind: 'wallFace', wallId: w.id as string, side: 'B' }), s);

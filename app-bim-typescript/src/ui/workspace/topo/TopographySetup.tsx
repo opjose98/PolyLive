@@ -178,8 +178,8 @@ export function TopographySetup(props: TopographySetupProps) {
             ) : method === 'gps' ? (
               <>
                 <Text style={styles.body}>
-                  Toca en el dibujo el punto donde estás parado; luego deja el celular quieto {geo?.gpsSeconds ?? 30} s. El
-                  GPS del celular tiene 3–15 m de error: sirve para ubicar, no para replantear.
+                  Toca en el dibujo el punto donde estás parado; luego deja el equipo quieto {geo?.gpsSeconds ?? 30} s. El
+                  GPS del equipo tiene 3–15 m de error: sirve para ubicar, no para replantear.
                 </Text>
                 <ActionButton
                   label="Tocar dónde estoy"

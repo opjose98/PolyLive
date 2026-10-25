@@ -21,11 +21,11 @@ import { lastPackagedAt } from '../../infrastructure/package/projectPackage';
 import { View, Text, FlatList, TouchableOpacity, TextInput, Modal, RefreshControl, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 
 import { AppServices } from '../../application/AppServices';
-import { Project, ProjectSummary, BIM_DISCIPLINES, BimDiscipline } from '../../domain/objects/project';
+import { Project, ProjectSummary, BimDiscipline } from '../../domain/objects/project';
 import type { Operator } from '../../domain/objects/operator';
-import { AppError } from '../../shared/errors/AppError';
+import { reportFailure } from '../../shared/diagnostics';
 import { ActionButton, alertDialog } from '../primitives';
-import { TextField, SegmentedField } from '../components/fields';
+import { TextField } from '../components/fields';
 import { spacing, radius, sizes } from '../design/tokens';
 import { type } from '../design/typography';
 import { themedStyles, useTheme } from '../design/theme';
@@ -116,7 +116,7 @@ export function ProjectsScreen({
               } catch (err) {
                 alertDialog(
                   'Error',
-                  err instanceof AppError ? err.userMessage : 'No se pudo eliminar el proyecto.',
+                  reportFailure('projects', err, 'No se pudo eliminar el proyecto.'),
                 );
               }
             },
@@ -160,7 +160,7 @@ export function ProjectsScreen({
           style={styles.search}
           value={query}
           onChangeText={setQuery}
-          placeholder="Buscar por nombre, código, autor o disciplina"
+          placeholder="Buscar por nombre, código o autor"
           placeholderTextColor={colors.textDisabled}
           accessibilityLabel="Buscar proyectos"
         />
@@ -219,7 +219,7 @@ export function ProjectsScreen({
           } catch (err) {
             alertDialog(
               'Error',
-              err instanceof AppError ? err.userMessage : 'No se pudo crear el proyecto.',
+              reportFailure('projects', err, 'No se pudo crear el proyecto.'),
             );
           }
         }}
@@ -240,7 +240,7 @@ export function ProjectsScreen({
           } catch (err) {
             alertDialog(
               'Error',
-              err instanceof AppError ? err.userMessage : 'No se pudo guardar el proyecto.',
+              reportFailure('projects', err, 'No se pudo guardar el proyecto.'),
             );
           }
         }}
@@ -294,8 +294,7 @@ function ProjectCard({
       ) : null}
 
       <View style={styles.cardMetaRow}>
-        <Text style={styles.cardMeta}>{project.discipline}</Text>
-        {project.author ? <Text style={styles.cardMeta}>· {project.author}</Text> : null}
+        {project.author ? <Text style={styles.cardMeta}>{project.author}</Text> : null}
       </View>
 
       <View style={styles.cardStats}>
@@ -449,12 +448,6 @@ function ProjectDialog({
             placeholder="Alcance del levantamiento"
             multiline
             onCommit={(description) => setValues((v) => ({ ...v, description }))}
-          />
-          <SegmentedField
-            label="Disciplina"
-            value={values.discipline}
-            options={BIM_DISCIPLINES.slice(0, 3).map((d) => ({ value: d, label: d }))}
-            onChange={(discipline) => setValues((v) => ({ ...v, discipline }))}
           />
           <TextField
             label="Autor"

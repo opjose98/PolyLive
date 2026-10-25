@@ -66,7 +66,7 @@ type ToolActivation =
   | { readonly ok: true; readonly tool: ActiveTool }
   | { readonly ok: false; readonly reason: 'disabled' | 'not-found' };
 
-export interface WorkspaceActions {
+interface WorkspaceActions {
   setMode(mode: WorkspaceMode): void;
 
   openPanel(key: PanelKey): void;

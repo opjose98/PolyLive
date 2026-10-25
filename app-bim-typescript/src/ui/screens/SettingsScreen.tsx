@@ -16,7 +16,7 @@ import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { AppServices } from '../../application/AppServices';
 import { ExpoBackupDatabaseUseCase } from '../../native/backup/ExpoBackupDatabaseUseCase';
 import { ExpoRestoreDatabaseUseCase, BackupEntry } from '../../native/backup/ExpoRestoreDatabaseUseCase';
-import { AppError } from '../../shared/errors/AppError';
+import { reportFailure } from '../../shared/diagnostics';
 import { loadAppPrefs, saveAppPrefs } from '../../native/prefs/prefsFile';
 import { shareDiagnostics } from '../../native/diagnostics/diagnosticsLog';
 import { LATEST_SCHEMA_VERSION } from '../../infrastructure/sqlite/migrations';
@@ -101,7 +101,7 @@ export function SettingsScreen({
           : 'Copia guardada.',
       );
     } catch (err) {
-      alertDialog('Error', err instanceof AppError ? err.userMessage : 'No se pudo crear la copia.');
+      alertDialog('Error', reportFailure('settings', err, 'No se pudo crear la copia.'));
     } finally {
       setCreating(false);
     }
@@ -136,9 +136,7 @@ export function SettingsScreen({
               } catch (err) {
                 alertDialog(
                   'Error',
-                  err instanceof AppError
-                    ? err.userMessage
-                    : 'No se pudo restaurar la copia. La base de datos quedó cerrada; reinicia la app.',
+                  reportFailure('settings', err, 'No se pudo restaurar la copia. La base de datos quedó cerrada; reinicia la app.'),
                 );
               } finally {
                 setRestoring(false);

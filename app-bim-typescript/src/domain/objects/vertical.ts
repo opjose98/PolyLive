@@ -30,10 +30,23 @@ export interface VerticalExtent {
   readonly unconnectedHeight: number;
 }
 
-/** Restricciones de los dos extremos de un muro (inicio y fin de su eje). */
+/**
+ * Estación de altimetría: un punto intermedio del eje con su propia base y
+ * tope (H-74). Con estaciones el alzado es un polígono (culata con cumbrera,
+ * culata irregular, base escalonada) sin partir el muro.
+ */
+export interface WallStation {
+  /** Metros desde el inicio del eje. */
+  readonly at: number;
+  readonly ext: VerticalExtent;
+}
+
+/** Restricciones de los dos extremos de un muro (inicio y fin de su eje) y de sus estaciones. */
 export interface WallVertical {
   readonly start: VerticalExtent;
   readonly end: VerticalExtent;
+  /** Estaciones intermedias, ordenadas por `at`. Sin ellas, el alzado es un trapecio. */
+  readonly stations?: readonly WallStation[];
 }
 
 /** Cota de cada nivel del proyecto, por id. */
@@ -45,10 +58,16 @@ export interface ResolvedExtent {
   readonly top: number;
 }
 
-/** Alzado de un muro en cotas absolutas: el trapecio que dibuja el alzado. */
+/** Estación resuelta: cotas absolutas a `at` metros del inicio. */
+interface ResolvedStation extends ResolvedExtent {
+  readonly at: number;
+}
+
+/** Alzado de un muro en cotas absolutas: el trapecio (o polígono, con estaciones) que dibuja el alzado. */
 export interface WallProfile {
   readonly start: ResolvedExtent;
   readonly end: ResolvedExtent;
+  readonly stations?: readonly ResolvedStation[];
 }
 
 /** Altura mínima de un elemento: por debajo, la restricción está mal puesta. */
@@ -92,7 +111,23 @@ export function sameExtent(a: VerticalExtent, b: VerticalExtent): boolean {
 }
 
 export function isUniformWall(v: WallVertical): boolean {
-  return sameExtent(v.start, v.end);
+  return sameExtent(v.start, v.end) && !v.stations?.length;
+}
+
+/** Estaciones ordenadas y dentro del muro (las que quedaron fuera al acortarlo se ignoran). */
+export function stationsWithin<T extends { readonly at: number }>(stations: readonly T[] | undefined, length: number): T[] {
+  return (stations ?? []).filter((s) => s.at > EPS && s.at < length - EPS).sort((a, b) => a.at - b.at);
+}
+
+/** Inserta o reemplaza una estación (misma posición ±1 mm). */
+export function withStation(v: WallVertical, st: WallStation): WallVertical {
+  const rest = (v.stations ?? []).filter((s) => Math.abs(s.at - st.at) > 1e-3);
+  return { ...v, stations: [...rest, st].sort((a, b) => a.at - b.at) };
+}
+
+export function withoutStation(v: WallVertical, at: number): WallVertical {
+  const rest = (v.stations ?? []).filter((s) => Math.abs(s.at - at) > 1e-3);
+  return rest.length ? { ...v, stations: rest } : { start: v.start, end: v.end };
 }
 
 // ---------------------------------------------------------------------------
@@ -110,21 +145,90 @@ export function resolveExtent(e: VerticalExtent, levels: LevelElevations): Resol
   return { base, top };
 }
 
-export function resolveWallProfile(v: WallVertical, levels: LevelElevations): WallProfile {
-  return { start: resolveExtent(v.start, levels), end: resolveExtent(v.end, levels) };
+/**
+ * Perfil en cotas absolutas. Con `length` (el largo del eje) solo cuentan las
+ * estaciones que caen dentro del muro: una que quedó fuera al acortarlo no
+ * debe subir su altura ni su restricción de Revit.
+ */
+export function resolveWallProfile(v: WallVertical, levels: LevelElevations, length?: number): WallProfile {
+  const start = resolveExtent(v.start, levels);
+  const end = resolveExtent(v.end, levels);
+  const inside = length === undefined ? [...(v.stations ?? [])].sort((a, b) => a.at - b.at) : stationsWithin(v.stations, length);
+  if (!inside.length) return { start, end };
+  return { start, end, stations: inside.map((s) => ({ at: s.at, ...resolveExtent(s.ext, levels) })) };
+}
+
+/** Los puntos del perfil (extremos y estaciones dentro del muro), de inicio a fin. */
+function profilePoints(p: WallProfile, length: number): ResolvedStation[] {
+  return [{ at: 0, ...p.start }, ...stationsWithin(p.stations, length), { at: length, ...p.end }];
+}
+
+/** Base y tope del perfil a `at` metros del inicio (interpolados entre sus puntos). */
+export function profileAt(p: WallProfile, length: number, at: number): ResolvedExtent {
+  const pts = profilePoints(p, length);
+  const x = Math.max(0, Math.min(length, at));
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1];
+    const b = pts[i];
+    if (x <= b.at + EPS || i === pts.length - 1) {
+      const t = b.at - a.at < EPS ? 0 : (x - a.at) / (b.at - a.at);
+      return { base: a.base + (b.base - a.base) * t, top: a.top + (b.top - a.top) * t };
+    }
+  }
+  return { base: p.start.base, top: p.start.top };
+}
+
+/** Contorno del alzado en (x a lo largo del eje, cota absoluta): base de inicio a fin y tope de vuelta. */
+export function profileOutline(p: WallProfile, length: number): { x: number; z: number }[] {
+  const pts = profilePoints(p, length);
+  return [...pts.map((q) => ({ x: q.at, z: q.base })), ...[...pts].reverse().map((q) => ({ x: q.at, z: q.top }))];
+}
+
+/** Área bruta del alzado (polígono del perfil). */
+export function profileArea(p: WallProfile, length: number): number {
+  const pts = profilePoints(p, length);
+  let a = 0;
+  for (let i = 1; i < pts.length; i++) {
+    a += ((pts[i].at - pts[i - 1].at) * (pts[i].top - pts[i].base + (pts[i - 1].top - pts[i - 1].base))) / 2;
+  }
+  return a;
+}
+
+/**
+ * Restricción en un punto intermedio del eje (`at` metros desde el inicio):
+ * la que deja el alzado igual al partir el muro ahí. Se ata a los niveles del
+ * inicio (o del fin si el inicio no tiene tope) con el desfase que haga falta.
+ */
+export function extentAt(v: WallVertical, at: number, length: number, levels: LevelElevations): VerticalExtent {
+  if (isUniformWall(v)) return v.start;
+  const same = (v.stations ?? []).find((s) => Math.abs(s.at - at) < 1e-3);
+  if (same) return same.ext;
+  const mm = (x: number) => Math.round(x * 1000) / 1000;
+  const { base, top } = profileAt(resolveWallProfile(v, levels, length), length, at);
+  const topLevelId = v.start.topLevelId ?? v.end.topLevelId;
+  const topLevel = topLevelId !== null ? levels.get(topLevelId) : undefined;
+  return {
+    baseLevelId: v.start.baseLevelId,
+    baseOffset: mm(base - levelElevation(levels, v.start.baseLevelId)),
+    topLevelId: topLevel !== undefined ? topLevelId : null,
+    topOffset: topLevel !== undefined ? mm(top - topLevel) : 0,
+    unconnectedHeight: mm(top - base),
+  };
 }
 
 /** Un alzado es rectangular si base y tope son iguales en los dos extremos. */
 export function isRectangularProfile(p: WallProfile): boolean {
-  return Math.abs(p.start.base - p.end.base) < EPS && Math.abs(p.start.top - p.end.top) < EPS;
+  return [p.end, ...(p.stations ?? [])].every(
+    (e) => Math.abs(p.start.base - e.base) < EPS && Math.abs(p.start.top - e.top) < EPS,
+  );
 }
 
 export function profileBottom(p: WallProfile): number {
-  return Math.min(p.start.base, p.end.base);
+  return Math.min(p.start.base, p.end.base, ...(p.stations ?? []).map((s) => s.base));
 }
 
 export function profileTop(p: WallProfile): number {
-  return Math.max(p.start.top, p.end.top);
+  return Math.max(p.start.top, p.end.top, ...(p.stations ?? []).map((s) => s.top));
 }
 
 /** ¿El elemento atraviesa la cota `z`? (base ≤ z < tope en algún punto del eje) */
@@ -134,9 +238,14 @@ export function profileSpans(p: WallProfile, z: number): boolean {
 
 /** Motivo por el que el alzado no es construible, o `null` si lo es. */
 export function profileProblem(p: WallProfile): string | null {
-  for (const [label, e] of [['inicio', p.start], ['fin', p.end]] as const) {
+  const points: [string, ResolvedExtent][] = [
+    ['el inicio', p.start],
+    ['el fin', p.end],
+    ...(p.stations ?? []).map((s): [string, ResolvedExtent] => [`la estación a ${s.at.toFixed(2)} m`, s]),
+  ];
+  for (const [label, e] of points) {
     if (e.top - e.base < MIN_VERTICAL_HEIGHT - EPS) {
-      return `El tope queda por debajo de la base en el ${label} del muro.`;
+      return `El tope queda por debajo de la base en ${label} del muro.`;
     }
   }
   return null;
@@ -160,10 +269,17 @@ interface RevitWallConstraints {
   readonly profileEdited: boolean;
 }
 
-export function revitConstraints(v: WallVertical, levels: LevelElevations): RevitWallConstraints {
-  const p = resolveWallProfile(v, levels);
-  const low = p.start.base <= p.end.base + EPS ? v.start : v.end;
-  const high = p.start.top >= p.end.top - EPS ? v.start : v.end;
+export function revitConstraints(v: WallVertical, levels: LevelElevations, length?: number): RevitWallConstraints {
+  const p = resolveWallProfile(v, levels, length);
+  // Base más baja y tope más alto entre extremos y estaciones (el inicio gana empates).
+  const inside = length === undefined ? v.stations ?? [] : stationsWithin(v.stations, length);
+  const all = [
+    { ext: v.start, r: p.start },
+    { ext: v.end, r: p.end },
+    ...inside.map((s) => ({ ext: s.ext, r: resolveExtent(s.ext, levels) })),
+  ];
+  const low = all.reduce((a, b) => (b.r.base < a.r.base - EPS ? b : a)).ext;
+  const high = all.reduce((a, b) => (b.r.top > a.r.top + EPS ? b : a)).ext;
   const bottom = profileBottom(p);
   const top = profileTop(p);
   const topLevelKnown = high.topLevelId !== null && levels.has(high.topLevelId);
@@ -181,8 +297,8 @@ export function revitConstraints(v: WallVertical, levels: LevelElevations): Revi
  * Nivel al que pertenece el elemento en planta: el de su base más baja (la
  * "Restricción de base" de Revit). Es el piso donde se exporta a IFC.
  */
-export function hostLevelOf(v: WallVertical, levels: LevelElevations): string {
-  return revitConstraints(v, levels).baseLevelId;
+export function hostLevelOf(v: WallVertical, levels: LevelElevations, length?: number): string {
+  return revitConstraints(v, levels, length).baseLevelId;
 }
 
 /** Altura total del alzado (lo que `Wall.height` guarda como resumen). */
@@ -244,5 +360,13 @@ export function parseWallVertical(raw: unknown): WallVertical | undefined {
   const o = raw as Record<string, unknown>;
   const start = parseExtent(o.start);
   const end = parseExtent(o.end);
-  return start && end ? { start, end } : undefined;
+  if (!start || !end) return undefined;
+  const stations = Array.isArray(o.stations)
+    ? o.stations.flatMap((raw: unknown) => {
+        const r = raw as Record<string, unknown> | null;
+        const ext = parseExtent(r?.ext);
+        return r && typeof r.at === 'number' && Number.isFinite(r.at) && ext ? [{ at: r.at, ext }] : [];
+      })
+    : [];
+  return stations.length ? { start, end, stations } : { start, end };
 }

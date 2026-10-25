@@ -11,18 +11,22 @@
 import { revitObjectId, type IObjectStore, type RoomId } from '../../domain/objects/base';
 import { Column } from '../../domain/objects/column';
 import { Door } from '../../domain/objects/door';
-import { Floor, floorZoneId } from '../../domain/objects/floor';
+import { Floor, floorZoneId, isFreeFloor } from '../../domain/objects/floor';
 import { Room } from '../../domain/objects/room';
 import { Wall } from '../../domain/objects/wall';
 import { Window } from '../../domain/objects/window';
 import type { IFCSerializer, ProjectSerializeInput, SpaceContent } from '../../infrastructure/export/ifc/IFCSerializer';
-import type { IfcMemberInput, IfcZoneInput } from '../../infrastructure/export/ifc/types';
+import type { IfcBareOpeningInput, IfcLevelInput, IfcMemberInput, IfcZoneInput } from '../../infrastructure/export/ifc/types';
 
 interface ProjectSpaceInput {
   readonly roomId: RoomId;
   readonly placement?: SpaceContent['placement'];
   readonly zones?: readonly IfcZoneInput[];
   readonly openingSills?: ReadonlyMap<string, number>;
+  readonly bareOpenings?: readonly IfcBareOpeningInput[];
+  /** Niveles y fases del espacio (docs/23 § 7). */
+  readonly levels?: readonly IfcLevelInput[];
+  readonly phaseNames?: ReadonlyMap<string, string>;
   readonly members?: readonly IfcMemberInput[];
 }
 
@@ -58,9 +62,12 @@ export class ExportProjectIfcUseCase {
         windows: objects.filter((o): o is Window => o instanceof Window),
         columns: objects.filter((o): o is Column => o instanceof Column),
         floor: floors.find((f) => floorZoneId(f) === null) ?? null,
-        zoneFloors: floors.filter((f) => floorZoneId(f) !== null),
+        zoneFloors: floors.filter((f) => floorZoneId(f) !== null || isFreeFloor(f)),
         zones: s.zones,
         openingSills: s.openingSills,
+        bareOpenings: s.bareOpenings,
+        levels: s.levels,
+        phaseNames: s.phaseNames,
         members: s.members,
         placement: s.placement,
       });

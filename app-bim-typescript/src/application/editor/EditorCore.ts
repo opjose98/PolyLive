@@ -47,6 +47,7 @@ import { RevitObjectBase, RevitObjectId, RoomId, WallId, generateId } from '../.
 import { Wall } from '../../domain/objects/wall';
 import { Room } from '../../domain/objects/room';
 import { Column } from '../../domain/objects/column';
+import { Floor } from '../../domain/objects/floor';
 import { Door } from '../../domain/objects/door';
 import { Window } from '../../domain/objects/window';
 import { distanceToSegment, isPointInPolygon } from '../../domain/geometry/polygon-utils';
@@ -57,7 +58,7 @@ import type { ZoneEdit } from '../../infrastructure/sqlite/ZoneStore';
 import { LEVEL_PROP, PHASE_PROP } from '../../domain/objects/marker';
 import { LevelElevations, VerticalExtent, WallProfile, WallVertical, columnVerticalOf, hostLevelOf, profileSpans, resolveExtent, resolveWallProfile, wallVerticalOf } from '../../domain/objects/vertical';
 import { projectPointToWall, isVanoWithinWall } from '../../domain/geometry/projections';
-import { AppError } from '../../shared/errors/AppError';
+import { reportFailure } from '../../shared/diagnostics';
 import { CanvasManager } from '../canvas/CanvasManager';
 import { CanvasPoint, canvasPoint, MIN_SCALE, MAX_SCALE } from '../canvas/types';
 import { SnapHandler } from '../canvas/SnapHandler';
@@ -82,7 +83,7 @@ export interface PhotoMarkerView {
 // Herramientas y estado
 // ---------------------------------------------------------------------------
 
-export type EditorTool = 'select' | 'wall' | 'door' | 'window' | 'column' | 'floor' | 'opening' | 'measure' | 'photo';
+export type EditorTool = 'select' | 'wall' | 'door' | 'window' | 'column' | 'floor' | 'opening' | 'measure' | 'photo' | 'split' | 'void';
 
 /** Valores por defecto de los objetos que el editor crea. Editables en Ajustes. */
 interface EditorDefaults {
@@ -118,10 +119,26 @@ type ColumnCreationMethod = 'rectangular' | 'circular';
 export interface CreationMethods {
   readonly wall: WallCreationMethod;
   readonly column: ColumnCreationMethod;
+  /** Suelo: de un recinto (tocándolo) o libre con una forma (andén, patio). */
+  readonly floor: FloorCreationMethod;
+  /** Vacío en un suelo: con una forma. */
+  readonly void: ShapeMethod;
+}
+
+export type ShapeMethod = 'polygon' | 'rect' | 'circle';
+type FloorCreationMethod = 'zone' | ShapeMethod;
+
+/** Forma en trazado para un suelo libre o un vacío (no persistida). */
+interface ShapeDraft {
+  readonly mode: 'floor' | 'void';
+  /** Polígono: vértices fijados. Rectángulo y círculo: [primera esquina | centro]. */
+  readonly points: readonly Point2D[];
+  /** Punto bajo el dedo (esquina opuesta, borde del círculo o siguiente vértice). */
+  readonly cursor: Point2D | null;
 }
 
 /** Muro en curso de trazado (no persistido). */
-export interface WallDraft {
+interface WallDraft {
   /** Punto fijado. En "punto a punto", `null` hasta el primer toque. */
   readonly start: Point2D | null;
   /** Donde está el dedo ahora, ya con snaps aplicados. */
@@ -194,6 +211,7 @@ export interface EditorState {
   readonly objects: readonly RevitObjectBase[];
   readonly creation: CreationMethods;
   readonly wallDraft: WallDraft | null;
+  readonly shapeDraft: ShapeDraft | null;
   /** Recintos cerrados que forman los muros, recalculados en cada cambio. */
   readonly rooms: readonly DetectedRoom[];
   readonly selectedId: RevitObjectId | null;
@@ -244,7 +262,7 @@ export interface EditorState {
 type EditorListener = (state: EditorState) => void;
 
 /** Lo común a todo destino de arrastre: plan de uniones (si el muro tiene) y muros arrastrados. */
-export interface DragJoints {
+interface DragJoints {
   readonly plan: WallEndsChange[] | null;
   readonly linked: RevitObjectBase[];
 }
@@ -284,6 +302,8 @@ export abstract class EditorCore {
   protected abstract addGenericOpening(world: Point2D, tol: Meters): Promise<void>;
   protected abstract addFloor(screenX: number, screenY: number): Promise<void>;
   protected abstract pickMeasureTarget(world: Point2D, tol: Meters): void;
+  protected abstract splitTap(world: Point2D, tol: Meters): Promise<void>;
+  protected abstract shapeTap(screenX: number, screenY: number, tol: Meters): Promise<void>;
 
   protected readonly services: AppServices;
   protected readonly roomId: RoomId;
@@ -341,8 +361,9 @@ export abstract class EditorCore {
     this.state = {
       tool: 'wall',
       objects: [],
-      creation: { wall: 'drag', column: 'rectangular' },
+      creation: { wall: 'drag', column: 'rectangular', floor: 'zone', void: 'rect' },
       wallDraft: null,
+      shapeDraft: null,
       rooms: [],
       selectedId: null,
       selectedZoneId: null,
@@ -397,7 +418,8 @@ export abstract class EditorCore {
   }
 
   protected fail(err: unknown, fallback: string): void {
-    this.notify('error', err instanceof AppError ? err.userMessage : fallback);
+    // Al registro también: "Enviar diagnóstico" debe traer la causa, no solo el aviso que se vio.
+    this.notify('error', reportFailure('editor', err, fallback));
   }
 
   // -------------------------------------------------------------------------
@@ -420,7 +442,17 @@ export abstract class EditorCore {
    * contenedor del levantamiento.
    */
   protected get pickable(): readonly RevitObjectBase[] {
-    return this.scopedObjects.filter((o) => !(o instanceof Room));
+    const show = this.pickFilter;
+    return this.scopedObjects.filter((o) => !(o instanceof Room) && (!show || show(o)));
+  }
+
+  private pickFilter: ((o: RevitObjectBase) => boolean) | null = null;
+
+  /** Qué se puede tocar: lo que la vista oculta con filtros o capas no se selecciona (H-75). */
+  setPickFilter(show: ((o: RevitObjectBase) => boolean) | null): void {
+    this.pickFilter = show;
+    const sel = this.selected;
+    if (sel && show && !show(sel)) this.patch({ selectedId: null });
   }
 
   protected scope(): NonNullable<EditorCore['scopeCache']> {
@@ -471,7 +503,7 @@ export abstract class EditorCore {
 
   /** Alzado del muro en cotas absolutas. */
   wallProfile(wall: Wall): WallProfile {
-    return resolveWallProfile(this.wallVertical(wall), this.levelElevations);
+    return resolveWallProfile(this.wallVertical(wall), this.levelElevations, wall.length as number);
   }
 
   columnVertical(column: Column): VerticalExtent {
@@ -522,11 +554,18 @@ export abstract class EditorCore {
   protected levelOf(o: RevitObjectBase, lv: LevelScope): string {
     const raw =
       o instanceof Wall
-        ? hostLevelOf(this.wallVertical(o), lv.elevations)
+        ? hostLevelOf(this.wallVertical(o), lv.elevations, o.length as number)
         : o instanceof Column
           ? this.columnVertical(o).baseLevelId
           : o.properties?.[LEVEL_PROP];
     return typeof raw === 'string' && lv.all.has(raw) ? raw : lv.base;
+  }
+
+  /** Nivel del Recinto persistido: la base, o el más bajo con muros si la base no tiene ninguno. */
+  protected roomLevelOf(objects: readonly RevitObjectBase[], lv: LevelScope): string {
+    const levels = new Set(objects.filter((o) => o instanceof Wall && !o.is_deleted).map((o) => this.levelOf(o, lv)));
+    if (levels.size === 0 || levels.has(lv.base)) return lv.base;
+    return [...levels].sort((a, b) => (lv.elevations.get(a) ?? 0) - (lv.elevations.get(b) ?? 0))[0];
   }
 
   /**
@@ -545,6 +584,12 @@ export abstract class EditorCore {
     if (o instanceof Column) {
       const e = resolveExtent(this.columnVertical(o), lv.elevations);
       return e.base <= cut && cut < e.top;
+    }
+    // Un suelo algo más alto que el nivel (un piso a +0,25 sobre la base) sigue siendo de esta planta.
+    if (o instanceof Floor) {
+      const z = lv.elevations.get(this.levelOf(o, lv));
+      const base = lv.elevations.get(lv.active) ?? 0;
+      return z !== undefined && base <= z && z < cut;
     }
     return false;
   }
@@ -567,6 +612,11 @@ export abstract class EditorCore {
    * Propiedades con que nace un objeto: nivel y fase activos. Van en la misma
    * escritura que lo crea, así Deshacer/Rehacer nunca ve un objeto sin ellas.
    */
+  /** Las mismas propiedades de nacimiento, para quien crea objetos por fuera del editor (puente de desarrollo). */
+  creationProps(level?: string): Record<string, string> {
+    return this.scopeProps(level);
+  }
+
   protected scopeProps(level?: string): Record<string, string> {
     const out: Record<string, string> = {};
     const lv = level ?? this.levelScope?.active;
@@ -654,12 +704,14 @@ export abstract class EditorCore {
     const scopedWalls = objects.filter((o): o is Wall => o instanceof Wall && this.inScope(o));
     const rooms = await this.syncZones(detect(scopedWalls), scopedWalls);
     // El Recinto persistido (el que exportan IFC y DXF) es el de su nivel, la
-    // base: navegar a otro nivel no debe reescribir su geometría.
+    // base: navegar a otro nivel no debe reescribir su geometría. Un espacio sin
+    // muros en la base (el 2.º piso con cotas absolutas) toma el nivel más bajo con muros.
     const lv = this.levelScope;
+    const roomLevel = lv && this.roomLevelOf(objects, lv);
     const baseRooms =
-      !lv || lv.active === lv.base
+      !lv || lv.active === roomLevel
         ? rooms
-        : detect(objects.filter((o): o is Wall => o instanceof Wall && this.levelOf(o, lv) === lv.base));
+        : detect(objects.filter((o): o is Wall => o instanceof Wall && this.levelOf(o, lv) === roomLevel));
     if (await this.syncRoomGeometry(objects, baseRooms)) {
       objects = await this.services.store.listObjects(this.roomId);
     }
@@ -774,12 +826,13 @@ export abstract class EditorCore {
       dragSnappedToNode: false,
       dragLinked: [],
       wallDraft: null,
+      shapeDraft: null,
     });
     this.dragOrigin = null;
   }
 
   setCreationMethod<K extends keyof CreationMethods>(tool: K, method: CreationMethods[K]): void {
-    this.patch({ creation: { ...this.state.creation, [tool]: method }, wallDraft: null });
+    this.patch({ creation: { ...this.state.creation, [tool]: method }, wallDraft: null, shapeDraft: null });
   }
 
   /** Valores con que se crean los objetos nuevos (espesor de muro, ancho de vano…). */
@@ -954,7 +1007,11 @@ export abstract class EditorCore {
   zoomToFit(viewportWidth: number, viewportHeight: number, paddingPx = 32): void {
     const pts: Point2D[] = [];
     for (const w of this.walls) pts.push(w.startPoint, w.endPoint);
-    for (const o of this.scopedObjects) if (o instanceof Column) pts.push(o.position);
+    for (const o of this.scopedObjects) {
+      if (o instanceof Column) pts.push(o.position);
+      // Un suelo libre (andén) puede salirse de los muros: también entra en el encuadre.
+      else if (o instanceof Floor && o.outline) pts.push(...o.outline);
+    }
     this.fitPoints(pts, viewportWidth, viewportHeight, paddingPx);
   }
 

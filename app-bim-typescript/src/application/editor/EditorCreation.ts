@@ -13,42 +13,38 @@ import { wallId } from '../../domain/objects/base';
 import { Wall } from '../../domain/objects/wall';
 import { Room } from '../../domain/objects/room';
 import { Column } from '../../domain/objects/column';
-import { Floor, floorZoneId } from '../../domain/objects/floor';
+import { Floor, circlePolygon, floorZoneId, netFloorArea, rectPolygon } from '../../domain/objects/floor';
 
 import { ElevationSnapshotCommand } from '../commands/ElevationSnapshotCommand';
+import { splitSnapCandidates } from '../../domain/objects/wall-split';
+import { isPointInPolygon } from '../../domain/geometry/polygon-utils';
 import {
-  
   VerticalExtent,
-  
   WallVertical,
-  
   hostLevelOf,
   profileHeight,
   profileProblem,
-  
   resolveExtent,
   resolveWallProfile,
-  
 } from '../../domain/objects/vertical';
 import { touchToleranceMeters } from '../canvas/SelectionService';
+import { diagnostics } from '../../shared/diagnostics';
 
 import {
-  
   EditorState,
-  
-  
-  
-  
-  
-  
-  
   MIN_WALL_LENGTH,
-  
-  
-  
-  
+  ShapeMethod,
 } from './EditorCore';
 import { EditorGestures } from './EditorGestures';
+
+/** Suelo tal como se dibuja: el de un recinto (`zoneId`) o uno libre, con sus vacíos. */
+export interface FloorView {
+  readonly id: string;
+  readonly zoneId: string | null;
+  readonly polygon: readonly Point2D[];
+  readonly holes: readonly (readonly Point2D[])[];
+  readonly thickness: number;
+}
 
 export abstract class EditorCreation extends EditorGestures {
   // -------------------------------------------------------------------------
@@ -63,6 +59,11 @@ export abstract class EditorCreation extends EditorGestures {
   // El muro se crea con snap a nodo (primero) o angular respecto al inicio.
 
   drawBegin(screenX: number, screenY: number): void {
+    if (this.shapeDragActive) {
+      const { point } = this.snapDrawPoint(screenX, screenY, undefined);
+      this.patch({ shapeDraft: { mode: this.state.tool === 'void' ? 'void' : 'floor', points: [point], cursor: point } });
+      return;
+    }
     // No se bloquea con `busy`: trazar el muro siguiente mientras se guarda el
     // anterior es el ritmo normal de campo; perder ese trazo sería peor.
     if (this.state.tool !== 'wall') return;
@@ -75,6 +76,12 @@ export abstract class EditorCreation extends EditorGestures {
   }
 
   drawMove(screenX: number, screenY: number): void {
+    const shape = this.state.shapeDraft;
+    if (shape && this.shapeDragActive) {
+      const { point } = this.snapDrawPoint(screenX, screenY, this.shapeMethodActive === 'rect' ? undefined : shape.points[0]);
+      this.patch({ shapeDraft: { ...shape, cursor: point } });
+      return;
+    }
     const draft = this.state.wallDraft;
     if (!draft || this.state.tool !== 'wall') return;
     const { point, snappedToNode } = this.snapDrawPoint(screenX, screenY, draft.start ?? undefined);
@@ -82,6 +89,14 @@ export abstract class EditorCreation extends EditorGestures {
   }
 
   async drawEnd(screenX: number, screenY: number): Promise<void> {
+    if (this.shapeDragActive) {
+      this.drawMove(screenX, screenY);
+      const poly = this.shapeDraftPolygon;
+      const mode = this.state.shapeDraft?.mode ?? 'floor';
+      this.patch({ shapeDraft: null });
+      if (poly && netFloorArea(poly) >= 0.01) await this.commitShape(mode, poly);
+      return;
+    }
     if (this.state.tool !== 'wall') return;
     this.drawMove(screenX, screenY);
     const draft = this.state.wallDraft;
@@ -98,6 +113,7 @@ export abstract class EditorCreation extends EditorGestures {
 
   /** El gesto se abandonó (entró un segundo dedo, o el sistema lo canceló). */
   drawCancel(): void {
+    if (this.shapeDragActive && this.state.shapeDraft) this.patch({ shapeDraft: null });
     const draft = this.state.wallDraft;
     if (!draft) return;
     // En punto a punto se conserva el inicio ya fijado: cancelar un gesto no
@@ -213,14 +229,15 @@ export abstract class EditorCreation extends EditorGestures {
     let height = this.defaults.wallHeight;
     let level: string | undefined;
     if (vertical) {
-      const profile = resolveWallProfile(vertical, this.levelElevations);
+      const len = Math.hypot(end.x - start.x, end.y - start.y);
+      const profile = resolveWallProfile(vertical, this.levelElevations, len);
       const problem = profileProblem(profile);
       if (problem) {
         this.notify('error', `${problem} Ajusta la base y el tope en el selector del muro.`);
         return;
       }
       height = meters(profileHeight(profile));
-      level = hostLevelOf(vertical, this.levelElevations);
+      level = hostLevelOf(vertical, this.levelElevations, len);
     }
     this.patch({ busy: true });
     try {
@@ -328,7 +345,9 @@ export abstract class EditorCreation extends EditorGestures {
       return elevations.flatMap((e) =>
         e.openings.filter((o) => o.type === 'opening').map((o) => ({ wallId: e.wallId, xOffset: o.xOffset, width: o.width })),
       );
-    } catch {
+    } catch (err) {
+      // Los vanos genéricos son un añadido: sin ellos la planta se dibuja igual.
+      diagnostics.warn('editor', 'No se pudieron leer los vanos genéricos', err);
       return [];
     }
   }
@@ -369,15 +388,19 @@ export abstract class EditorCreation extends EditorGestures {
    * Suelos a dibujar: los del alcance cuyo recinto está cerrado, con el
    * contorno NETO de ese recinto (el suelo no tiene contorno propio).
    */
-  get floorViews(): { id: string; zoneId: string; polygon: readonly Point2D[]; thickness: number }[] {
-    const out: { id: string; zoneId: string; polygon: readonly Point2D[]; thickness: number }[] = [];
+  get floorViews(): FloorView[] {
+    const out: FloorView[] = [];
     for (const o of this.scopedObjects) {
       if (!(o instanceof Floor)) continue;
+      if (o.outline && o.outline.length >= 3 && !floorZoneId(o)) {
+        out.push({ id: o.id as string, zoneId: null, polygon: o.outline, holes: o.holes ?? [], thickness: (o.thickness as number | undefined) ?? 0 });
+        continue;
+      }
       const zoneId = floorZoneId(o);
       const room = zoneId ? this.state.rooms.find((r) => r.id === zoneId) : undefined;
       const polygon = room?.netPolygon?.length ? room.netPolygon : room?.polygon;
       if (!zoneId || !polygon || polygon.length < 3) continue;
-      out.push({ id: o.id as string, zoneId, polygon, thickness: (o.thickness as number | undefined) ?? 0 });
+      out.push({ id: o.id as string, zoneId, polygon, holes: o.holes ?? [], thickness: (o.thickness as number | undefined) ?? 0 });
     }
     return out;
   }
@@ -452,6 +475,120 @@ export abstract class EditorCreation extends EditorGestures {
     this.patch({ measureTargetId: wallId(host.id as string), selectedId: host.id });
   }
 
+  // --- Suelos libres y vacíos (formas) -----------------------------------
+  //
+  // Polígono: cada toque fija un vértice (con el enganche del muro) y tocar el
+  // primero, o «Cerrar», lo termina. Rectángulo y círculo: un arrastre de una
+  // esquina a la opuesta, o del centro al borde. Un vacío se agrega al suelo
+  // (libre o de recinto) que contiene su centro.
+
+  /** Herramienta de forma activa: suelo libre o vacío, con su método. */
+  get shapeMethodActive(): ShapeMethod | null {
+    const { tool, creation } = this.state;
+    if (tool === 'void') return creation.void;
+    if (tool === 'floor' && creation.floor !== 'zone') return creation.floor;
+    return null;
+  }
+
+  /** Rectángulo y círculo se trazan arrastrando (la vista no debe panear). */
+  get shapeDragActive(): boolean {
+    const m = this.shapeMethodActive;
+    return m === 'rect' || m === 'circle';
+  }
+
+  /** Polígono que resultaría de la forma en trazado (para dibujarla y para crearla). */
+  get shapeDraftPolygon(): Point2D[] | null {
+    const d = this.state.shapeDraft;
+    const m = this.shapeMethodActive;
+    if (!d || !m || d.points.length === 0) return null;
+    if (m === 'polygon') return d.cursor ? [...d.points, d.cursor] : [...d.points];
+    if (!d.cursor) return null;
+    if (m === 'rect') return rectPolygon(d.points[0], d.cursor);
+    const r = Math.hypot(d.cursor.x - d.points[0].x, d.cursor.y - d.points[0].y);
+    return r > 0.01 ? circlePolygon(d.points[0], r) : null;
+  }
+
+  protected async shapeTap(screenX: number, screenY: number, tol: Meters): Promise<void> {
+    const m = this.shapeMethodActive;
+    if (!m) return;
+    if (m !== 'polygon') {
+      this.notify('info', m === 'rect' ? 'Arrastra de una esquina a la opuesta.' : 'Arrastra del centro al borde.');
+      return;
+    }
+    const mode = this.state.tool === 'void' ? 'void' : 'floor';
+    const d = this.state.shapeDraft;
+    const pts = d?.points ?? [];
+    const { point } = this.snapDrawPoint(screenX, screenY, pts[pts.length - 1]);
+    if (pts.length >= 3 && Math.hypot(point.x - pts[0].x, point.y - pts[0].y) <= (tol as number)) {
+      await this.closeShape();
+      return;
+    }
+    this.patch({ shapeDraft: { mode, points: [...pts, point], cursor: null } });
+  }
+
+  /** Termina el polígono en trazado (botón «Cerrar» o tocar el primer vértice). */
+  async closeShape(): Promise<void> {
+    const d = this.state.shapeDraft;
+    if (!d || d.points.length < 3) return;
+    this.patch({ shapeDraft: null });
+    await this.commitShape(d.mode, [...d.points]);
+  }
+
+  undoShapePoint(): void {
+    const d = this.state.shapeDraft;
+    if (!d) return;
+    this.patch({ shapeDraft: d.points.length > 1 ? { ...d, points: d.points.slice(0, -1) } : null });
+  }
+
+  /** Suelo (libre o de recinto) que contiene el punto, para recibir un vacío. */
+  floorAtPoint(p: Point2D): Floor | null {
+    for (const o of this.scopedObjects) {
+      if (!(o instanceof Floor)) continue;
+      const poly = o.outline?.length ? o.outline : this.floorViews.find((f) => f.id === (o.id as string))?.polygon;
+      if (poly && poly.length >= 3 && isPointInPolygon(p, poly)) return o;
+    }
+    return null;
+  }
+
+  protected async commitShape(mode: 'floor' | 'void', poly: Point2D[]): Promise<void> {
+    if (netFloorArea(poly) < 0.01) {
+      this.notify('info', 'La forma no tiene área.');
+      return;
+    }
+    this.patch({ busy: true });
+    try {
+      if (mode === 'floor') {
+        const { floor } = await this.services.useCases.createFloor.execute({
+          roomId: this.roomId,
+          outline: poly,
+          thickness: this.defaults.floorThickness,
+          properties: this.scopeProps(),
+        });
+        await this.reload();
+        this.patch({ selectedId: floor.id });
+        this.notify('success', `Suelo libre de ${netFloorArea(poly).toFixed(2)} m².`);
+        return;
+      }
+      const c = poly.reduce((a, q) => ({ x: a.x + q.x / poly.length, y: a.y + q.y / poly.length }), { x: 0, y: 0 });
+      const host = this.floorAtPoint(c);
+      if (!host) {
+        this.notify('info', 'Dibuja el vacío dentro de un suelo (de recinto o libre).');
+        return;
+      }
+      await this.services.useCases.updateObjectProperty.execute({
+        objectId: host.id,
+        property: 'holes',
+        newValue: [...(host.holes ?? []), poly],
+      });
+      await this.reload();
+      this.notify('success', `Vacío de ${netFloorArea(poly).toFixed(2)} m² en el suelo.`);
+    } catch (err) {
+      this.fail(err, mode === 'floor' ? 'No se pudo crear el suelo.' : 'No se pudo crear el vacío.');
+    } finally {
+      this.patch({ busy: false });
+    }
+  }
+
   // -------------------------------------------------------------------------
   // Acciones sobre la selección
   // -------------------------------------------------------------------------
@@ -477,6 +614,119 @@ export abstract class EditorCreation extends EditorGestures {
       if (result.deletedCount > 1) this.notify('info', `Se eliminaron también ${result.deletedCount - 1} vano(s) del muro.`);
     } catch (err) {
       this.fail(err, 'No se pudo eliminar el objeto.');
+    } finally {
+      this.patch({ busy: false });
+    }
+  }
+
+  /**
+   * Parte el muro seleccionado a `distance` m de su arranque (H-74): el primer
+   * tramo sigue seleccionado y el segundo es un muro nuevo con los vanos que
+   * caen en él. Devuelve `false` si no se pudo.
+   */
+  async splitSelectedWall(distance: Meters): Promise<boolean> {
+    const sel = this.selected;
+    return sel instanceof Wall ? this.splitWall(sel, distance) : false;
+  }
+
+  /**
+   * Herramienta Dividir muro: parte el muro bajo el dedo donde se toca. Se
+   * engancha a los cruces y encuentros en T con otros muros y a la mitad.
+   */
+  protected async splitTap(world: Point2D, tol: Meters): Promise<void> {
+    const wall = this.nearestWall(world, tol);
+    if (!wall) {
+      this.notify('info', 'Toca sobre el muro que quieres dividir.');
+      return;
+    }
+    if (!wall.isStraight) {
+      this.notify('info', 'Solo se pueden dividir muros rectos.');
+      return;
+    }
+    const along = this.projectOntoWall(world, wall);
+    const others = this.walls.filter((w) => w.id !== wall.id).map((w) => ({ start: w.startPoint, end: w.endPoint }));
+    const snaps = splitSnapCandidates(wall.startPoint, wall.endPoint, others);
+    const near = snaps.reduce<number | null>((b, d) => (Math.abs(d - along) <= Math.max(tol as number, 0.15) && (b === null || Math.abs(d - along) < Math.abs(b - along)) ? d : b), null);
+    const distance = near ?? Math.round(along * 100) / 100;
+    if (await this.splitWall(wall, meters(distance))) {
+      this.notify('success', `Muro dividido a ${distance.toFixed(2)} m de su inicio${near !== null ? ' (encuentro con otro muro)' : ''}.`);
+    }
+  }
+
+  /**
+   * Muro colineal que comparte un extremo con `wall` y su mismo espesor (lo
+   * que «Unir» junta con él), o null. Con dos candidatos, el del extremo final.
+   */
+  mergeCandidate(wall: Wall): Wall | null {
+    if (!wall.isStraight) return null;
+    const near = (p: Point2D, q: Point2D) => Math.hypot(p.x - q.x, p.y - q.y) <= 2e-3;
+    const dir = Math.atan2(wall.endPoint.y - wall.startPoint.y, wall.endPoint.x - wall.startPoint.x);
+    const parallel = (w: Wall) => {
+      let d = Math.abs(Math.atan2(w.endPoint.y - w.startPoint.y, w.endPoint.x - w.startPoint.x) - dir) % Math.PI;
+      if (d > Math.PI / 2) d = Math.PI - d;
+      return d < 0.01;
+    };
+    const candidates = this.walls.filter(
+      (w) =>
+        w.id !== wall.id &&
+        w.isStraight &&
+        Math.abs((w.thickness as number) - (wall.thickness as number)) < 1e-6 &&
+        parallel(w) &&
+        [w.startPoint, w.endPoint].some((p) => near(p, wall.startPoint) || near(p, wall.endPoint)),
+    );
+    // Un tercer muro en el nudo (T) no impide unir: la T sigue siendo T.
+    return candidates.find((w) => near(w.startPoint, wall.endPoint) || near(w.endPoint, wall.endPoint)) ?? candidates[0] ?? null;
+  }
+
+  /** Une el muro seleccionado con su tramo colineal (inverso de partir): un paso de deshacer. */
+  async mergeSelectedWall(): Promise<boolean> {
+    const sel = this.selected;
+    if (!(sel instanceof Wall)) return false;
+    const other = this.mergeCandidate(sel);
+    if (!other) {
+      this.notify('info', 'Este muro no tiene un tramo alineado con el que unirse.');
+      return false;
+    }
+    this.patch({ busy: true });
+    try {
+      const r = await this.services.useCases.mergeWalls.execute({
+        keepId: sel.id,
+        removeId: other.id,
+        keepVertical: this.wallVertical(sel),
+        removeVertical: this.wallVertical(other),
+        levels: this.levelElevations,
+      });
+      await this.reload();
+      this.notify(
+        r.mismatch ? 'info' : 'success',
+        r.mismatch
+          ? `Muros unidos (${r.length.toFixed(2)} m). Tenían alturas distintas en el punto común: quedó la del muro seleccionado; revísalo en el alzado.`
+          : `Muros unidos: ${r.length.toFixed(2)} m.`,
+      );
+      return true;
+    } catch (err) {
+      this.fail(err, 'No se pudieron unir los muros.');
+      return false;
+    } finally {
+      this.patch({ busy: false });
+    }
+  }
+
+  protected async splitWall(sel: Wall, distance: Meters): Promise<boolean> {
+    this.patch({ busy: true });
+    try {
+      const r = await this.services.useCases.splitWall.execute({
+        wallId: sel.id,
+        distance: distance as number,
+        vertical: this.wallVertical(sel),
+        levels: this.levelElevations,
+      });
+      await this.reload();
+      if (r.clamped > 0) this.notify('info', `${r.clamped} vano(s) quedaban sobre el corte y se arrimaron dentro de su tramo.`);
+      return true;
+    } catch (err) {
+      this.fail(err, 'No se pudo partir el muro.');
+      return false;
     } finally {
       this.patch({ busy: false });
     }
@@ -527,7 +777,7 @@ export abstract class EditorCreation extends EditorGestures {
     let height: number;
     if (sel instanceof Wall) {
       if (!('start' in vertical)) return false;
-      const profile = resolveWallProfile(vertical, this.levelElevations);
+      const profile = resolveWallProfile(vertical, this.levelElevations, sel.length as number);
       const problem = profileProblem(profile);
       if (problem) {
         this.notify('error', problem);

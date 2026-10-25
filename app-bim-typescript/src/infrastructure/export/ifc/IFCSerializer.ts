@@ -14,13 +14,14 @@
 // entidad se explica en step-writer.ts.
 // =============================================================================
 
+import type { Point2D } from '../../../domain/geometry/types';
 import { Door } from '../../../domain/objects/door';
 import { Window } from '../../../domain/objects/window';
 import { RevitObjectBase } from '../../../domain/objects/base';
 import { LEVEL_PROP, PHASE_PROP } from '../../../domain/objects/marker';
-import { floorZoneId } from '../../../domain/objects/floor';
+import { floorZoneId, isFreeFloor, netFloorArea, polygonArea } from '../../../domain/objects/floor';
 import { columnForExport, toLocal, wallForExport } from '../../../domain/geometry/handedness';
-import { LevelElevations, VerticalExtent, WallProfile, columnVerticalOf, isRectangularProfile, profileBottom, profileTop, resolveExtent, resolveWallProfile, revitConstraints, wallVerticalOf } from '../../../domain/objects/vertical';
+import { LevelElevations, VerticalExtent, WallProfile, columnVerticalOf, isRectangularProfile, profileArea, profileBottom, profileOutline, profileTop, resolveExtent, resolveWallProfile, revitConstraints, wallVerticalOf } from '../../../domain/objects/vertical';
 import { SerializeInput, GateValidationResult, IfcLevelInput } from './types';
 import { IfcValue, StepWriter, ref, stepReal, stepString } from './step-writer';
 import { stableGuid } from './guid-generator';
@@ -41,10 +42,13 @@ interface SerializeResult {
 /** Contenido de un espacio (lo que va dentro del proyecto). */
 export type SpaceContent = Pick<
   SerializeInput,
-  'room' | 'walls' | 'doors' | 'windows' | 'columns' | 'floor' | 'zones' | 'zoneFloors' | 'members' | 'openingSills'
+  'room' | 'walls' | 'doors' | 'windows' | 'columns' | 'floor' | 'zones' | 'zoneFloors' | 'members' | 'openingSills' | 'bareOpenings'
 > & {
   /** Ubicación del espacio en el proyecto (amarre): x, y (m, Y arriba) y giro (rad). */
   readonly placement?: { readonly x: number; readonly y: number; readonly rotation: number };
+  /** Niveles y fases del espacio (son de cada espacio); sin niveles, un único «Nivel 0». */
+  readonly levels?: readonly IfcLevelInput[];
+  readonly phaseNames?: ReadonlyMap<string, string>;
 };
 
 /** El proyecto: datos comunes (niveles, fases, georreferencia) y sus espacios. */
@@ -113,9 +117,14 @@ export class IFCSerializer {
     // ------------------------------------------------------------------
     // 3. Contexto, proyecto, sitio, edificio, pisos
     // ------------------------------------------------------------------
-    const levels = [...(input.levels?.length ? input.levels : [DEFAULT_LEVEL])].sort((a, b) => a.elevation - b.elevation);
-    const baseLevel = levels.find((l) => l.isBase) ?? levels.find((l) => l.elevation === 0) ?? levels[0];
-    const elevations: LevelElevations = new Map(levels.map((l) => [l.id, l.elevation] as [string, number]));
+    // Los niveles son de cada espacio: el IFC lleva un piso por COTA distinta, y cada
+    // espacio cuelga sus elementos del piso de la cota de su nivel.
+    const levelsOf = (sp: SpaceContent) =>
+      [...(sp.levels?.length ? sp.levels : [DEFAULT_LEVEL])].sort((a, b) => a.elevation - b.elevation);
+    const baseOf = (lv: readonly IfcLevelInput[]) => lv.find((l) => l.isBase) ?? lv.find((l) => l.elevation === 0) ?? lv[0];
+    let levels = levelsOf(valid[0]);
+    let baseLevel = baseOf(levels);
+    let elevations: LevelElevations = new Map();
 
     const context = w.writeContext(input.author ?? '');
     const units = w.writeUnits();
@@ -135,16 +144,22 @@ export class IFCSerializer {
       `IFCBUILDING('${stableGuid(`building:${input.projectKey ?? projectName}`)}',${oh},${stepString(input.buildingName ?? 'Edificio')},$,$,${ref(buildingPlacement)},$,$,.ELEMENT.,$,$,$)`,
     );
 
-    const storeys = new Map<string, Storey>();
-    for (const level of levels) {
+    const storeys = new Map<number, Storey>();
+    const guidSources = new Set<string>();
+    for (const level of valid.flatMap(levelsOf).sort((a, b) => a.elevation - b.elevation)) {
+      if (storeys.has(level.elevation)) continue;
+      // El GUID sale del id del nivel; dos espacios pueden compartir id con cotas distintas.
+      let source = `storey:${level.id}`;
+      if (guidSources.has(source)) source = `storey:${level.id}@${level.elevation}`;
+      guidSources.add(source);
       const placement = w.placementAt(buildingPlacement, 0, 0, level.elevation);
       const entity = w.add(
-        `IFCBUILDINGSTOREY('${stableGuid(`storey:${level.id}`)}',${oh},${stepString(level.name)},$,$,${ref(placement)},$,$,.ELEMENT.,${stepReal(level.elevation)})`,
+        `IFCBUILDINGSTOREY('${stableGuid(source)}',${oh},${stepString(level.name)},$,$,${ref(placement)},$,$,.ELEMENT.,${stepReal(level.elevation)})`,
       );
-      storeys.set(level.id, { level, entity, placement, elements: [] });
+      storeys.set(level.elevation, { level, entity, placement, elements: [] });
     }
-    const baseStorey = storeys.get(baseLevel.id)!;
-    const storeyOf = (levelId: string) => storeys.get(levelId) ?? baseStorey;
+    let baseStorey = storeys.get(baseLevel.elevation)!;
+    const storeyOf = (levelId: string) => storeys.get(elevations.get(levelId) ?? NaN) ?? baseStorey;
     products += 3 + storeys.size;
 
     w.aggregates(`project:${project}`, project, [site]);
@@ -154,11 +169,17 @@ export class IFCSerializer {
     const levelName = (id: string | null) => (id === null ? 'Unconnected' : levels.find((l) => l.id === id)?.name ?? baseLevel.name);
     const phaseName = (o: RevitObjectBase) => {
       const id = o.properties?.[PHASE_PROP];
-      return typeof id === 'string' ? input.phaseNames?.get(id) ?? '' : '';
+      return typeof id === 'string' ? phaseNames?.get(id) ?? '' : '';
     };
+    let phaseNames: ReadonlyMap<string, string> | undefined;
 
     let spacesWritten = 0;
     for (const sp of valid) {
+      levels = levelsOf(sp);
+      baseLevel = baseOf(levels);
+      elevations = new Map(levels.map((l) => [l.id, l.elevation] as [string, number]));
+      baseStorey = storeys.get(baseLevel.elevation)!;
+      phaseNames = sp.phaseNames;
       // IFC usa Y hacia arriba (norte); el modelo, Y hacia abajo (ver handedness.ts).
       const walls = sp.walls.filter((wl) => !wl.is_deleted).map(wallForExport);
       const doors = sp.doors.filter((d) => !d.is_deleted);
@@ -224,21 +245,30 @@ export class IFCSerializer {
       let zoneSlabs = 0;
       for (const f of sp.zoneFloors ?? []) {
         if (f.is_deleted) continue;
+        // Suelo de recinto (contorno neto del recinto) o libre (andén, patio: contorno propio).
         const z = zonesById.get(floorZoneId(f) ?? '');
-        if (!z) continue;
-        const storey = storeyOf(z.levelId);
+        const free = !z && isFreeFloor(f);
+        if (!z && !free) continue;
+        const outline: readonly Point2D[] = z ? z.netPolygon : (f.outline as Point2D[]);
+        const holes = f.holes ?? [];
+        const ownLevel = f.properties[LEVEL_PROP];
+        // El nivel propio del suelo manda (un piso a +0,25 en un recinto detectado en la base); si no, el del recinto.
+        const storey = storeyOf(typeof ownLevel === 'string' ? ownLevel : z ? z.levelId : baseLevel.id);
         const thickness = (f.thickness as number) || 0.1;
-        const body = w.bodyShape([w.extrusion(w.polygonProfile(z.netPolygon.map(toLocal)), w.origin3Axis, thickness)]);
+        const profile = w.polygonProfileWithVoids(outline.map(toLocal), holes.map((h) => h.map(toLocal)));
+        const body = w.bodyShape([w.extrusion(profile, w.origin3Axis, thickness)]);
         const placement = w.placementAt(P(storey), 0, 0, -thickness);
-        const name = (f.properties.name as string | undefined) ?? `Suelo ${z.code}`;
+        const name = (f.properties.name as string | undefined) ?? (z ? `Suelo ${z.code}` : 'Suelo libre');
+        const netArea = z ? Math.max(0, z.netArea - holes.reduce((a, h) => a + polygonArea(h), 0)) : netFloorArea(outline, holes);
+        const perimeter = outline.reduce((a, p, i) => a + Math.hypot(outline[(i + 1) % outline.length].x - p.x, outline[(i + 1) % outline.length].y - p.y), 0);
         const slab = w.add(
           `IFCSLAB('${stableGuid(f.id as string)}',${oh},${stepString(name)},$,$,${ref(placement)},${ref(w.productShape([body]))},$,.FLOOR.)`,
         );
         storey.elements.push(slab);
         if (f.material) w.associateMaterial(f.id as string, [slab], w.materialLayerSet(f.material, thickness));
         w.quantities(f.id as string, 'Qto_SlabBaseQuantities', slab, {
-          lengths: [['Depth', thickness], ['Perimeter', z.perimeter]],
-          areas: [['NetArea', z.netArea]],
+          lengths: [['Depth', thickness], ['Perimeter', z ? z.perimeter : perimeter]],
+          areas: [['NetArea', netArea]],
         });
         zoneSlabs++;
         products++;
@@ -281,8 +311,8 @@ export class IFCSerializer {
         if (length < 1e-6) return; // degenerado: no hay dirección
 
         const vertical = wallVerticalOf(wall, baseLevel.id, LEVEL_PROP);
-        const profile = resolveWallProfile(vertical, elevations);
-        const rc = revitConstraints(vertical, elevations);
+        const profile = resolveWallProfile(vertical, elevations, length);
+        const rc = revitConstraints(vertical, elevations, length);
         const storey = storeyOf(rc.baseLevelId);
         const bottom = profileBottom(profile);
         const thickness = wall.thickness as number;
@@ -290,9 +320,11 @@ export class IFCSerializer {
         const name = (wall.properties.name as string | undefined) ?? `Muro ${i + 1}`;
         const material = wall.material ?? (wall.isStructural ? 'Muro portante' : 'Tabique');
         // Huecos de puertas y ventanas de ESTE muro: el área lateral neta los descuenta.
-        const openingArea = [...doors, ...windows]
-          .filter((o) => (o.parentWallId as string) === (wall.id as string))
-          .reduce((a, o) => a + (o.width as number) * (o.height as number), 0);
+        const openingArea =
+          [...doors, ...windows]
+            .filter((o) => (o.parentWallId as string) === (wall.id as string))
+            .reduce((a, o) => a + (o.width as number) * (o.height as number), 0) +
+          (sp.bareOpenings ?? []).filter((o) => o.wallId === (wall.id as string)).reduce((a, o) => a + o.width * o.height, 0);
 
         const placement = w.placementAt(
           P(storey),
@@ -309,12 +341,7 @@ export class IFCSerializer {
           body = w.bodyShape([w.extrusion(plan, w.origin3Axis, profileTop(profile) - bottom)]);
         } else {
           // Alzado (trapecio) en el plano vertical del muro, extruido a través del espesor.
-          const elev = w.polygonProfile([
-            { x: 0, y: profile.start.base - bottom },
-            { x: length, y: profile.end.base - bottom },
-            { x: length, y: profile.end.top - bottom },
-            { x: 0, y: profile.start.top - bottom },
-          ]);
+          const elev = w.polygonProfile(profileOutline(profile, length).map((q) => ({ x: q.x, y: q.z - bottom })));
           body = w.bodyShape([w.extrusion(elev, w.wallPlaneAxis(0, thickness / 2, 0), thickness)]);
         }
         const shape = w.productShape([body, w.axisShape(length)]);
@@ -345,7 +372,7 @@ export class IFCSerializer {
           ...endProps('End', vertical.end, profile.end, levelName, (id) => elevations.has(id)),
           ['Phase', { label: phaseName(wall) }],
         ]);
-        const gross = (length * (profile.start.top - profile.start.base + (profile.end.top - profile.end.base))) / 2;
+        const gross = profileArea(profile, length);
         w.quantities(wall.id as string, 'Qto_WallBaseQuantities', entity, {
           lengths: [
             ['Length', length],
@@ -368,18 +395,16 @@ export class IFCSerializer {
       // ------------------------------------------------------------------
       // 4c. Puertas y ventanas (vano + relleno), relativos a su muro
       // ------------------------------------------------------------------
-      const writeFilling = (vano: Door | Window, kind: 'door' | 'window') => {
-        const host = hosts.get(vano.parentWallId as string);
-        if (!host) return;
-        const width = vano.width as number;
-        const height = vano.height as number;
-        const along = Math.max(0, Math.min(vano.offsetAlongWall as number, host.length - Math.min(width, host.length)));
+      // El hueco que recorta el muro; lo comparten puertas, ventanas y vanos sin carpintería.
+      const cutOpening = (id: string, wallId: string, offset: number, width: number, height: number, sill: number) => {
+        const host = hosts.get(wallId);
+        if (!host) return null;
+        const along = Math.max(0, Math.min(offset, host.length - Math.min(width, host.length)));
         // La base del muro puede subir o bajar a lo largo del eje: el antepecho
         // se mide desde la base en el centro del vano.
         const t = host.length > 0 ? (along + width / 2) / host.length : 0;
         const bottom = profileBottom(host.profile);
         const floorAt = host.profile.start.base + (host.profile.end.base - host.profile.start.base) * t - bottom;
-        const sill = sp.openingSills?.get(vano.id as string) ?? (kind === 'door' ? 0 : 0.9);
         const z = floorAt + sill;
         const clearance = 0.05;
 
@@ -389,9 +414,19 @@ export class IFCSerializer {
           w.extrusion(cut, w.wallPlaneAxis(0, host.thickness / 2 + clearance, 0), host.thickness + 2 * clearance),
         ]);
         const opening = w.add(
-          `IFCOPENINGELEMENT('${stableGuid(`opening:${vano.id}`)}',${oh},'Vano',$,$,${ref(openingPlacement)},${ref(w.productShape([openingBody]))},$,.OPENING.)`,
+          `IFCOPENINGELEMENT('${stableGuid(`opening:${id}`)}',${oh},'Vano',$,$,${ref(openingPlacement)},${ref(w.productShape([openingBody]))},$,.OPENING.)`,
         );
-        w.add(`IFCRELVOIDSELEMENT('${stableGuid(`voids:${vano.id}`)}',${oh},$,$,${ref(host.entity)},${ref(opening)})`);
+        w.add(`IFCRELVOIDSELEMENT('${stableGuid(`voids:${id}`)}',${oh},$,$,${ref(host.entity)},${ref(opening)})`);
+        return { host, along, opening, openingPlacement };
+      };
+
+      const writeFilling = (vano: Door | Window, kind: 'door' | 'window') => {
+        const width = vano.width as number;
+        const height = vano.height as number;
+        const sill = sp.openingSills?.get(vano.id as string) ?? (kind === 'door' ? 0 : 0.9);
+        const cutResult = cutOpening(vano.id as string, vano.parentWallId as string, vano.offsetAlongWall as number, width, height, sill);
+        if (!cutResult) return;
+        const { host, along, opening, openingPlacement } = cutResult;
 
         // El relleno: un panel delgado en el plano del muro, para que se vea.
         const panelDepth = Math.min(0.05, host.thickness);
@@ -432,6 +467,10 @@ export class IFCSerializer {
       };
       for (const d of doors) writeFilling(d, 'door');
       for (const win of windows) writeFilling(win, 'window');
+      // Vanos sin carpintería: solo el hueco, sin relleno (H-70).
+      for (const o of sp.bareOpenings ?? []) {
+        if (cutOpening(o.id, o.wallId, o.xOffset, o.width, o.height, o.sillHeight)) products += 1;
+      }
 
       // ------------------------------------------------------------------
       // 4d. Columnas

@@ -16,6 +16,7 @@
 //   8. Archivo .ifc escribible (error I/O) — validado externamente
 // =============================================================================
 
+import { segmentsIntersect } from '../../../domain/geometry/polygon-validator';
 import { Room } from '../../../domain/objects/room';
 import { Wall } from '../../../domain/objects/wall';
 import { Door } from '../../../domain/objects/door';
@@ -204,32 +205,4 @@ function isPolygonSelfIntersecting(vertices: Point2D[]): boolean {
   }
 
   return false;
-}
-
-/**
- * Determina si dos segmentos (p1→p2) y (p3→p4) se cruzan propiamente.
- * No cuenta intersecciones en los extremos (T-joints, esquinas).
- */
-function segmentsIntersect(
-  p1: Point2D,
-  p2: Point2D,
-  p3: Point2D,
-  p4: Point2D
-): boolean {
-  const d1 = cross(p3, p4, p1);
-  const d2 = cross(p3, p4, p2);
-  const d3 = cross(p1, p2, p3);
-  const d4 = cross(p1, p2, p4);
-
-  if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
-      ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) {
-    return true;
-  }
-
-  return false;
-}
-
-/** Producto cruzado 2D: (b-a) × (c-a). */
-function cross(a: Point2D, b: Point2D, c: Point2D): number {
-  return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
 }

@@ -250,6 +250,21 @@ describe('IFCSerializer — Revit', () => {
     expect(lintIfc(r.content)).toEqual([]);
   });
 
+  it('un muro con estación (culata con cumbrera) exporta el pentágono de su alzado', async () => {
+    const muro = extent({ baseLevelId: 'n0', topLevelId: 'n1', unconnectedHeight: 3 });
+    const v: WallVertical = { start: muro, end: muro, stations: [{ at: 2.5, ext: extent({ baseLevelId: 'n0', topLevelId: 'n2', unconnectedHeight: 6 }) }] };
+    const r = await serialize({ walls: [wall('w1', [0, 0], [5, 0], v)] });
+    const ents = parseStep(r.content);
+    const pentagon = ofType(r.content, 'IFCARBITRARYCLOSEDPROFILEDEF').find((p) => {
+      const poly = ents.get(refsIn(p.args[2])[0])!;
+      const pts = refsIn(poly.args[0]).map((id) => ents.get(id)!.args[0]);
+      return pts.join(' ') === '(0.,0.) (2.5,0.) (5.,0.) (5.,3.) (2.5,6.) (0.,3.) (0.,0.)';
+    });
+    expect(pentagon).toBeDefined();
+    expect(constraintsOf(r.content, ofType(r.content, 'IFCWALL')[0].id).TopConstraint).toBe("IFCLABEL('Nivel 2')");
+    expect(lintIfc(r.content)).toEqual([]);
+  });
+
   it('el vano se coloca relativo a su muro, al antepecho indicado', async () => {
     const win = new Window({
       id: revitObjectId('v1'),
@@ -269,6 +284,22 @@ describe('IFCSerializer — Revit', () => {
     expect(wallEnt).toBeDefined();
     const axis = ents.get(refsIn(placement.args[1])[0])!;
     expect(ents.get(refsIn(axis.args[0])[0])!.args[0]).toBe('(1.5,0.,0.95)');
+  });
+
+  it('un vano sin carpintería recorta su muro y no lleva relleno (H-70)', async () => {
+    const r = await serialize({
+      bareOpenings: [{ id: 'o1', wallId: 'w2', xOffset: 1, width: 0.85, sillHeight: 0, height: 2.1 }],
+    });
+    const ents = parseStep(r.content);
+    const [opening] = ofType(r.content, 'IFCOPENINGELEMENT');
+    expect(opening).toBeDefined();
+    const voids = ofType(r.content, 'IFCRELVOIDSELEMENT')[0];
+    const host = ents.get(refsIn(voids.args[4])[0])!;
+    expect(host.args[2]).toBe("'Muro 2'");
+    expect(refsIn(voids.args[5])).toEqual([opening.id]);
+    expect(ofType(r.content, 'IFCRELFILLSELEMENT')).toHaveLength(0);
+    expect(ofType(r.content, 'IFCDOOR')).toHaveLength(0);
+    expect(lintIfc(r.content)).toEqual([]);
   });
 
   it('los GUIDs de los elementos son estables entre exportaciones', async () => {
@@ -369,6 +400,56 @@ describe('IFCSerializer — suelos de recinto (F6a)', () => {
     expect(slabs).toHaveLength(1);
     expect(slabs[0].args[0]).toBe(`'${stableGuid('f1')}'`);
     expect(slabs[0].args[2]).toBe("'Suelo R-01'");
+  });
+});
+
+describe('IFCSerializer — suelo con nivel propio', () => {
+  it('un suelo de recinto con nivel propio (piso a otra cota) cuelga de ese piso', async () => {
+    const z = { id: 'za', code: 'R-01', name: 'Aula', levelId: 'n0', netPolygon: [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 3 }, { x: 0, y: 3 }], netArea: 12, grossArea: 12, perimeter: 14 };
+    const f = new Floor({ id: revitObjectId('f2'), roomId: roomId('room-1'), isImplicit: false, thickness: meters(0.1), properties: { zoneId: 'za', levelMarkerId: 'n1' } });
+    const r = await serialize({ zones: [z], zoneFloors: [f] });
+    const ents = parseStep(r.content);
+    const slab = ofType(r.content, 'IFCSLAB')[0];
+    const rel = ofType(r.content, 'IFCRELCONTAINEDINSPATIALSTRUCTURE').find((x) => x.args[4].includes(`#${slab.id}`))!;
+    const storey = ents.get(refsIn(rel.args[5])[0])!;
+    expect(storey.args[2]).toBe("'Nivel 1'");
+    expect(lintIfc(r.content)).toEqual([]);
+  });
+});
+
+describe('IFCSerializer — suelos libres y vacíos', () => {
+  it('un andén (suelo libre) sale como IfcSlab con su contorno; sus vacíos, como huecos del perfil', async () => {
+    const f = new Floor({
+      id: revitObjectId('anden'),
+      roomId: roomId('room-1'),
+      isImplicit: false,
+      thickness: meters(0.1),
+      outline: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 1.5 }, { x: 0, y: 1.5 }],
+      holes: [[{ x: 2, y: 0.5 }, { x: 3, y: 0.5 }, { x: 3, y: 1 }, { x: 2, y: 1 }]],
+      properties: { levelId: 'n1' },
+    });
+    const r = await serialize({ zoneFloors: [f] });
+    expect(lintIfc(r.content)).toEqual([]);
+    const slabs = ofType(r.content, 'IFCSLAB');
+    expect(slabs).toHaveLength(1);
+    expect(slabs[0].args[2]).toBe("'Suelo libre'");
+    expect(ofType(r.content, 'IFCARBITRARYPROFILEDEFWITHVOIDS')).toHaveLength(1);
+    expect(r.content).toMatch(/IFCQUANTITYAREA\('NetArea',\$,\$,14\.5/);
+  });
+
+  it('un espacio de exteriores (sin muros, solo suelos) sale con sus losas y sin IfcSpace (H-86)', async () => {
+    const placa = new Floor({
+      id: revitObjectId('placa'),
+      roomId: roomId('room-1'),
+      isImplicit: false,
+      thickness: meters(0.1),
+      outline: [{ x: 0, y: 0 }, { x: 15, y: 0 }, { x: 15, y: 21 }, { x: 0, y: 21 }],
+    });
+    const open = new Room({ id: revitObjectId('room-1'), roomId: roomId('room-1'), levelId: levelId('level-1'), geometry: [], isOpen: true });
+    const r = await serialize({ room: open, walls: [], zoneFloors: [placa] });
+    expect(lintIfc(r.content)).toEqual([]);
+    expect(ofType(r.content, 'IFCSLAB')).toHaveLength(1);
+    expect(ofType(r.content, 'IFCSPACE')).toHaveLength(0);
   });
 });
 

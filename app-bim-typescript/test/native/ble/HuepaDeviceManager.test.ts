@@ -17,8 +17,6 @@ jest.mock('react-native-ble-plx', () => ({
 import {
   HuepaDeviceManager,
   createHuepaManager,
-  
-  
 } from '../../../src/native/ble/HuepaDeviceManager';
 
 // ---------------------------------------------------------------------------

@@ -56,7 +56,7 @@ export function CameraCaptureView({ capture, onCapture, onClose }: CameraCapture
   if (allowed === false) {
     return (
       <View style={[styles.container, styles.denied]}>
-        <Text style={styles.deniedText}>PolyLive necesita la cámara para tomar fotos de evidencia. Actívala en Ajustes del teléfono → Apps → PolyLive BIM → Permisos.</Text>
+        <Text style={styles.deniedText}>PolyLive necesita la cámara para tomar fotos de evidencia. Actívala en Ajustes del equipo → Apps → PolyLive BIM → Permisos.</Text>
         <TouchableOpacity style={styles.deniedButton} onPress={onClose}>
           <Text style={styles.deniedButtonText}>Volver</Text>
         </TouchableOpacity>

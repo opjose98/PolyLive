@@ -37,6 +37,8 @@ import { FabView } from '../workspace/FabView';
 import { FabCreate } from '../workspace/FabCreate';
 import { CornerTools } from '../workspace/CornerTools';
 import { ElevationDetails } from '../workspace/ElevationDetails';
+import { ConstraintSelector } from '../workspace/ConstraintSelector';
+import { describeExtent, sortLevels } from '../../application/workspace/constraintModel';
 import { BottomSheet, Icon, Tappable, toast } from '../primitives';
 import { elevation as shadow, sizes, spacing } from '../design/tokens';
 import { haptic } from '../design/haptics';
@@ -225,7 +227,7 @@ export function ElevationView(props: ElevationViewProps) {
     }
     const binding = findTool(categoriesFor(workspaceStore.getState().workMode, 'elevation'), activeTool.categoryId, activeTool.toolId)?.tool
       .binding;
-    editor.setTool(binding?.kind === 'elevation' ? binding.opening : 'select');
+    editor.setTool(binding?.kind === 'elevation' ? binding.opening : binding?.kind === 'station' ? 'station' : 'select');
   }, [editor, activeTool?.categoryId, activeTool?.toolId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- Escena ---
@@ -258,9 +260,11 @@ export function ElevationView(props: ElevationViewProps) {
             progressLayers: painting && wallDbId && progress ? progress.faceLayers(wallDbId, st.side) : undefined,
             markups: (reviewing || ws.coordination) && review && faceView ? review.shapesFor(faceView) : undefined,
             annotations: photoPins.length ? [...(draftAnnotations ?? []), ...photoPins] : draftAnnotations,
+            profileHandles: ws.workMode === 'levantamiento' ? editor.profileHandles : undefined,
+            cuts: st.cuts,
           }
         : null,
-    [st, editor, width, height, severity, ws.grid, ws.filters.cotas, palette, visibleTypes, painting, ws.coordination, wallDbId, progress, reviewing, review, faceView, draftAnnotations, photoPins],
+    [st, editor, width, height, severity, ws.grid, ws.filters.cotas, palette, visibleTypes, painting, ws.coordination, wallDbId, progress, reviewing, review, faceView, draftAnnotations, photoPins, ws.workMode],
   );
 
   // Solo Levantamiento edita vanos; Avance y Revisión miran el alzado.
@@ -319,9 +323,32 @@ export function ElevationView(props: ElevationViewProps) {
     [editor, editable],
   );
 
+  // --- Punto del perfil seleccionado: selector de base y tope (el de la planta) ---
+  const point = st.selectedPoint;
+  const pointExt = point ? editor.selectedPointExtent : null;
+  const constraintLevels = useMemo(
+    () => sortLevels(levels.map((m) => ({ id: m.id, name: m.name, value: m.value }))),
+    [levels],
+  );
+  const pointLabel = !point ? '' : point.kind === 'start' ? 'Extremo A' : point.kind === 'end' ? 'Extremo B' : `Punto a ${point.at.toFixed(2)} m`;
+  const pointSelector =
+    point && pointExt && editable && constraintLevels.length > 0 ? (
+      <ConstraintSelector
+        levels={constraintLevels}
+        edit={{ a: pointExt, b: pointExt, linked: true, editing: 'a' }}
+        kind="column"
+        canUnlink={false}
+        caption={point.kind === 'start' ? 'A' : point.kind === 'end' ? 'B' : 'Pto'}
+        endNames={{ a: pointLabel, b: pointLabel }}
+        onChange={(ed, commit) => void editor.setPointExtent(ed.a, commit)}
+      />
+    ) : null;
+
   // --- BPC ---
   const sel = st.elevation?.openings.find((o) => o.id === st.selectedId) ?? null;
-  const selection: SelectionSummary | null = sel
+  const selection: SelectionSummary | null = point && pointExt
+    ? { typeLabel: pointLabel, detail: describeExtent(constraintLevels, pointExt), props: {} }
+    : sel
     ? {
         typeLabel: openingTypeLabel(sel.type),
         detail: `x ${sel.xOffset.toFixed(2)} m`,
@@ -371,8 +398,19 @@ export function ElevationView(props: ElevationViewProps) {
         ...(drafting.state.selectedId && !drafting.tool ? [{ icon: 'draw', label: 'Dibujo', onPress: () => props.onOpenDraftSheet?.() }] : []),
       ]
     : [];
+  const pointActions: BpcAction[] =
+    point && editable
+      ? [
+          ...(point.kind === 'station'
+            ? [{ icon: 'delete-outline', label: 'Quitar punto', onPress: () => void editor.removeSelectedStation() }]
+            : []),
+          { icon: 'check', label: 'Listo', onPress: () => editor.selectPoint(null) },
+        ]
+      : [];
   const actions: BpcAction[] = draftActions.length
     ? draftActions
+    : pointActions.length
+    ? pointActions
     : editable
     ? [{ icon: 'tune-variant', label: sel ? 'Propiedades' : 'Detalles', onPress: () => setSheetOpen(true) }]
     : reviewing && review
@@ -444,7 +482,7 @@ export function ElevationView(props: ElevationViewProps) {
       />
       <LevelChip top={belowBpc} wallName={wallName} />
       <Minimap walls={props.planWalls} activeId={st.wall ? (st.wall.id as string) : ''} top={belowBpc + 28} />
-      <RangeSelectors levels={props.levelHandlers} phases={props.phaseHandlers} only="phases" />
+      <RangeSelectors levels={props.levelHandlers} phases={props.phaseHandlers} only="phases" extra={pointSelector} />
       <FabView top={chromeTop} />
       <AxisGizmo kind="elevation" mirrored={st.side === 'B'} bottom={spacing.xl + sizes.fabCreate + spacing.md} />
       <CornerTools onZoom={onZoom} />

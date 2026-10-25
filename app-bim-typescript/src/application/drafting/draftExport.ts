@@ -17,6 +17,7 @@
 // =============================================================================
 
 import type { Point2D } from '../../domain/geometry/types';
+import { averageOfVertices } from '../../domain/geometry/polygon-utils';
 import { DraftItem, dimensionLine, itemLength, polygonMetrics, segmentLength, trussParts } from '../../domain/drafting/drafting';
 import { DRAFT_DXF_LAYERS, DxfDraftEntity } from '../../infrastructure/export/dxf/DXFSerializer';
 
@@ -102,7 +103,7 @@ export function draftDxfEntities(items: readonly DraftItem[], ctx: DraftDxfConte
       case 'polygon':
         if (i.points.length >= 3) {
           out.push({ kind: 'polyline', layer: L.areas, points: i.points, closed: true });
-          const c = centroidOf(i.points);
+          const c = averageOfVertices(i.points);
           out.push({ kind: 'text', layer: L.areas, at: c, text: `${f2(polygonMetrics(i.points).area)} m2`, height: h(2.5), center: true });
         }
         break;
@@ -126,22 +127,18 @@ export function draftDxfEntities(items: readonly DraftItem[], ctx: DraftDxfConte
         break;
       case 'purlin':
         break; // solo en alzado (sección)
+      case 'section':
+        // Línea de corte a trazos con su nombre en los dos extremos.
+        if (!a || !b) break;
+        out.push({ kind: 'line', layer: L.sections, a, b, dashed: true });
+        for (const p of [a, b]) out.push({ kind: 'text', layer: L.sections, at: p, text: i.text || 'Corte', height: h(2.5), center: true });
+        break;
     }
   }
   return out;
 }
 
 const cm = (m: number) => Math.round(m * 100);
-
-function centroidOf(points: readonly Point2D[]): Point2D {
-  let x = 0;
-  let y = 0;
-  for (const p of points) {
-    x += p.x;
-    y += p.y;
-  }
-  return { x: x / points.length, y: y / points.length };
-}
 
 // ---------------------------------------------------------------------------
 // IFC

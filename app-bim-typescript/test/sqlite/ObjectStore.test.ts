@@ -14,15 +14,12 @@ import {
   Room,
   Measurement,
   AuditPhoto,
-  
   revitObjectId,
   roomId,
   wallId,
   levelId,
   measurementId,
   auditPhotoId,
-  
-  
 } from '../../src/domain/objects';
 import { meters, squareMeters } from '../../src/domain/geometry/types';
 

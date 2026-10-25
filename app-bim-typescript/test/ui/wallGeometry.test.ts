@@ -1,4 +1,4 @@
-import { buildWallOutlines, faceSegments } from '../../src/ui/canvas/wallGeometry';
+import { buildWallOutlines, faceSegments, jointPatches } from '../../src/ui/canvas/wallGeometry';
 
 const T = 0.2;
 const wall = (id: string, ax: number, ay: number, bx: number, by: number, t = T) => ({
@@ -100,5 +100,31 @@ describe('hatchSegments — trama de mampostería', () => {
   it('polígono degenerado o paso inválido: nada', () => {
     expect(hatchSegments([{ x: 0, y: 0 }, { x: 1, y: 1 }], 5)).toEqual([]);
     expect(hatchSegments([{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }], 0)).toEqual([]);
+  });
+});
+
+describe('parches de nudo (triángulos vacíos en encuentros)', () => {
+  it('en una T el parche cierra el triángulo entre los dos tramos y el muro que llega', () => {
+    const walls = [
+      { id: 'a1', start: { x: 0, y: 0 }, end: { x: 2, y: 0 }, thickness: 0.2 },
+      { id: 'a2', start: { x: 2, y: 0 }, end: { x: 4, y: 0 }, thickness: 0.2 },
+      { id: 'b', start: { x: 2, y: 0 }, end: { x: 2, y: 3 }, thickness: 0.2 },
+    ];
+    const patches = jointPatches(walls, buildWallOutlines(walls));
+    expect(patches).toHaveLength(1);
+    const xs = patches[0].polygon.map((p) => Number(p.x.toFixed(3)));
+    const ys = patches[0].polygon.map((p) => Number(p.y.toFixed(3)));
+    expect(Math.min(...xs)).toBeCloseTo(1.9);
+    expect(Math.max(...xs)).toBeCloseTo(2.1);
+    expect(Math.min(...ys)).toBeCloseTo(-0.1);
+    expect(Math.max(...ys)).toBeCloseTo(0.1);
+  });
+
+  it('una esquina en L bien cerrada no necesita parche', () => {
+    const walls = [
+      { id: 'a', start: { x: 0, y: 0 }, end: { x: 3, y: 0 }, thickness: 0.2 },
+      { id: 'b', start: { x: 3, y: 0 }, end: { x: 3, y: 3 }, thickness: 0.2 },
+    ];
+    expect(jointPatches(walls, buildWallOutlines(walls))).toHaveLength(0);
   });
 });

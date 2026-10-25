@@ -15,7 +15,7 @@
 // =============================================================================
 
 import type { MenuScreen } from '../workspace/useSurveyMenu';
-import { record } from '../../shared/diagnostics';
+import { record, reportFailure } from '../../shared/diagnostics';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Dimensions, Modal, BackHandler } from 'react-native';
 
@@ -30,6 +30,7 @@ import { AxisGizmo } from '../workspace/AxisGizmo';
 import { resolveBpcContext, SelectionSummary } from '../../application/workspace/bpcContext';
 import { DEFAULT_SCALE } from '../../application/canvas/types';
 import { useShallow } from 'zustand/react/shallow';
+import type { RevitObjectBase } from '../../domain/objects/base';
 import { Column } from '../../domain/objects/column';
 import { Room } from '../../domain/objects/room';
 import { WorkspaceStatusBar } from '../workspace/WorkspaceStatusBar';
@@ -57,7 +58,12 @@ import { useProgress } from '../workspace/progress/useProgress';
 import { ProgressSheets } from '../workspace/progress/ProgressSheets';
 import { planSvg, faceSvg } from '../../application/report/planSvg';
 import { MeasureDialog } from '../workspace/MeasureDialog';
+import { SplitWallDialog } from '../workspace/SplitWallDialog';
+import { ProjectionView } from './ProjectionView';
+import { Projection, columnProjection, sectionProjection } from '../../application/section/projection';
 import { useSurveyMenu } from '../workspace/useSurveyMenu';
+import { buildRevitIfc } from '../workspace/exportActions';
+import { updateBridgeContext } from '../../infrastructure/bridge/devBridge';
 import { saveFieldPhoto } from '../workspace/fieldPhotos';
 import { useReview } from '../workspace/review/useReview';
 import { DRAFT_HINT, draftDetail, useEditorDrafting } from '../workspace/drafting/useEditorDrafting';
@@ -72,7 +78,7 @@ import { zoneCode, zoneCode as zoneCodeOf } from '../../domain/objects/zone';
 
 import { ElevationEditor } from '../../application/elevation/ElevationEditor';
 import { ElevationView } from './ElevationView';
-import type { CanvasTransform } from '../../domain/geometry/types';
+import type { CanvasTransform, Point2D } from '../../domain/geometry/types';
 
 import { useStore } from 'zustand';
 import { CameraCaptureView } from '../components/CameraCaptureView';
@@ -198,6 +204,7 @@ export function SurveyScreen({
   const [panelOpen, setPanelOpen] = useState(false);
   const [zoneSheetOpen, setZoneSheetOpen] = useState(false);
   const [manualMeasureOpen, setManualMeasureOpen] = useState(false);
+  const [splitOpen, setSplitOpen] = useState(false);
   const [measurements, setMeasurements] = useState<readonly Measurement[]>([]);
 
   // --- Cromo del espacio de trabajo (FABs, BPC, herramientas de esquina) ---
@@ -243,7 +250,7 @@ export function SurveyScreen({
   const live = useMemo(() => createLiveSource(editor), [editor]);
 
   useEffect(() => {
-    editor.init().catch(() => toast('No se pudo abrir el levantamiento.', { kind: 'error' }));
+    editor.init().catch((err) => toast(reportFailure('survey', err, 'No se pudo abrir el levantamiento.'), { kind: 'error' }));
   }, [editor]);
 
   // Los avisos del controlador se muestran una vez y se limpian, para que un
@@ -280,6 +287,8 @@ export function SurveyScreen({
     if (binding?.kind !== 'plan') return;
     editor.setTool(binding.tool);
     if (binding.tool === 'wall' && activeTool.methodId) editor.setCreationMethod('wall', activeTool.methodId as 'drag' | 'points');
+    if (binding.tool === 'floor' && activeTool.methodId) editor.setCreationMethod('floor', activeTool.methodId as 'zone' | 'polygon' | 'rect' | 'circle');
+    if (binding.tool === 'void' && activeTool.methodId) editor.setCreationMethod('void', activeTool.methodId as 'polygon' | 'rect' | 'circle');
     if (binding.tool === 'column' && activeTool.methodId) {
       editor.setCreationMethod('column', activeTool.methodId as 'rectangular' | 'circular');
     }
@@ -314,6 +323,7 @@ export function SurveyScreen({
   const { loaded: markersLoaded, view: levelInfo, levelHandlers, phaseHandlers, projectLevels } = useProjectLevels({
     services,
     projectId,
+    spaceId: roomId as string,
     editor,
   });
 
@@ -437,6 +447,13 @@ export function SurveyScreen({
   const [draftSheetOpen, setDraftSheetOpen] = useState(false);
 
   const topoBack = topo.back;
+
+  // --- Corte y alzado de columna: vistas por plano vertical, encima de la planta ---
+  const [projection, setProjection] = useState<Projection | null>(null);
+  const openSection = useCallback(
+    (a: Point2D, b: Point2D, name: string) => void sectionProjection(services, roomId, projectLevels, a, b, name).then(setProjection),
+    [services, roomId, projectLevels],
+  );
 
   // --- Alzado (F4): vive encima de la planta, que queda intacta debajo ---
   const [elevWallId, setElevWallId] = useState<string | null>(null);
@@ -750,16 +767,18 @@ export function SurveyScreen({
 
   // --- Visibilidad: filtros y capas del FAB de vista ---
   const { filters, layers } = wsState;
-  const visibleObjects = useMemo(
-    () =>
-      displayObjects.filter((o) => {
-        if (o instanceof Wall) return filters.muros && (o.isStructural ? layers.estructural : layers.arquitectonico);
-        if (o instanceof Column) return filters.columnas && layers.estructural;
-        if (o instanceof Door || o instanceof Window) return layers.arquitectonico;
-        return true;
-      }),
-    [displayObjects, filters, layers],
+  const isVisible = useCallback(
+    (o: RevitObjectBase) => {
+      if (o instanceof Wall) return filters.muros && (o.isStructural ? layers.estructural : layers.arquitectonico);
+      if (o instanceof Column) return filters.columnas && layers.estructural;
+      if (o instanceof Door || o instanceof Window) return layers.arquitectonico;
+      return true;
+    },
+    [filters, layers],
   );
+  const visibleObjects = useMemo(() => displayObjects.filter(isVisible), [displayObjects, isVisible]);
+  // Lo oculto tampoco se toca: si no, un muro filtrado tapa la columna que hay en él.
+  useEffect(() => editor.setPickFilter(isVisible), [editor, isVisible]);
   const underlay = useMemo(
     () => (markersLoaded ? editor.underlayObjects : []),
     [editor, markersLoaded, state.objects, levelInfo],
@@ -991,6 +1010,10 @@ export function SurveyScreen({
     bpcActions.push({ icon: 'undo-variant', label: 'Quitar punto', onPress: () => drafting.ctl.undoPolygonPoint() });
   }
   if (drafting.state.selectedId && !drafting.tool) {
+    const sec = drafting.ctl.selected;
+    if (sec?.kind === 'section' && sec.points.length >= 2) {
+      bpcActions.push({ icon: 'arrow-split-vertical', label: 'Ver corte', onPress: () => openSection(sec.points[0], sec.points[1], sec.text || 'Corte') });
+    }
     bpcActions.push({ icon: 'tune-variant', label: 'Dibujo', onPress: () => setDraftSheetOpen(true) });
   }
   if (review.active) {
@@ -1015,6 +1038,10 @@ export function SurveyScreen({
   }
   if (state.tool === 'wall' && state.wallDraft?.start) {
     bpcActions.push({ icon: 'close-circle-outline', label: 'Soltar inicio', onPress: () => editor.clearWallDraft() });
+  }
+  if (state.shapeDraft && editor.shapeMethodActive === 'polygon') {
+    if (state.shapeDraft.points.length >= 3) bpcActions.push({ icon: 'vector-polygon', label: 'Cerrar', onPress: () => void editor.closeShape() });
+    bpcActions.push({ icon: 'undo-variant', label: 'Quitar punto', onPress: () => editor.undoShapePoint() });
   }
   if (state.tool === 'measure' && state.measureTargetId) {
     bpcActions.push({ icon: 'pencil', label: 'Ingresar medida', onPress: () => setManualMeasureOpen(true) });
@@ -1071,6 +1098,51 @@ export function SurveyScreen({
   );
   const handleZoomFit = useCallback(() => handleZoom('zoomFit'), [handleZoom]);
   // --- Menú ☰ y entregables (IFC, plano PDF, cuadro de áreas, registro fotográfico, paquete) ---
+  // Acciones de pantalla del puente (se leen en el momento: siempre con el estado vigente).
+  const bridgeUi = useRef<Record<string, (a: Record<string, unknown>) => unknown>>({});
+  useEffect(() => {
+    if (!__DEV__) return;
+    bridgeUi.current.fit = () => editor.zoomToFit(canvasSize.w, canvasSize.h);
+    bridgeUi.current.select = (a) => editor.select(revitObjectId(String(a.id)));
+    bridgeUi.current.close = () => {
+      setProjection(null);
+      if (elevWallId) closeElevation();
+    };
+    bridgeUi.current.elevation = (a) => openElevation(String(a.wall));
+    bridgeUi.current.column = async (a) => {
+      const c = await services.store.readObject(revitObjectId(String(a.id)));
+      if (c instanceof Column) setProjection(await columnProjection(services, roomId, projectLevels, c));
+    };
+    bridgeUi.current.section = async (a) => {
+      // Por id (un corte guardado) o por dos puntos sueltos.
+      const saved = a.id ? (await services.drafts.list(roomId as string)).find((d) => d.id === a.id && d.kind === 'section') : undefined;
+      const [ax, ay] = saved ? [saved.points[0].x, saved.points[0].y] : (a.a as [number, number]);
+      const [bx, by] = saved ? [saved.points[1].x, saved.points[1].y] : (a.b as [number, number]);
+      setProjection(await sectionProjection(services, roomId, projectLevels, { x: ax, y: ay }, { x: bx, y: by }, saved?.text ?? 'Corte'));
+    };
+    bridgeUi.current.tool = (a) => (a.id ? editor.setTool(a.id as never) : editor.setTool('select'));
+    // Nivel activo por nombre, como mover el deslizador «Nivel» (los recintos se detectan por nivel).
+    bridgeUi.current.level = (a) => {
+      const idx = workspaceStore.getState().levels.items.findIndex((i) => i.name === a.name);
+      if (idx < 0) throw new Error(`No hay nivel "${String(a.name)}".`);
+      workspaceStore.getState().moveRangeThumb('levels', 'nivel', idx);
+    };
+  });
+
+  // Puente de desarrollo: ve este editor y exporta el IFC como el menú.
+  useEffect(() => {
+    if (!__DEV__) return;
+    updateBridgeContext({
+      editor,
+      projectId: projectId ?? null,
+      spaceId: roomId as string,
+      exportIfc: async () =>
+        (await buildRevitIfc(services, { roomId, projectId, projectName: projectName ?? 'Proyecto', spaceName: roomName ?? 'Espacio', author: operatorName })).content,
+      ui: bridgeUi.current,
+    });
+    return () => updateBridgeContext({ editor: null, projectId: null, spaceId: null, exportIfc: undefined });
+  }, [editor, services, projectId, roomId, projectName, roomName, operatorName]);
+
   const menuItems = useSurveyMenu({
     services,
     editor,
@@ -1245,7 +1317,7 @@ export function SurveyScreen({
           palette={canvasPalette}
           grid={{ show: gridLines || gridDots, lines: gridLines, dots: gridDots }}
           dragEnabled={editable && state.tool === 'select' && !state.busy}
-          drawEnabled={(editable && state.tool === 'wall') || progress.drawEnabled || review.drawEnabled || drafting.drawEnabled}
+          drawEnabled={(editable && (state.tool === 'wall' || editor.shapeDragActive)) || progress.drawEnabled || review.drawEnabled || drafting.drawEnabled}
           sketch={planSketch}
           doubleTapEnabled={state.tool === 'select' && wsState.workMode !== 'topografia'}
           rotationSnaps={topo.rotationSnaps}
@@ -1288,6 +1360,15 @@ export function SurveyScreen({
             onFacePhoto={setPendingFacePhoto}
             onOpenPhoto={onOpenPhoto}
             onClose={closeElevation}
+          />
+        ) : projection ? (
+          <ProjectionView
+            projection={projection}
+            levels={projectLevels}
+            width={canvasSize.w}
+            height={canvasSize.h}
+            chromeTop={chromeTop}
+            onClose={() => setProjection(null)}
           />
         ) : (
           <>
@@ -1374,6 +1455,30 @@ export function SurveyScreen({
                 ? () => {
                     editor.setTool('measure');
                     setPanelOpen(false);
+                  }
+                : undefined
+            }
+            onOpenColumnElevation={
+              selected instanceof Column
+                ? () => {
+                    setPanelOpen(false);
+                    void columnProjection(services, roomId, projectLevels, selected).then(setProjection);
+                  }
+                : undefined
+            }
+            onMerge={
+              selected instanceof Wall && editor.mergeCandidate(selected)
+                ? () => {
+                    setPanelOpen(false);
+                    void editor.mergeSelectedWall();
+                  }
+                : undefined
+            }
+            onSplit={
+              selected instanceof Wall
+                ? () => {
+                    setPanelOpen(false);
+                    setSplitOpen(true);
                   }
                 : undefined
             }
@@ -1467,6 +1572,16 @@ export function SurveyScreen({
           onClose={closeCamera}
         />
       </Modal>
+
+      {/* --- Partir el muro seleccionado (H-74) --- */}
+      {splitOpen && selected instanceof Wall ? (
+        <SplitWallDialog
+          open
+          length={selected.length as number}
+          onClose={() => setSplitOpen(false)}
+          onApply={(distance) => void editor.splitSelectedWall(meters(distance))}
+        />
+      ) : null}
 
       {/* --- Medida del muro (cara interior / exterior / eje) --- */}
       <MeasureDialog

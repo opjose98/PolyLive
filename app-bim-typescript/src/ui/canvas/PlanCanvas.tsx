@@ -229,6 +229,7 @@ export function PlanCanvas(props: PlanCanvasProps) {
     focal: { x: 0, y: 0 },
     rotStart: 0,
     rotSnapped: false,
+    longFired: false,
   }).current;
 
   // La cámara del controlador cambió por algo que NO fue un gesto (encuadre,
@@ -305,6 +306,7 @@ export function PlanCanvas(props: PlanCanvasProps) {
           handles: liveState.handles,
           showLabels: false,
           wallDraft: liveState.wallDraft,
+          shapeDraft: liveState.shapeDraft,
           draftThickness,
           snapIndicator: liveState.snapIndicator,
           existingIds,
@@ -592,27 +594,26 @@ export function PlanCanvas(props: PlanCanvasProps) {
         if (success) cb.current.onDoubleTap?.(e.x, e.y);
       });
 
-    let longFired = false;
     const longPress = Gesture.LongPress()
       .runOnJS(true)
       .minDuration(LONG_PRESS_MS)
       .maxDistance(TAP_SLOP_PX)
       .enabled(props.longPressEnabled && !!props.onLongPress)
       .onBegin((e) => {
-        longFired = false;
+        g.longFired = false;
         ringX.value = e.x;
         ringY.value = e.y;
         // El anillo aparece tarde: un toque normal no debe mostrarlo.
         ring.value = withDelay(120, withTiming(1, { duration: LONG_PRESS_MS - 120 }));
       })
       .onStart((e) => {
-        longFired = true;
+        g.longFired = true;
         ring.value = withSequence(withTiming(1, { duration: 0 }), withTiming(0, { duration: duration.fast }));
         haptic.grab();
         cb.current.onLongPress?.(e.x, e.y);
       })
       .onFinalize(() => {
-        if (!longFired) {
+        if (!g.longFired) {
           cancelAnimation(ring);
           ring.value = withTiming(0, { duration: duration.instant });
         }

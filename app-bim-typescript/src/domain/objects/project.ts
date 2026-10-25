@@ -41,18 +41,9 @@ export function projectId(value: string): ProjectId {
 /**
  * Disciplina BIM del proyecto. Lista cerrada a propósito: como texto libre,
  * "Arquitectura", "arquitectura" y "ARQ" se convierten en tres disciplinas
- * distintas al filtrar o exportar.
+ * distintas al filtrar o exportar. Ya no se elige al crear (docs/23 § 7).
  */
-export const BIM_DISCIPLINES = [
-  'Arquitectura',
-  'Estructuras',
-  'Instalaciones',
-  'Topografía',
-  'Patrimonio',
-  'Otra',
-] as const;
-
-export type BimDiscipline = (typeof BIM_DISCIPLINES)[number];
+export type BimDiscipline = 'Arquitectura' | 'Estructuras' | 'Instalaciones' | 'Topografía' | 'Patrimonio' | 'Otra';
 
 export const DEFAULT_DISCIPLINE: BimDiscipline = 'Arquitectura';
 

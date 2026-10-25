@@ -27,6 +27,7 @@ import { RevitObjectBase, RevitObjectId } from '../../domain/objects/base';
 import { Wall } from '../../domain/objects/wall';
 import { Column } from '../../domain/objects/column';
 import { Room } from '../../domain/objects/room';
+import { Floor } from '../../domain/objects/floor';
 import { Door } from '../../domain/objects/door';
 import { Window } from '../../domain/objects/window';
 
@@ -39,7 +40,7 @@ import { Window } from '../../domain/objects/window';
  * - `start` / `end`: extremos de un muro (arrastrarlos re-traza el muro)
  * - `center`: mueve el objeto entero (punto medio de un muro, centro de una columna)
  */
-export type HandleKind = 'start' | 'end' | 'center';
+type HandleKind = 'start' | 'end' | 'center';
 
 export interface Handle {
   readonly kind: HandleKind;
@@ -98,6 +99,12 @@ export class SelectionService {
     for (const obj of objects) {
       if (!(obj instanceof Column)) continue;
       if (this.hitsColumn(worldPoint, obj, thresholdMeters)) return obj;
+    }
+
+    // 3b. Suelos libres (andenes, patios): dentro del contorno y fuera de sus vacíos.
+    for (const obj of objects) {
+      if (!(obj instanceof Floor) || !obj.outline || obj.outline.length < 3) continue;
+      if (isPointInPolygon(worldPoint, obj.outline) && !(obj.holes ?? []).some((h) => isPointInPolygon(worldPoint, h))) return obj;
     }
 
     // 4. Recintos (point-in-polygon). Último porque cubren todo lo demás.

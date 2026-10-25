@@ -27,7 +27,8 @@ describe('ExpoSQLiteDatabase', () => {
     const db = new ExpoSQLiteDatabase('test.db');
     await db.open();
 
-    expect(openDatabaseAsync).toHaveBeenCalledWith('test.db');
+    // Conexión propia: tras una recarga del JS no comparte la de la caché que el contexto viejo cierra (H-81).
+    expect(openDatabaseAsync).toHaveBeenCalledWith('test.db', { useNewConnection: true });
     expect(mockDb.execAsync).toHaveBeenCalledWith(expect.stringContaining('WAL'));
     expect(mockDb.execAsync).toHaveBeenCalledWith(expect.stringContaining('foreign_keys'));
     expect(mockDb.execAsync).toHaveBeenCalledWith(expect.stringContaining('busy_timeout'));
@@ -112,6 +113,43 @@ describe('ExpoSQLiteDatabase', () => {
 
     const callback = (mockDb.withTransactionAsync as jest.Mock).mock.calls[0][0];
     await expect(callback()).rejects.toThrow('constraint violation');
+  });
+
+  // Regresión H-52 (docs/25 § 6): con una sola conexión, un BEGIN que llega durante otra
+  // transacción falla y su ROLLBACK deshace la primera ("cannot rollback - no transaction is
+  // active" en la tableta). Las transacciones deben ir una detrás de otra.
+  it('transaction() no solapa dos transacciones lanzadas a la vez', async () => {
+    const db = new ExpoSQLiteDatabase('test.db');
+    await db.open();
+    const log: string[] = [];
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+
+    const first = db.transaction(async () => {
+      log.push('A begin');
+      await gate;
+      log.push('A end');
+    });
+    const second = db.transaction(async () => {
+      log.push('B begin');
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    release();
+    await Promise.all([first, second]);
+
+    expect(log).toEqual(['A begin', 'A end', 'B begin']);
+  });
+
+  it('transaction() sigue atendiendo la cola aunque una transacción falle', async () => {
+    const db = new ExpoSQLiteDatabase('test.db');
+    await db.open();
+    const failing = db.transaction(async () => {
+      throw new Error('falla A');
+    });
+    const ok = db.transaction(async () => 'B');
+    await expect(failing).rejects.toThrow('falla A');
+    await expect(ok).resolves.toBe('B');
   });
 
   it('migrate() ejecuta todas las sentencias DDL del schema y marca la última versión', async () => {

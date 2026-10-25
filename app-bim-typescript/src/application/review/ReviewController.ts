@@ -30,7 +30,7 @@ import {
 } from '../../domain/review/review';
 import type { ReviewStore } from '../../infrastructure/sqlite/ReviewStore';
 
-export interface ReviewDraft {
+interface ReviewDraft {
   readonly view: ReviewView;
   readonly kind: Exclude<MarkupKind, 'text'>;
   readonly points: readonly Point2D[];

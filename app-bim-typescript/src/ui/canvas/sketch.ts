@@ -11,6 +11,7 @@
 import type { Point2D } from '../../domain/geometry/types';
 import type { ICanvasRenderer } from '../../native/canvas/SkiaCanvasAdapter';
 import { cloudOutline } from '../../application/review/cloud';
+import { withAlpha } from '../design/tokens';
 
 export type SketchShape =
   /** Trazo con ancho en METROS (pincel) o en PÍXELES (marcador de revisión). */
@@ -36,7 +37,9 @@ export interface SketchSource {
   get(): readonly SketchShape[];
 }
 
-export const EMPTY_SKETCH: SketchSource = { subscribe: () => () => undefined, get: () => [] };
+// El mismo arreglo siempre: useSyncExternalStore toma un arreglo nuevo por un cambio y entra en bucle.
+const NO_SHAPES: readonly SketchShape[] = [];
+export const EMPTY_SKETCH: SketchSource = { subscribe: () => () => undefined, get: () => NO_SHAPES };
 
 /** Une varias capas vivas en una (el lienzo tiene una sola). Conserva la identidad mientras nada cambie. */
 export function mergeSketches(...sources: readonly SketchSource[]): SketchSource {
@@ -55,14 +58,6 @@ export function mergeSketches(...sources: readonly SketchSource[]): SketchSource
       return cached;
     },
   };
-}
-
-/** #RRGGBB + opacidad → rgba(). */
-export function withAlpha(hex: string, alpha: number): string {
-  const m = /^#?([0-9a-f]{6})$/i.exec(hex);
-  if (!m) return hex;
-  const n = parseInt(m[1], 16);
-  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${Math.max(0, Math.min(1, alpha))})`;
 }
 
 /** Trazo de marcador de revisión (px), independiente del zoom. */

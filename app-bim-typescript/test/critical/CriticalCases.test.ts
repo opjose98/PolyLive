@@ -22,7 +22,6 @@ import {
   Wall,
   Door,
   Room,
-  
   Window,
   roomId,
   wallId,

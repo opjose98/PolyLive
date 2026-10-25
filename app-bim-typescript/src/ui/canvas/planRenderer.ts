@@ -42,9 +42,9 @@ import { worldToScreen } from '../../domain/geometry/coordinates';
 import { isPointInPolygon } from '../../domain/geometry/polygon-utils';
 import type { Handle } from '../../application/canvas/SelectionService';
 import { CANVAS_PALETTES, CanvasPalette } from '../design/canvasThemes';
-import { sizes } from '../design/tokens';
-import { buildWallOutlines, faceSegments, hatchSegments, WallOutline } from './wallGeometry';
-import { drawSketch, SketchShape, withAlpha } from './sketch';
+import { sizes, withAlpha } from '../design/tokens';
+import { buildWallOutlines, faceSegments, hatchSegments, jointPatches, WallOutline } from './wallGeometry';
+import { drawSketch, SketchShape } from './sketch';
 
 // ---------------------------------------------------------------------------
 // Entrada
@@ -97,9 +97,11 @@ export interface PlanScene {
   /** Marcas de revisión (M4) y otros trazos guardados, encima de todo. */
   readonly markups?: readonly SketchShape[];
   /** Suelos (F6a): contorno neto de su recinto, con trama de piso. */
-  readonly floors?: readonly { readonly id: string; readonly polygon: readonly Point2D[] }[];
+  readonly floors?: readonly { readonly id: string; readonly polygon: readonly Point2D[]; readonly holes?: readonly (readonly Point2D[])[] }[];
   /** Muro en curso de trazado. */
   readonly wallDraft?: { start: Point2D | null; end: Point2D | null; snappedToNode: boolean } | null;
+  /** Suelo libre o vacío en trazado (capa viva). */
+  readonly shapeDraft?: { readonly points: readonly Point2D[]; readonly closed: boolean } | null;
   /** Espesor (m) con que se previsualiza el muro en curso. */
   readonly draftThickness?: number;
   /** Mostrar los nudos (extremos de muro) como puntos de enganche. */
@@ -121,7 +123,7 @@ export interface PlanScene {
   readonly snapIndicator?: Point2D | null;
 }
 
-export interface PlanRoom {
+interface PlanRoom {
   readonly polygon: readonly Point2D[];
   readonly area: number;
   readonly centroid: Point2D;
@@ -205,6 +207,7 @@ export function drawPlanOverlay(r: ICanvasRenderer, scene: PlanScene): void {
     drawSelection(ctx);
   }
   drawWallDraft(ctx);
+  drawShapeDraft(ctx);
   if (scene.snapIndicator) drawSnapIndicator(r, ctx.toScreen(scene.snapIndicator), ctx.pal);
 }
 
@@ -331,10 +334,10 @@ function drawUnderlay(
   scale: number,
 ): void {
   const walls = objects.filter((o): o is Wall => o instanceof Wall && o.isStraight);
-  const outlines = buildWallOutlines(
-    walls.map((w) => ({ id: w.id as string, start: w.startPoint, end: w.endPoint, thickness: w.thickness as number })),
-  );
+  const inputs = walls.map((w) => ({ id: w.id as string, start: w.startPoint, end: w.endPoint, thickness: w.thickness as number }));
+  const outlines = buildWallOutlines(inputs);
   r.setFillStyle(pal.underlay);
+  for (const p of jointPatches(inputs, outlines)) r.fillPolygon(p.polygon.map(toScreen));
   for (const o of outlines.values()) r.fillPolygon(o.polygon.map(toScreen));
   for (const o of objects) {
     if (!(o instanceof Column)) continue;
@@ -372,13 +375,17 @@ const FLOOR_HATCH_PX = 14;
 function drawFloors({ r, scene, pal, toScreen }: Ctx): void {
   for (const f of scene.floors ?? []) {
     const poly = f.polygon.map(toScreen);
+    const holes = (f.holes ?? []).map((h) => h.map(toScreen));
     r.setStrokeStyle(pal.roomStroke);
     r.setLineWidth(STROKE.thin * 0.8 * pal.lineScale);
     for (const angle of [Math.PI / 4, -Math.PI / 4]) {
-      for (const [a, b] of hatchSegments(poly, FLOOR_HATCH_PX * pal.lineScale, angle)) r.drawLine(a.x, a.y, b.x, b.y);
+      for (const [a, b] of hatchSegments(poly, FLOOR_HATCH_PX * pal.lineScale, angle, holes)) r.drawLine(a.x, a.y, b.x, b.y);
     }
     r.setLineWidth(STROKE.thin * pal.lineScale);
     r.strokePolygon(poly);
+    // Vacío: su contorno (la trama ya se detiene en él). Sin diagonal: un vacío
+    // también puede ser el edificio dentro de un andén perimetral.
+    for (const h of holes) r.strokePolygon(h);
   }
 }
 
@@ -436,6 +443,24 @@ function drawWalls(ctx: Ctx): void {
   const { r, pal, toScreen } = ctx;
   const cut = STROKE.cut * pal.lineScale;
   const thin = STROKE.thin * pal.lineScale;
+
+  // Nudos (T, cruz, ingletes abiertos): el poché bajo los muros cierra el triángulo entre extremos.
+  const inputs = ctx.walls
+    .filter((w) => w.isStraight)
+    .map((w) => ({ id: w.id as string, start: w.startPoint, end: w.endPoint, thickness: w.thickness as number }));
+  for (const patch of jointPatches(inputs, ctx.outlines)) {
+    const ws = patch.wallIds.map((id) => ctx.wallsById.get(id)).filter((w): w is Wall => !!w);
+    const existing = ws.every((w) => !!ctx.scene.existingIds?.has(w.id as string));
+    const solid = ws.some((w) => wallRendering(w.material, w.isStructural) === 'solid');
+    const poly = patch.polygon.map(toScreen);
+    r.setFillStyle(existing ? pal.existingFill : solid ? pal.wallFill : pal.background);
+    r.fillPolygon(poly);
+    if (!existing && !solid) {
+      r.setStrokeStyle(pal.partition);
+      r.setLineWidth(thin);
+      for (const [a, b] of hatchSegments(poly, HATCH_PX * pal.lineScale)) r.drawLine(a.x, a.y, b.x, b.y);
+    }
+  }
 
   for (const wall of ctx.walls) {
     const outline = ctx.outlines.get(wall.id as string);
@@ -619,6 +644,23 @@ function drawNodes({ r, pal, toScreen, walls }: Ctx): void {
       r.fillCircle(s.x, s.y, 3.5);
     }
   }
+}
+
+/** Suelo libre o vacío en trazado: relleno de selección y borde de vista previa. */
+function drawShapeDraft({ r, scene, pal, toScreen }: Ctx): void {
+  const d = scene.shapeDraft;
+  if (!d || d.points.length === 0) return;
+  const pts = d.points.map(toScreen);
+  r.setStrokeStyle(pal.preview);
+  r.setLineWidth(1.5 * pal.lineScale);
+  if (pts.length >= 3) {
+    r.setFillStyle(pal.selectionFill);
+    r.fillPolygon(pts);
+  }
+  if (d.closed && pts.length >= 3) r.strokePolygon(pts);
+  else r.strokePolyline(pts);
+  r.setFillStyle(pal.preview);
+  for (const p of d.closed ? [] : pts) r.fillCircle(p.x, p.y, 4);
 }
 
 // ---------------------------------------------------------------------------

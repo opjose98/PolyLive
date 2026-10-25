@@ -28,6 +28,7 @@ import { CameraCaptureView } from '../components/CameraCaptureView';
 import { AppServices } from '../../application/AppServices';
 import { RoomId, RevitObjectBase, Wall, Door, Window, Column } from '../../domain/objects';
 import { AppError, AppErrorCode } from '../../shared/errors/AppError';
+import { reportFailure } from '../../shared/diagnostics';
 import { PhotoViewer } from '../components/PhotoViewer';
 import { AuditPhoto } from '../../domain/objects/audit-photo';
 import { alertDialog } from '../primitives';
@@ -163,7 +164,7 @@ export function GalleryScreen({ services, roomId, objectId, photoId, operatorNam
 
         await loadPhotos();
       } catch (error) {
-        const message = error instanceof AppError ? error.userMessage : 'No se pudo guardar la foto capturada.';
+        const message = reportFailure('gallery', error, 'No se pudo guardar la foto capturada.');
         alertDialog('Error', message);
       }
     },
@@ -275,7 +276,7 @@ export function GalleryScreen({ services, roomId, objectId, photoId, operatorNam
         await services.useCases.linkPhotoToObject.execute({ photoId: match.id, objectId: target.id });
         alertDialog('Vinculada', `Foto vinculada a: ${describeObject(target)}`);
       } catch (err) {
-        const message = err instanceof AppError ? err.userMessage : 'No se pudo vincular la foto.';
+        const message = reportFailure('gallery', err, 'No se pudo vincular la foto.');
         alertDialog('Error', message);
       } finally {
         setLinking(false);

@@ -24,8 +24,10 @@ import { Window } from '../../domain/objects/window';
 import type { Handle } from '../../application/canvas/SelectionService';
 import type { EditorController, EditorState } from '../../application/editor/EditorController';
 
-export interface LiveOverlay {
+interface LiveOverlay {
   readonly wallDraft: EditorState['wallDraft'];
+  /** Suelo libre o vacío en trazado: su polígono (abierto si es un polígono a medias). */
+  readonly shapeDraft: { readonly points: readonly Point2D[]; readonly closed: boolean } | null;
   /** El objeto arrastrado en su posición viva, con sus vanos. */
   readonly objects: readonly RevitObjectBase[];
   readonly selectedId: RevitObjectId | null;
@@ -40,7 +42,7 @@ export interface LiveSource {
   get(): LiveOverlay;
 }
 
-const EMPTY: LiveOverlay = { wallDraft: null, objects: [], selectedId: null, handles: [], snapIndicator: null, snapped: false };
+const EMPTY: LiveOverlay = { wallDraft: null, shapeDraft: null, objects: [], selectedId: null, handles: [], snapIndicator: null, snapped: false };
 
 /** ¿Hay un arrastre en curso (o su vista previa todavía en pantalla)? */
 export function isDragging(s: EditorState): boolean {
@@ -67,10 +69,10 @@ export function createLiveSource(editor: EditorController): LiveSource {
     subscribe: (onChange) => editor.subscribe(() => onChange()),
     get: () => {
       const s = editor.getState();
-      const key = [s.wallDraft, s.dragPreview, s.draggingHandle, s.dragSnappedToNode, s.dragLinked, s.objects, s.selectedId];
+      const key = [s.wallDraft, s.shapeDraft, s.dragPreview, s.draggingHandle, s.dragSnappedToNode, s.dragLinked, s.objects, s.selectedId];
       if (key.every((k, i) => k === cacheKey[i])) return cached;
       cacheKey = key;
-      if (!s.wallDraft && !isDragging(s)) {
+      if (!s.wallDraft && !s.shapeDraft && !isDragging(s)) {
         cached = EMPTY;
         return cached;
       }
@@ -91,6 +93,9 @@ export function createLiveSource(editor: EditorController): LiveSource {
           : null;
       cached = {
         wallDraft: s.wallDraft,
+        shapeDraft: s.shapeDraft
+          ? { points: editor.shapeDraftPolygon ?? s.shapeDraft.points, closed: editor.shapeMethodActive !== 'polygon' }
+          : null,
         objects,
         selectedId: preview ? preview.id : null,
         handles: preview ? editor.selectedHandles : [],
@@ -110,6 +115,9 @@ export function sameStructure(a: EditorState, b: EditorState): boolean {
   for (const k of Object.keys(b) as (keyof EditorState)[]) {
     if (k === 'wallDraft') {
       if (!!a.wallDraft !== !!b.wallDraft || !!a.wallDraft?.start !== !!b.wallDraft?.start) return false;
+    } else if (k === 'shapeDraft') {
+      // La forma en trazado se dibuja en la capa viva; a la pantalla solo le importa cuántos vértices tiene.
+      if ((a.shapeDraft?.points.length ?? -1) !== (b.shapeDraft?.points.length ?? -1)) return false;
     } else if (k === 'dragPreview') {
       if ((a.dragPreview?.id ?? null) !== (b.dragPreview?.id ?? null)) return false;
     } else if (k === 'draggingHandle') {

@@ -6,9 +6,9 @@
 import { ValidationWarning } from '../../domain/geometry/types';
 import { revitObjectId, IObjectStore, Room, Wall, Door, Column, Floor, RoomId, Window } from '../../domain/objects';
 
-import { floorZoneId } from '../../domain/objects/floor';
+import { floorZoneId, isFreeFloor } from '../../domain/objects/floor';
 import { IValidationService, IIFCSerializer, ValidationError } from './types';
-import type { IfcMapConversionInput, IfcMemberInput, IfcZoneInput } from '../../infrastructure/export/ifc/types';
+import type { IfcBareOpeningInput, IfcMapConversionInput, IfcMemberInput, IfcZoneInput } from '../../infrastructure/export/ifc/types';
 
 interface ExportRoomIfcInput {
   roomId: RoomId;
@@ -18,6 +18,8 @@ interface ExportRoomIfcInput {
   phaseNames?: ReadonlyMap<string, string>;
   /** Antepecho de cada vano (id de Door/Window → m sobre la base del muro). */
   openingSills?: ReadonlyMap<string, number>;
+  /** Vanos sin carpintería, leídos del alzado de cada muro (H-70). */
+  bareOpenings?: readonly IfcBareOpeningInput[];
   projectName?: string;
   /** Clave estable del proyecto (su id): fija el GUID de IfcProject. */
   projectKey?: string;
@@ -54,14 +56,17 @@ export class ExportRoomIfcUseCase {
     const room = await this.store.readObject(revitObjectId(input.roomId));
     if (!room || !(room instanceof Room)) throw new Error('Room no existe');
 
-    const validationResult = this.validationService.validateExport(room);
-    if (!validationResult.valid) {
-      throw new ValidationError(validationResult.warnings);
-    }
-
     // 2. Recolectar objetos
     const allObjects = await this.store.listObjects(input.roomId);
     const walls = allObjects.filter((o) => o instanceof Wall) as Wall[];
+
+    // Un espacio sin muros y con suelos (exteriores: placas, andenes) no tiene Recinto que cerrar:
+    // sale con sus losas y sin IfcSpace (H-86). Con muros, el Recinto debe estar cerrado.
+    const floorsOnly = walls.length === 0 && allObjects.some((o) => o instanceof Floor);
+    const validationResult = floorsOnly ? { valid: true, warnings: [] } : this.validationService.validateExport(room);
+    if (!validationResult.valid) {
+      throw new ValidationError(validationResult.warnings);
+    }
     const doors = allObjects.filter((o) => o instanceof Door) as Door[];
     const windows = allObjects.filter((o) => o instanceof Window) as Window[];
     const columns = allObjects.filter((o) => o instanceof Column) as Column[];
@@ -80,13 +85,14 @@ export class ExportRoomIfcUseCase {
       levels: input.levels,
       phaseNames: input.phaseNames,
       openingSills: input.openingSills,
+      bareOpenings: input.bareOpenings,
       projectName: input.projectName,
       projectKey: input.projectKey,
       author: input.author,
       zones: input.zones,
       mapConversion: input.mapConversion,
       members: input.members,
-      zoneFloors: floors.filter((f) => floorZoneId(f) !== null),
+      zoneFloors: floors.filter((f) => floorZoneId(f) !== null || isFreeFloor(f)),
     });
 
     const exportTime = Date.now() - startTime;

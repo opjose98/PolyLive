@@ -125,6 +125,11 @@ export interface VerticalLevels {
    */
   readonly leftBase?: number;
   readonly rightBase?: number;
+  /**
+   * Estaciones intermedias del perfil (vertical.ts): base y tope sobre el CSL 0
+   * a `x` m del inicio, ordenadas. Con ellas el contorno es un polígono.
+   */
+  readonly stations?: readonly { readonly x: number; readonly base: number; readonly top: number }[];
 }
 
 export function effectiveLeftHeight(levels: VerticalLevels): number {
@@ -140,17 +145,54 @@ export function hasHeightProfile(levels: VerticalLevels): boolean {
     levels.leftHeight !== undefined ||
     levels.rightHeight !== undefined ||
     (levels.leftBase ?? 0) !== 0 ||
-    (levels.rightBase ?? 0) !== 0
+    (levels.rightBase ?? 0) !== 0 ||
+    !!levels.stations?.length
   );
+}
+
+/** Puntos del contorno (extremos y estaciones dentro del muro), de inicio a fin, en CSL. */
+export function profileStations(levels: VerticalLevels, wallLength: number): { x: number; base: number; top: number }[] {
+  const inner = (levels.stations ?? []).filter((s) => s.x > 1e-6 && s.x < wallLength - 1e-6);
+  return [
+    { x: 0, base: levels.leftBase ?? 0, top: effectiveLeftHeight(levels) },
+    ...inner,
+    { x: wallLength, base: levels.rightBase ?? 0, top: effectiveRightHeight(levels) },
+  ];
+}
+
+/** Contorno del muro en CSL: la base de inicio a fin y el tope de vuelta. */
+export function elevationOutline(levels: VerticalLevels, wallLength: number): { x: number; y: number }[] {
+  if (!hasHeightProfile(levels)) {
+    return [
+      { x: 0, y: 0 },
+      { x: wallLength, y: 0 },
+      { x: wallLength, y: levels.coronacion },
+      { x: 0, y: levels.coronacion },
+    ];
+  }
+  const pts = profileStations(levels, wallLength);
+  return [...pts.map((q) => ({ x: q.x, y: q.base })), ...[...pts].reverse().map((q) => ({ x: q.x, y: q.top }))];
+}
+
+/** Interpola el campo pedido del contorno en `localX`. */
+function along(levels: VerticalLevels, localX: number, wallLength: number, key: 'base' | 'top'): number {
+  const pts = profileStations(levels, wallLength);
+  const x = Math.max(0, Math.min(wallLength, localX));
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1];
+    const b = pts[i];
+    if (x <= b.x + 1e-9 || i === pts.length - 1) {
+      const t = b.x - a.x < 1e-9 ? 0 : (x - a.x) / (b.x - a.x);
+      return a[key] + (b[key] - a[key]) * t;
+    }
+  }
+  return pts[0][key];
 }
 
 /** Cota de la base del muro en `localX` (0 salvo base inclinada). */
 export function baseAt(levels: VerticalLevels, localX: number, wallLength: number): number {
-  const l = levels.leftBase ?? 0;
-  const r = levels.rightBase ?? 0;
-  if (wallLength <= 0) return l;
-  const t = Math.max(0, Math.min(1, localX / wallLength));
-  return l + (r - l) * t;
+  if (wallLength <= 0) return levels.leftBase ?? 0;
+  return along(levels, localX, wallLength, 'base');
 }
 
 /**
@@ -161,25 +203,28 @@ export function baseAt(levels: VerticalLevels, localX: number, wallLength: numbe
 export function levelsFromProfile(p: {
   start: { base: number; top: number };
   end: { base: number; top: number };
+  stations?: readonly { at: number; base: number; top: number }[];
 }): VerticalLevels {
-  const y0 = Math.min(p.start.base, p.end.base);
+  const st = p.stations ?? [];
+  const y0 = Math.min(p.start.base, p.end.base, ...st.map((s) => s.base));
   const lt = p.start.top - y0;
   const rt = p.end.top - y0;
   const lb = p.start.base - y0;
   const rb = p.end.base - y0;
-  const rect = Math.abs(lt - rt) < 1e-6 && Math.abs(lb) < 1e-6 && Math.abs(rb) < 1e-6;
-  return rect
-    ? { base: 0, coronacion: lt }
-    : { base: 0, coronacion: Math.max(lt, rt), leftHeight: lt, rightHeight: rt, leftBase: lb, rightBase: rb };
+  const stations = st.map((s) => ({ x: s.at, base: s.base - y0, top: s.top - y0 }));
+  const flat = (b: number, t: number) => Math.abs(t - lt) < 1e-6 && Math.abs(b) < 1e-6;
+  const rect = flat(lb, lt) && flat(rb, rt) && stations.every((s) => flat(s.base, s.top));
+  if (rect) return { base: 0, coronacion: lt };
+  const coronacion = Math.max(lt, rt, ...stations.map((s) => s.top));
+  const out = { base: 0, coronacion, leftHeight: lt, rightHeight: rt, leftBase: lb, rightBase: rb };
+  return stations.length ? { ...out, stations } : out;
 }
 
 /** Altura del muro en la coordenada CSL `localX`, interpolada si hay culata. */
 export function heightAt(levels: VerticalLevels, localX: number, wallLength: number): number {
   if (!hasHeightProfile(levels)) return levels.coronacion;
   if (wallLength <= 0) return effectiveLeftHeight(levels);
-
-  const t = Math.max(0, Math.min(1, localX / wallLength));
-  return effectiveLeftHeight(levels) + (effectiveRightHeight(levels) - effectiveLeftHeight(levels)) * t;
+  return along(levels, localX, wallLength, 'top');
 }
 
 // ---------------------------------------------------------------------------
@@ -250,11 +295,15 @@ export function computeQuantification(
 ): WallQuantification {
   const { levels } = elevation;
 
-  // Trapecio: la media de las alturas netas (tope − base) de los extremos.
-  const gross = hasHeightProfile(levels)
-    ? wallLength *
-      ((effectiveLeftHeight(levels) - (levels.leftBase ?? 0) + (effectiveRightHeight(levels) - (levels.rightBase ?? 0))) / 2)
-    : wallLength * levels.coronacion;
+  // Polígono del perfil: suma de trapecios entre puntos consecutivos (extremos y estaciones).
+  let gross = wallLength * levels.coronacion;
+  if (hasHeightProfile(levels)) {
+    const pts = profileStations(levels, wallLength);
+    gross = 0;
+    for (let i = 1; i < pts.length; i++) {
+      gross += ((pts[i].x - pts[i - 1].x) * (pts[i].top - pts[i].base + (pts[i - 1].top - pts[i - 1].base))) / 2;
+    }
+  }
 
   const rects: Rect[] = [];
   for (const opening of elevation.openings) {
@@ -393,4 +442,3 @@ export function deserializeOpenings(json: string): WallOpening[] {
   }));
 }
 
-export type { SquareMeters };

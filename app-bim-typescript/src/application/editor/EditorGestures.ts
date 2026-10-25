@@ -20,19 +20,8 @@ import { JointWall, WallEndsChange, endsAt, planEndMove, planWallTranslate } fro
 
 import {
   EditorCore,
-  
-  
-  
-  
-  
   DragTarget,
-  
   cloneWith,
-  
-  
-  
-  
-  
 } from './EditorCore';
 
 export abstract class EditorGestures extends EditorCore {
@@ -63,11 +52,15 @@ export abstract class EditorGestures extends EditorCore {
       case 'column':
         return this.addColumn(world);
       case 'floor':
-        return this.addFloor(screenX, screenY);
+        return this.state.creation.floor === 'zone' ? this.addFloor(screenX, screenY) : this.shapeTap(screenX, screenY, tol);
+      case 'void':
+        return this.shapeTap(screenX, screenY, tol);
       case 'opening':
         return this.addGenericOpening(world, tol);
       case 'measure':
         return this.pickMeasureTarget(world, tol);
+      case 'split':
+        return this.splitTap(world, tol);
       case 'photo':
         this.patch({ pendingPhotoPoint: world });
         return;

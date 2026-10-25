@@ -215,7 +215,9 @@ export class DraftingController {
     const d = this.state.draft;
     this.patch({ draft: null });
     if (!d || segmentLength(d.a, d.b) < MIN_DRAFT_LENGTH) return null;
-    return this.create(d.view, d.kind, [d.a, d.b], '');
+    // Un corte nace con nombre correlativo del espacio (Corte 1, Corte 2…): es lo que se lista y se abre.
+    const name = d.kind === 'section' ? `Corte ${this.state.items.filter((i) => i.kind === 'section').length + 1}` : '';
+    return this.create(d.view, d.kind, [d.a, d.b], name);
   }
 
   async submitText(text: string): Promise<DraftItem | null> {

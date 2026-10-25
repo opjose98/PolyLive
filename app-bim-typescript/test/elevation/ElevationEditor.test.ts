@@ -128,6 +128,59 @@ describe('ElevationEditor', () => {
     expect(Number(ed.quantification!.grossArea)).toBeCloseTo(4 * 3.75);
   });
 
+  it('estaciones: se crean con la altura que había, se editan con el selector y se arrastran', async () => {
+    const rect = extent({ baseLevelId: 'n0', topLevelId: 'n1', unconnectedHeight: 3 });
+    expect(await ed.saveVertical({ start: rect, end: rect })).toBe(true);
+
+    ed.setTool('station');
+    await ed.tap(200, 450, 22); // x = 2 m, lejos de los vértices
+    let w = (await services.store.readObject(revitObjectId('w1'))) as Wall;
+    expect(w.vertical?.stations).toEqual([{ at: 2, ext: rect }]);
+    expect(ed.getState().selectedPoint).toEqual({ kind: 'station', at: 2 });
+
+    // Deslizador: sin confirmar solo se ve; al confirmar se guarda.
+    await ed.setPointExtent({ ...rect, topOffset: 1 }, false);
+    expect(Number(ed.quantification!.grossArea)).toBeCloseTo(4 * 3 + (4 * 1) / 2);
+    w = (await services.store.readObject(revitObjectId('w1'))) as Wall;
+    expect(w.vertical?.stations?.[0].ext.topOffset).toBe(0);
+    await ed.setPointExtent({ ...rect, topOffset: 1 }, true);
+    w = (await services.store.readObject(revitObjectId('w1'))) as Wall;
+    expect(w.vertical?.stations?.[0].ext.topOffset).toBe(1);
+    expect(w.height as number).toBeCloseTo(4);
+
+    // Tocar el vértice lo selecciona; arrastrarlo lo mueve a lo largo del muro.
+    ed.setTool('select');
+    ed.selectPoint(null);
+    await ed.tap(200, 100, 22); // tope de la estación: (2, 4)
+    expect(ed.getState().selectedPoint).toEqual({ kind: 'station', at: 2 });
+    expect(ed.beginDrag(200, 100, 22)).toBe(true);
+    ed.updateDrag(300, 100, 22);
+    await ed.endDrag();
+    w = (await services.store.readObject(revitObjectId('w1'))) as Wall;
+    expect(w.vertical?.stations?.map((s) => s.at)).toEqual([3]);
+
+    // Los extremos también se seleccionan y se editan.
+    await ed.tap(0, 200, 22);
+    expect(ed.getState().selectedPoint).toEqual({ kind: 'start' });
+
+    ed.selectPoint({ kind: 'station', at: 3 });
+    expect(await ed.removeSelectedStation()).toBe(true);
+    w = (await services.store.readObject(revitObjectId('w1'))) as Wall;
+    expect(w.vertical?.stations).toBeUndefined();
+  });
+
+  it('un muro que llega en T se ve cortado en el alzado (sin bloquear nada)', async () => {
+    await services.store.createObject(
+      new Wall({ id: revitObjectId('w2'), roomId: ROOM, startPoint: { x: 2, y: 0 }, endPoint: { x: 2, y: 3 }, thickness: meters(0.2), height: meters(2.5) }),
+    );
+    await ed.load(); // los cortes se calculan al abrir el alzado
+    const cuts = ed.getState().cuts;
+    expect(cuts).toHaveLength(1);
+    expect(cuts[0]).toMatchObject({ id: 'w2', kind: 'wall', y0: 0, y1: 2.5 });
+    expect(cuts[0].x0).toBeCloseTo(1.9);
+    expect(cuts[0].x1).toBeCloseTo(2.1);
+  });
+
   it('el renderer dibuja en espejo el lado B', () => {
     const calls: { op: string; args: unknown[] }[] = [];
     const r = new Proxy({} as ICanvasRenderer, {

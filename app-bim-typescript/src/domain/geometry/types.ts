@@ -45,7 +45,7 @@ export interface Point2D {
 // Resultado de triangulación
 // ---------------------------------------------------------------------------
 
-export type ValidationWarningType =
+type ValidationWarningType =
   | 'degenerate_triangle'
   | 'self_intersecting_polygon'
   | 'duplicate_vertices'

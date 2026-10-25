@@ -26,6 +26,7 @@ import { Room } from '../../src/domain/objects/room';
 import { meters } from '../../src/domain/geometry/types';
 import { MIN_SCALE } from '../../src/application/canvas/types';
 import { extent, uniformWall } from '../../src/domain/objects/vertical';
+import { diagnostics } from '../../src/shared/diagnostics';
 
 const ROOM_ID: RoomId = roomId('editor-room');
 const ROOM_OBJECT_ID: RevitObjectId = revitObjectId('editor-room');
@@ -205,6 +206,83 @@ describe('EditorController', () => {
   // Herramienta: selección
   // -------------------------------------------------------------------------
 
+  describe('herramienta dividir muro', () => {
+    it('se engancha al encuentro en T con otro muro y parte en un paso de deshacer', async () => {
+      editor.setNodeSnapEnabled(false);
+      await drawWall(0, 0, 6, 0);
+      await drawWall(2.5, 0, 2.5, 3); // T sobre el primero
+      const before = editor.walls.length;
+      editor.setTool('split');
+      await editor.handleTap(px(2.4), px(0.05), TOL_PX);
+      expect(editor.walls).toHaveLength(before + 1);
+      const ends = editor.walls.filter((w) => w.startPoint.y === 0 && w.endPoint.y === 0).map((w) => [w.startPoint.x, w.endPoint.x].sort((a, b) => a - b));
+      expect(ends).toEqual(expect.arrayContaining([[0, 2.5], [2.5, 6]]));
+      await editor.undo();
+      expect(editor.walls).toHaveLength(before);
+    });
+
+    it('lejos de un encuentro parte donde se toca, al centímetro', async () => {
+      await drawWall(0, 0, 6, 0);
+      editor.setTool('split');
+      await editor.handleTap(px(4.123), px(0), TOL_PX);
+      expect(editor.walls.map((w) => w.endPoint.x).sort()).toEqual([4.12, 6]);
+    });
+  });
+
+  describe('suelos libres y vacíos', () => {
+    const floors = () => editor.floorViews;
+
+    it('rectángulo arrastrado: suelo libre con su contorno; se selecciona tocándolo', async () => {
+      editor.setNodeSnapEnabled(false);
+      editor.setSnapEnabled(false);
+      editor.setTool('floor');
+      editor.setCreationMethod('floor', 'rect');
+      expect(editor.shapeDragActive).toBe(true);
+      editor.drawBegin(px(0), px(0));
+      editor.drawMove(px(4), px(1.5));
+      await editor.drawEnd(px(4), px(1.5));
+      expect(floors()).toHaveLength(1);
+      expect(floors()[0].zoneId).toBeNull();
+      expect(floors()[0].polygon).toHaveLength(4);
+
+      editor.setTool('select');
+      await editor.handleTap(px(2), px(0.7), TOL_PX);
+      expect(editor.selected?.type).toBe('Floor');
+    });
+
+    it('polígono por toques: tocar el primer vértice lo cierra; un vacío se agrega al suelo que lo contiene', async () => {
+      editor.setNodeSnapEnabled(false);
+      editor.setSnapEnabled(false);
+      editor.setTool('floor');
+      editor.setCreationMethod('floor', 'polygon');
+      for (const [x, y] of [[0, 0], [5, 0], [5, 3], [0, 3]]) await editor.handleTap(px(x), px(y), TOL_PX);
+      expect(editor.getState().shapeDraft?.points).toHaveLength(4);
+      await editor.handleTap(px(0), px(0), TOL_PX);
+      expect(editor.getState().shapeDraft).toBeNull();
+      expect(floors()).toHaveLength(1);
+
+      editor.setTool('void');
+      editor.setCreationMethod('void', 'circle');
+      editor.drawBegin(px(2.5), px(1.5));
+      editor.drawMove(px(3), px(1.5));
+      await editor.drawEnd(px(3), px(1.5));
+      expect(floors()[0].holes).toHaveLength(1);
+
+      // Deshacer quita el vacío; el suelo sigue.
+      await editor.undo();
+      expect(floors()[0].holes).toHaveLength(0);
+    });
+
+    it('un vacío fuera de cualquier suelo no se crea', async () => {
+      editor.setTool('void');
+      editor.setCreationMethod('void', 'rect');
+      editor.drawBegin(px(10), px(10));
+      editor.drawMove(px(11), px(11));
+      await editor.drawEnd(px(11), px(11));
+      expect(editor.getState().notice?.message).toMatch(/dentro de un suelo/);
+    });
+  });
+
   describe('herramienta selección', () => {
     it('toca un muro y lo selecciona', async () => {
       await drawRectangle();
@@ -212,6 +290,19 @@ describe('EditorController', () => {
 
       await editor.handleTap(px(2), px(0), TOL_PX);
 
+      expect(editor.selected).toBeInstanceOf(Wall);
+    });
+
+    it('lo que los filtros ocultan no se puede tocar (H-75)', async () => {
+      await drawRectangle();
+      editor.setTool('select');
+      editor.setPickFilter((o) => !(o instanceof Wall));
+
+      await editor.handleTap(px(2), px(0), TOL_PX);
+      expect(editor.selected).toBeNull();
+
+      editor.setPickFilter(null);
+      await editor.handleTap(px(2), px(0), TOL_PX);
       expect(editor.selected).toBeInstanceOf(Wall);
     });
 
@@ -480,6 +571,8 @@ describe('EditorController', () => {
       const reread = (await services.store.readObject(id)) as Wall;
       expect(reread.thickness).toBeCloseTo(0.15);
       expect(editor.getState().notice?.kind).toBe('error');
+      // H-46: el fallo también queda en el registro de diagnóstico.
+      expect(diagnostics.entries().some((e) => e.source === 'editor')).toBe(true);
     });
   });
 
@@ -1041,6 +1134,18 @@ describe('EditorController', () => {
       expect(editor.getState().selectedId).toBeNull();
     });
 
+    it('un espacio sin muros en la base (2.º piso con cotas absolutas) cierra su Recinto con el nivel más bajo', async () => {
+      editor.setScope(levels('L1'), null);
+      editor.setSnapEnabled(false);
+      editor.setNodeSnapEnabled(false);
+      await drawRectangle();
+      // Mirando otro nivel, el Recinto persistido sigue siendo el de L1 (el único con muros).
+      editor.setScope(levels('L2'), null);
+      await editor.reload();
+      const room = (await services.store.readObject(ROOM_OBJECT_ID)) as Room;
+      expect(room.geometry).toHaveLength(4);
+    });
+
     it('lo que no tiene nivel (levantado antes) pertenece a la base', async () => {
       editor.setSnapEnabled(false);
       editor.setNodeSnapEnabled(false);
@@ -1182,11 +1287,16 @@ describe('EditorController', () => {
     });
 
     it('el recinto que se guarda es el de la base, aunque se esté trazando en otro nivel', async () => {
+      editor.setScope(levels('L0'), null);
+      await drawRectangle(); // 4 × 3 en la base
       editor.setScope(levels('L1'), null);
-      await drawRectangle();
+      await drawWall(0, 0, 6, 0);
+      await drawWall(6, 0, 6, 5);
+      await drawWall(6, 5, 0, 5);
+      await drawWall(0, 5, 0, 0);
       expect(editor.getState().rooms).toHaveLength(1); // se ve en el nivel activo
       const room = (await services.store.readObject(ROOM_OBJECT_ID)) as Room;
-      expect(room.geometry).toHaveLength(0); // pero no reescribe el de la base
+      expect(Math.max(...room.geometry.map((p) => p.x))).toBeCloseTo(4); // pero no reescribe el de la base
     });
   });
 

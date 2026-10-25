@@ -46,3 +46,6 @@ yarn-error.*
 
 # Muestras de exportación generadas por la CI / tests
 app-bim-typescript/artifacts/
+
+# Mapa de graphify (local)
+graphify-out/

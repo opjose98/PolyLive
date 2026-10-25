@@ -6,7 +6,7 @@
 // value); se cierra tocando el velo o arrastrándolo hacia su borde.
 // =============================================================================
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AppState, StyleSheet, useWindowDimensions, View } from 'react-native';
 import Animated, {
   Extrapolation,
@@ -38,10 +38,16 @@ export function SideDrawer({ open, onClose, side, top = 0, children }: SideDrawe
 
   const progress = useSharedValue(0);
   const drag = useSharedValue(0);
+  // Cerrado y sin animar, el cajón se desmonta: no depende de que el estilo animado
+  // llegue a la vista (tras volver del selector de carpetas a veces no llegaba, H-53).
+  const [mounted, setMounted] = useState(open);
+  if (open && !mounted) setMounted(true);
 
   useEffect(() => {
     drag.value = 0;
-    progress.value = withSpring(open ? 1 : 0, spring.gentle);
+    progress.value = withSpring(open ? 1 : 0, spring.gentle, (finished) => {
+      if (finished && !open) runOnJS(setMounted)(false);
+    });
   }, [open, progress, drag]);
 
   // Una entrada del menú abre otra actividad (el selector de carpetas) mientras el cajón
@@ -52,6 +58,7 @@ export function SideDrawer({ open, onClose, side, top = 0, children }: SideDrawe
       if (s !== 'active') return;
       drag.value = 0;
       progress.value = open ? 1 : 0;
+      if (!open) setMounted(false);
     });
     return () => sub.remove();
   }, [open, progress, drag]);
@@ -76,6 +83,8 @@ export function SideDrawer({ open, onClose, side, top = 0, children }: SideDrawe
   const scrimStyle = useAnimatedStyle(() => ({
     opacity: interpolate(progress.value, [0, 1], [0, 1], Extrapolation.CLAMP) * (1 - drag.value / width),
   }));
+
+  if (!mounted) return null;
 
   return (
     <View

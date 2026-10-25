@@ -35,7 +35,9 @@ export class ExpoSQLiteDatabase implements IDatabase {
   }
 
   async open(): Promise<void> {
-    this.db = await SQLite.openDatabaseAsync(this.dbName);
+    // Conexión propia, no la de la caché de expo-sqlite: tras una recarga del JS (dev client), el
+    // contexto viejo cierra al liberarse la conexión compartida y el nuevo quedaba sin base (H-81).
+    this.db = await SQLite.openDatabaseAsync(this.dbName, { useNewConnection: true });
     await this.exec('PRAGMA journal_mode = WAL;');
     await this.exec('PRAGMA busy_timeout = 5000;');
     await this.exec('PRAGMA foreign_keys = ON;');
@@ -71,6 +73,20 @@ export class ExpoSQLiteDatabase implements IDatabase {
   }
 
   async transaction<T>(fn: () => Promise<T>): Promise<T> {
+    // Una conexión, una transacción a la vez: un BEGIN que llega durante otra falla y su
+    // ROLLBACK deshace la primera ("cannot rollback - no transaction is active", H-52).
+    // Las transacciones no se anidan en el código (anidar aquí bloquearía la cola).
+    const run = this.txQueue.then(() => this.runTransaction(fn));
+    this.txQueue = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }
+
+  private txQueue: Promise<void> = Promise.resolve();
+
+  private async runTransaction<T>(fn: () => Promise<T>): Promise<T> {
     let result: T;
 
     // BUG CORREGIDO: la versión anterior capturaba el error de `fn()` DENTRO

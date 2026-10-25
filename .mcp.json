@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "polylive": {
+      "command": "node",
+      "args": ["app-bim-typescript/scripts/bridge/polylive-bridge.mjs", "--mcp"]
+    }
+  }
+}

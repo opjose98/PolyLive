@@ -1,5 +1,5 @@
 // =============================================================================
-// useProjectLevels — Niveles y fases del proyecto en el espacio de trabajo
+// useProjectLevels — Niveles y fases del espacio de trabajo (son de cada espacio)
 // =============================================================================
 //
 // Une las tres piezas que antes vivían sueltas en la pantalla:
@@ -23,25 +23,28 @@ import { haptic } from '../design/haptics';
 export function useProjectLevels({
   services,
   projectId,
+  spaceId,
   editor,
 }: {
   services: AppServices;
   projectId?: string;
+  spaceId: string;
   editor: EditorController;
 }) {
+  const scope = useMemo(() => (projectId ? { projectId, spaceId } : null), [projectId, spaceId]);
   const levelsState = useStore(workspaceStore, (s) => s.levels);
   const phasesState = useStore(workspaceStore, (s) => s.phases);
   const [loaded, setLoaded] = useState(false);
 
   const reload = useCallback(async () => {
-    if (!projectId) return;
+    if (!scope) return;
     const toItem = (m: ProjectMarker) => ({ id: m.id, name: m.name, value: m.value, base: m.isBase });
-    const [lv, ph] = await Promise.all([services.markers.list(projectId, 'level'), services.markers.list(projectId, 'phase')]);
+    const [lv, ph] = await Promise.all([services.markers.list(scope, 'level'), services.markers.list(scope, 'phase')]);
     const ws = workspaceStore.getState();
     ws.setRangeItems('levels', lv.map(toItem));
     ws.setRangeItems('phases', ph.map(toItem));
     setLoaded(true);
-  }, [services, projectId]);
+  }, [services, scope]);
 
   useEffect(() => {
     reload().catch(() => toast('No se pudieron leer los niveles del proyecto.', { kind: 'error' }));
@@ -61,9 +64,9 @@ export function useProjectLevels({
       const failed = () => toast(`No se pudo guardar el ${label.toLowerCase()}.`, { kind: 'error' });
       return {
         onAdd: () => {
-          if (!projectId) return;
+          if (!scope) return;
           services.markers
-            .add(projectId, kind, label)
+            .add(scope, kind, label)
             .then(() => {
               haptic.commit();
               return reload();
@@ -71,8 +74,9 @@ export function useProjectLevels({
             .catch(failed);
         },
         onRemove: (id) => {
+          if (!scope) return;
           services.markers
-            .remove(id)
+            .remove(scope, id)
             .then((ok) => {
               if (ok) toast(`${label} eliminado: lo que tenía pasa a la base`, { kind: 'info' });
               return reload();
@@ -80,10 +84,11 @@ export function useProjectLevels({
             .catch(failed);
         },
         onRename: (id, name) => {
-          services.markers.rename(id, name).then(reload).catch(failed);
+          if (scope) services.markers.rename(scope, id, name).then(reload).catch(failed);
         },
         onSetValue: async (id, value) => {
-          const r = await services.markers.setValue(id, value);
+          if (!scope) return 'invalid';
+          const r = await services.markers.setValue(scope, id, value);
           if (r.ok) {
             await reload();
             return null;
@@ -92,7 +97,7 @@ export function useProjectLevels({
         },
       };
     },
-    [services, projectId, reload],
+    [services, scope, reload],
   );
   const levelHandlers = useMemo(() => handlersFor('level', 'Nivel'), [handlersFor]);
   const phaseHandlers = useMemo(() => handlersFor('phase', 'Fase'), [handlersFor]);
@@ -103,12 +108,13 @@ export function useProjectLevels({
       view.levels.map((i) => ({
         id: i.id,
         projectId: projectId ?? '',
+        spaceId,
         kind: 'level' as const,
         name: i.name,
         value: i.value,
         isBase: !!i.base,
       })),
-    [view.levels, projectId],
+    [view.levels, projectId, spaceId],
   );
 
   return { loaded, view, levelHandlers, phaseHandlers, projectLevels };

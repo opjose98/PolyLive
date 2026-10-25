@@ -22,7 +22,7 @@ import type { ProgressStore } from '../../infrastructure/sqlite/ProgressStore';
 
 export type ProgressTool = 'brush' | 'eraser' | 'fill' | 'rect';
 
-export interface ProgressDraft {
+interface ProgressDraft {
   readonly target: ProgressTarget;
   readonly tool: 'brush' | 'eraser' | 'rect';
   readonly points: readonly Point2D[];

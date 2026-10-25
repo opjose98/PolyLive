@@ -12,8 +12,7 @@ import type { StoreApi } from 'zustand/vanilla';
 import type { WorkspaceState } from './workspaceStore';
 import { record } from '../shared/diagnostics';
 
-export const PREF_KEYS = ['canvasTheme', 'grid', 'snap', 'scale', 'layers'] as const;
-export type WorkspacePrefs = Partial<Pick<WorkspaceState, (typeof PREF_KEYS)[number]>>;
+export type WorkspacePrefs = Partial<Pick<WorkspaceState, 'canvasTheme' | 'grid' | 'snap' | 'scale' | 'layers'>>;
 
 export interface PrefsStorage {
   load(): Promise<WorkspacePrefs | null>;

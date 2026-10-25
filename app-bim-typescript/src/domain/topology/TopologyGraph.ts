@@ -39,6 +39,25 @@ export interface TopologyCycle {
   readonly fromNodeIds: string[];
 }
 
+/**
+ * Punto donde se cruzan los segmentos ab y cd, si cae en el interior de los dos (a más de `tol`
+ * de cada extremo: lo que toca un extremo ya es una T y lo parte `splitEdgesAt`). Paralelos: null.
+ */
+function crossingPoint(a: Point2D, b: Point2D, c: Point2D, d: Point2D, tol: number): Point2D | null {
+  const rx = b.x - a.x;
+  const ry = b.y - a.y;
+  const sx = d.x - c.x;
+  const sy = d.y - c.y;
+  const den = rx * sy - ry * sx;
+  if (Math.abs(den) < 1e-12) return null;
+  const t = ((c.x - a.x) * sy - (c.y - a.y) * sx) / den;
+  const u = ((c.x - a.x) * ry - (c.y - a.y) * rx) / den;
+  const lr = Math.hypot(rx, ry);
+  const ls = Math.hypot(sx, sy);
+  if (t * lr < tol || (1 - t) * lr < tol || u * ls < tol || (1 - u) * ls < tol) return null;
+  return { x: a.x + t * rx, y: a.y + t * ry };
+}
+
 /** Límite de aristas por ciclo, para no colgarse en grafos degenerados. */
 const MAX_CYCLE_LENGTH = 200;
 
@@ -86,6 +105,32 @@ export class TopologyGraph {
     this.edges.set(edge.id, edge);
     startNode.connectedEdgeIds.push(edge.id);
     endNode.connectedEdgeIds.push(edge.id);
+
+    // T en orden inverso: si el muro nuevo pasa por extremos ya existentes, también se
+    // parte; si no, el recinto depende del orden de trazado (H-69).
+    if (edge.geometryType !== 'line') return;
+    const a = startNode.position;
+    const b = endNode.position;
+    for (const node of [...this.nodes.values()]) {
+      if (node === startNode || node === endNode) continue;
+      if (distanceToSegment(node.position, a, b) < this.snapTolerance) this.splitEdgesAt(node);
+    }
+
+    // Cruce en X sin extremo común: el punto de cruce es un nudo de los dos muros (H-83).
+    const crossings: Point2D[] = [];
+    for (const other of this.edges.values()) {
+      if (other.geometryType !== 'line' || other.id === edge.id) continue;
+      const c = this.nodes.get(other.startNodeId)?.position;
+      const d = this.nodes.get(other.endNodeId)?.position;
+      const p = c && d ? crossingPoint(a, b, c, d, this.snapTolerance) : null;
+      if (p) crossings.push(p);
+    }
+    for (const p of crossings) {
+      const node = this.getOrCreateNode(p);
+      // Una vez para el muro existente y otra para el nuevo (o su tramo).
+      this.splitEdgesAt(node);
+      this.splitEdgesAt(node);
+    }
   }
 
   /** Añade varios muros en orden. */
@@ -97,11 +142,11 @@ export class TopologyGraph {
    * Detecta todos los ciclos mínimos cerrados formados por aristas de muro.
    *
    * Usa traversía de caras planares (rotation system tipo DCEL). La cara
-   * exterior —el contorno del conjunto, que siempre aparece como un ciclo más—
-   * se descarta antes de devolver: es el ciclo de mayor área absoluta.
+   * exterior de cada grupo de muros conectados —su contorno, que siempre aparece
+   * como un ciclo más, recorrido al revés que los recintos— se descarta.
    */
   findMinimalCycles(): TopologyCycle[] {
-    const wallEdges = [...this.edges.values()].filter((e) => e.objectType === 'wall');
+    const wallEdges = pruneFilaments([...this.edges.values()].filter((e) => e.objectType === 'wall'));
     if (wallEdges.length < 2) return [];
 
     const outAngles = this.buildRotationSystem(wallEdges);
@@ -144,23 +189,15 @@ export class TopologyGraph {
     }
 
     if (rawCycles.length === 0) return [];
-    if (rawCycles.length === 1) return rawCycles;
 
-    // Descartar la cara exterior: la de mayor área absoluta.
-    let maxArea = -1;
-    let outerIdx = 0;
-    for (let i = 0; i < rawCycles.length; i++) {
-      const verts = rawCycles[i].fromNodeIds
-        .map((id) => this.nodes.get(id)?.position)
-        .filter((p): p is Point2D => p !== undefined);
-      const a = Math.abs(signedArea(verts));
-      if (a > maxArea) {
-        maxArea = a;
-        outerIdx = i;
-      }
-    }
-
-    return rawCycles.filter((_, i) => i !== outerIdx);
+    // Descartar las caras exteriores: el contorno de CADA grupo de muros conectados.
+    // Con el giro más a la izquierda (nextHalfEdge) un recinto se recorre en sentido
+    // antihorario (área positiva) y todo contorno exterior en horario (negativa).
+    // Antes se descartaba solo el ciclo de mayor área: con dos grupos de muros que no
+    // se tocan, el contorno del segundo quedaba como recinto (ANDA, NARG29).
+    return rawCycles.filter(
+      (c) => signedArea(c.fromNodeIds.map((id) => this.nodes.get(id)?.position).filter((p): p is Point2D => p !== undefined)) > 1e-9,
+    );
   }
 
   // -------------------------------------------------------------------------
@@ -403,6 +440,25 @@ export class TopologyGraph {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Quita los muros colgantes (y las cadenas que quedan colgando al quitarlos): no
+ * encierran nada. Sin esto, el recorrido de una cara se corta en su punta y la cara
+ * exterior no cierra; entonces se descartaba como "exterior" el recinto más grande.
+ */
+function pruneFilaments(edges: readonly TopologyEdge[]): TopologyEdge[] {
+  let kept = [...edges];
+  for (;;) {
+    const degree = new Map<string, number>();
+    for (const e of kept) {
+      degree.set(e.startNodeId, (degree.get(e.startNodeId) ?? 0) + 1);
+      degree.set(e.endNodeId, (degree.get(e.endNodeId) ?? 0) + 1);
+    }
+    const next = kept.filter((e) => degree.get(e.startNodeId)! > 1 && degree.get(e.endNodeId)! > 1);
+    if (next.length === kept.length) return kept;
+    kept = next;
+  }
+}
 
 /**
  * Clona un muro con un eje recto nuevo, PRESERVANDO su `id`.
