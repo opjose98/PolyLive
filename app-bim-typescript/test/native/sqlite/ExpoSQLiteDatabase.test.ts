@@ -27,7 +27,8 @@ describe('ExpoSQLiteDatabase', () => {
     const db = new ExpoSQLiteDatabase('test.db');
     await db.open();
 
-    expect(openDatabaseAsync).toHaveBeenCalledWith('test.db');
+    // Conexión propia: tras una recarga del JS no comparte la de la caché que el contexto viejo cierra (H-81).
+    expect(openDatabaseAsync).toHaveBeenCalledWith('test.db', { useNewConnection: true });
     expect(mockDb.execAsync).toHaveBeenCalledWith(expect.stringContaining('WAL'));
     expect(mockDb.execAsync).toHaveBeenCalledWith(expect.stringContaining('foreign_keys'));
     expect(mockDb.execAsync).toHaveBeenCalledWith(expect.stringContaining('busy_timeout'));

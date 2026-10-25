@@ -509,7 +509,7 @@ export abstract class EditorCore {
 
   /** Alzado del muro en cotas absolutas. */
   wallProfile(wall: Wall): WallProfile {
-    return resolveWallProfile(this.wallVertical(wall), this.levelElevations);
+    return resolveWallProfile(this.wallVertical(wall), this.levelElevations, wall.length as number);
   }
 
   columnVertical(column: Column): VerticalExtent {
@@ -560,7 +560,7 @@ export abstract class EditorCore {
   protected levelOf(o: RevitObjectBase, lv: LevelScope): string {
     const raw =
       o instanceof Wall
-        ? hostLevelOf(this.wallVertical(o), lv.elevations)
+        ? hostLevelOf(this.wallVertical(o), lv.elevations, o.length as number)
         : o instanceof Column
           ? this.columnVertical(o).baseLevelId
           : o.properties?.[LEVEL_PROP];

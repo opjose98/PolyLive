@@ -14,6 +14,8 @@ import { BridgeContext, runBridgeCommand } from '../../application/bridge/bridge
 
 const DEFAULT_URL = 'http://127.0.0.1:8765';
 const RETRY_MS = 4000;
+/** Cabecera propia: un navegador no la puede mandar sin preflight CORS (que el puente no concede). */
+const BRIDGE_HEADERS = { 'x-polylive-bridge': '1' };
 
 type MutableContext = { -readonly [K in keyof BridgeContext]: BridgeContext[K] };
 
@@ -35,8 +37,12 @@ export function startDevBridge(services: AppServices, url = DEFAULT_URL): () => 
   void (async () => {
     while (!stopped) {
       try {
-        const r = await fetch(`${url}/next`);
-        if (r.status !== 200) continue;
+        const r = await fetch(`${url}/next`, { headers: BRIDGE_HEADERS });
+        if (r.status === 204) continue; // sin comandos: otra espera larga
+        if (r.status !== 200) {
+          await sleep(RETRY_MS); // otro servidor o un error: no martillar el puerto
+          continue;
+        }
         const c = (await r.json()) as { id: string; cmd: string; args?: Record<string, unknown> };
         let out: { id: string; ok: boolean; result?: unknown; error?: string };
         try {
@@ -45,7 +51,7 @@ export function startDevBridge(services: AppServices, url = DEFAULT_URL): () => 
           const e = err as { userMessage?: string; message?: string };
           out = { id: c.id, ok: false, error: e.userMessage ?? e.message ?? String(err) };
         }
-        await fetch(`${url}/result`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(out) });
+        await fetch(`${url}/result`, { method: 'POST', headers: { ...BRIDGE_HEADERS, 'content-type': 'application/json' }, body: JSON.stringify(out) });
       } catch {
         await sleep(RETRY_MS);
       }

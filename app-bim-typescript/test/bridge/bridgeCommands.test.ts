@@ -67,6 +67,12 @@ describe('puente: comandos', () => {
     await runBridgeCommand(ctx, 'ops', { list: [{ op: 'props', id: floorId, set: { name: 'Andén', thickness: 0.12 } }] });
     const named = ((await runBridgeCommand(ctx, 'objects')) as { floors: { id: string; name?: string; thickness: number }[] }).floors.find((f) => f.id === floorId);
     expect(named).toMatchObject({ name: 'Andén', thickness: 0.12 });
+    // Un vano sin carpintería por el puente es un paso de deshacer, como en la pantalla.
+    await runBridgeCommand(ctx, 'ops', { list: [{ op: 'opening', wall: wallId, offset: 4, width: 0.8, height: 2, sill: 0 }] });
+    expect(((await runBridgeCommand(ctx, 'objects')) as { openings: unknown[] }).openings).toHaveLength(1);
+    await runBridgeCommand(ctx, 'undo');
+    expect(((await runBridgeCommand(ctx, 'objects')) as { openings: unknown[] }).openings).toHaveLength(0);
+
     // Espesor y nombre son dos pasos; el tercero quita el andén.
     for (let i = 0; i < 3; i++) await runBridgeCommand(ctx, 'undo');
 

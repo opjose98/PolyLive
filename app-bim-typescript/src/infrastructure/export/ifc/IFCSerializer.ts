@@ -310,8 +310,8 @@ export class IFCSerializer {
         if (length < 1e-6) return; // degenerado: no hay dirección
 
         const vertical = wallVerticalOf(wall, baseLevel.id, LEVEL_PROP);
-        const profile = resolveWallProfile(vertical, elevations);
-        const rc = revitConstraints(vertical, elevations);
+        const profile = resolveWallProfile(vertical, elevations, length);
+        const rc = revitConstraints(vertical, elevations, length);
         const storey = storeyOf(rc.baseLevelId);
         const bottom = profileBottom(profile);
         const thickness = wall.thickness as number;

@@ -161,5 +161,8 @@ describe('estaciones (culatas sin partir el muro)', () => {
 
   it('una estación fuera del muro (se acortó) no cuenta', () => {
     expect(profileArea(p, 2.5)).toBeCloseTo(2.5 * 3);
+    // Con el largo, tampoco sube la altura ni la restricción de Revit.
+    expect(profileTop(resolveWallProfile(v, LV, 2.5))).toBe(3);
+    expect(revitConstraints(v, LV, 2.5)).toMatchObject({ topLevelId: 'n1', profileEdited: false });
   });
 });

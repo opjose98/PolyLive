@@ -35,7 +35,9 @@ export class ExpoSQLiteDatabase implements IDatabase {
   }
 
   async open(): Promise<void> {
-    this.db = await SQLite.openDatabaseAsync(this.dbName);
+    // Conexión propia, no la de la caché de expo-sqlite: tras una recarga del JS (dev client), el
+    // contexto viejo cierra al liberarse la conexión compartida y el nuevo quedaba sin base (H-81).
+    this.db = await SQLite.openDatabaseAsync(this.dbName, { useNewConnection: true });
     await this.exec('PRAGMA journal_mode = WAL;');
     await this.exec('PRAGMA busy_timeout = 5000;');
     await this.exec('PRAGMA foreign_keys = ON;');

@@ -286,8 +286,14 @@ diferencia de áreas de BRIS es de reparto (el plano asigna al Corredor parte de
 41,6 contra 40,65, coincide). Los contornos exteriores se leyeron a escala del plano de zonificación contra los
 muros levantados (≈1,9 cm por píxel en MARA): conviene confirmarlos en obra.
 
-**Hallazgos de la ronda:** H-79 y H-80 corregidos; H-81 (recarga en caliente en el dev client) abierto, solo de
-desarrollo.
+**Hallazgos de la ronda:** H-79, H-80 y H-81 corregidos.
+
+**Auditoría del código de la ronda** (revisión de todo el diff, 10 hallazgos, todos corregidos con pruebas): el puente
+exige una cabecera propia (una página web no puede mandarle comandos) y no martilla el puerto ante errores; las
+estaciones que quedan fuera al acortar un muro ya no suben su altura ni su restricción de Revit; los cortes ignoran
+huecos de vanos borrados y se calculan al abrir el alzado; vano y antepecho por el puente son deshacibles; partir y
+unir se devuelven solos si fallan a mitad; unir copia las mediciones del tramo que desaparece y avisa si las dos
+mitades llegaban a alturas distintas al punto común.
 
 ## Nota del build release
 

@@ -173,7 +173,7 @@ describe('ElevationEditor', () => {
     await services.store.createObject(
       new Wall({ id: revitObjectId('w2'), roomId: ROOM, startPoint: { x: 2, y: 0 }, endPoint: { x: 2, y: 3 }, thickness: meters(0.2), height: meters(2.5) }),
     );
-    await ed.load(false);
+    await ed.load(); // los cortes se calculan al abrir el alzado
     const cuts = ed.getState().cuts;
     expect(cuts).toHaveLength(1);
     expect(cuts[0]).toMatchObject({ id: 'w2', kind: 'wall', y0: 0, y1: 2.5 });

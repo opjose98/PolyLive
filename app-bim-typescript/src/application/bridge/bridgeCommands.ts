@@ -38,7 +38,8 @@ import {
   wallVerticalOf,
   withStation,
 } from '../../domain/objects/vertical';
-import type { WallOpeningId } from '../../domain/objects/wall-elevation';
+import type { WallElevation, WallOpeningId } from '../../domain/objects/wall-elevation';
+import { ElevationSnapshotCommand } from '../commands/ElevationSnapshotCommand';
 import { columnProjection, sectionProjection } from '../section/projection';
 
 /** Lo que el puente necesita de la app en marcha (lo registran App y SurveyScreen). */
@@ -244,7 +245,7 @@ async function objects(ctx: BridgeContext) {
       .filter((o): o is Wall => o instanceof Wall)
       .map((w) => {
         const v = wallVerticalOf(w, base, LEVEL_PROP);
-        const p = resolveWallProfile(v, elev);
+        const p = resolveWallProfile(v, elev, w.length as number);
         return {
           id: w.id,
           name: w.properties.name,
@@ -342,16 +343,23 @@ async function ops(ctx: BridgeContext, args: Args) {
     if (!(w instanceof Wall)) throw new Error(`"${String(id)}" no es un muro.`);
     return w;
   };
-  const checkProfile = (v: WallVertical): number => {
-    const p = resolveWallProfile(v, elev);
+  const checkProfile = (v: WallVertical, length: number): number => {
+    const p = resolveWallProfile(v, elev, length);
     const problem = profileProblem(p);
     if (problem) throw new Error(problem);
     return profileHeight(p);
   };
+  // Lo que se escribe en el alzado entra en la historia como en la pantalla (un paso de deshacer).
+  const undoable = (before: WallElevation, after: WallElevation) =>
+    ctx.services.commandStack.execute(
+      new ElevationSnapshotCommand((e) => ctx.services.elevations.saveElevation(e), { elevation: before, vanos: new Map() }, { elevation: after, vanos: new Map() }),
+    );
   const setSill = async (wall: Wall, vanoId: string, sill: number) => {
     const e = await ctx.services.elevations.getElevation(wall);
     const o = e.openings.find((x) => x.vanoId === vanoId);
-    if (o) await ctx.services.elevations.updateOpening(e, wall, o.id as WallOpeningId, { sillHeight: sill });
+    if (!o) return;
+    const r = await ctx.services.elevations.updateOpening(e, wall, o.id as WallOpeningId, { sillHeight: sill });
+    await undoable(e, r.elevation);
   };
   const roomId = scope(ctx).spaceId as never;
 
@@ -374,9 +382,10 @@ async function ops(ctx: BridgeContext, args: Args) {
     switch (o.op) {
       case 'wall': {
         const v = verticalOf(o);
-        const height = checkProfile(v);
         const [sx, sy] = o.start as Xy;
         const [ex, ey] = o.end as Xy;
+        const len = Math.hypot(ex - sx, ey - sy);
+        const height = checkProfile(v, len);
         const { wall } = await ctx.services.useCases.createWall.execute({
           roomId,
           startPoint: { x: sx, y: sy },
@@ -385,7 +394,7 @@ async function ops(ctx: BridgeContext, args: Args) {
           height: meters(height),
           material: o.material as string | undefined,
           vertical: v,
-          properties: { ...editor.creationProps(hostLevelOf(v, elev)), ...(o.name ? { name: String(o.name) } : {}) },
+          properties: { ...editor.creationProps(hostLevelOf(v, elev, len)), ...(o.name ? { name: String(o.name) } : {}) },
         });
         if (o.structural === false) {
           await ctx.services.useCases.updateObjectProperty.execute({ objectId: wall.id, property: 'isStructural', newValue: false });
@@ -421,6 +430,7 @@ async function ops(ctx: BridgeContext, args: Args) {
           height: Number(o.height),
           sillHeight: Number(o.sill ?? 0),
         });
+        await undoable(e, r.elevation);
         return r.opening.id;
       }
       case 'sill': {
@@ -494,7 +504,7 @@ async function ops(ctx: BridgeContext, args: Args) {
         } else {
           next = withStation(current, { at: Number(o.at), ext: toExtent(o as ExtentSpec, current.start) });
         }
-        const height = checkProfile(next);
+        const height = checkProfile(next, obj.length as number);
         await ctx.services.useCases.updateObjectProperty.execute({ objectId: obj.id, property: 'vertical', newValue: next, also: { height: meters(height) } });
         return obj.id;
       }
@@ -527,7 +537,7 @@ async function ops(ctx: BridgeContext, args: Args) {
           removeVertical: wallVerticalOf(b, base, LEVEL_PROP),
           levels: elev,
         });
-        return { id: a.id, length: r.length };
+        return { id: a.id, length: r.length, mismatch: r.mismatch };
       }
       case 'split': {
         const wall = await wallOf(o.wall);

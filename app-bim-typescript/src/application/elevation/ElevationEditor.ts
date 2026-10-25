@@ -190,7 +190,8 @@ export class ElevationEditor {
       this.stored = await this.services.elevations.getElevation(wall);
       this.publish(wall, this.stored);
       if (fit) this.zoomToFit();
-      await this.loadCuts(wall);
+      // Lo que atraviesa el muro no cambia con lo que se edita aquí (vanos, estaciones): se calcula al abrir.
+      if (fit) await this.loadCuts(wall);
     } catch (err) {
       // La vista llama a load() sin esperar: un error aquí no debe quedar
       // como promesa rechazada sin manejar.
@@ -201,7 +202,7 @@ export class ElevationEditor {
   private publish(wall: Wall, stored: WallElevation): void {
     const base = this.levels.find((m) => m.isBase)?.id ?? '';
     const vertical = this.preview ?? wallVerticalOf(wall, base, LEVEL_PROP);
-    const profile = wall.vertical || this.preview ? resolveWallProfile(vertical, this.levelElevations) : null;
+    const profile = wall.vertical || this.preview ? resolveWallProfile(vertical, this.levelElevations, wall.length as number) : null;
     const elevation = profile ? { ...stored, levels: levelsFromProfile(profile) } : stored;
     const baseElevation = profile ? profileBottom(profile) : this.levelElevations.get(vertical.start.baseLevelId) ?? 0;
     const selectedId = elevation.openings.some((o) => o.id === this.state.selectedId) ? this.state.selectedId : null;
@@ -635,7 +636,7 @@ export class ElevationEditor {
   async saveVertical(next: WallVertical): Promise<boolean> {
     const wall = this.state.wall;
     if (!wall) return false;
-    const p = resolveWallProfile(next, this.levelElevations);
+    const p = resolveWallProfile(next, this.levelElevations, wall.length as number);
     const problem = profileProblem(p);
     if (problem) {
       this.notify('error', problem);
@@ -676,7 +677,7 @@ export class ElevationEditor {
           if (near(other.endPoint, pt)) next = { ...next, end: ext };
         }
         if (next === ov) continue;
-        const p = resolveWallProfile(next, this.levelElevations);
+        const p = resolveWallProfile(next, this.levelElevations, other.length as number);
         if (profileProblem(p)) continue;
         await this.services.useCases.updateObjectProperty.execute({
           objectId: other.id,

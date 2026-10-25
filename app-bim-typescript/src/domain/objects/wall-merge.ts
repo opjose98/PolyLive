@@ -33,6 +33,8 @@ export interface MergePlan {
   readonly flipA: boolean;
   readonly flipB: boolean;
   readonly length: number;
+  /** B tenía otra base o tope en el punto común: se tomó la de A (hay que avisarlo). */
+  readonly mismatch: boolean;
 }
 
 const near = (p: Point2D, q: Point2D) => Math.hypot(p.x - q.x, p.y - q.y) <= NODE_TOL;
@@ -63,6 +65,10 @@ export function planWallMerge(a: Seg, b: Seg, levels: LevelElevations): MergePla
   const startExt = flipA ? extA('end') : extA('start');
   const endExt = flipB ? extB('start') : extB('end');
   const pExt = aP === 'end' ? extA('end') : extA('start');
+  const pExtB = bP === 'start' ? extB('start') : extB('end');
+  const ra = resolveExtent(pExt, levels);
+  const rb = resolveExtent(pExtB, levels);
+  const mismatch = Math.abs(ra.top - rb.top) > 1e-3 || Math.abs(ra.base - rb.base) > 1e-3;
 
   const stations: WallStation[] = [
     ...(a.vertical.stations ?? []).map((s) => ({ at: mapA(s.at), ext: s.ext })),
@@ -77,7 +83,7 @@ export function planWallMerge(a: Seg, b: Seg, levels: LevelElevations): MergePla
   const kept = breaks(prev, { at: La, ext: pExt }, next, levels) ? withP : stations.sort((x, y) => x.at - y.at);
 
   const vertical: WallVertical = kept.length ? { start: startExt, end: endExt, stations: kept } : { start: startExt, end: endExt };
-  return { start: Fa, end: Fb, vertical, mapA, mapB, flipA, flipB, length: L };
+  return { start: Fa, end: Fb, vertical, mapA, mapB, flipA, flipB, length: L, mismatch };
 }
 
 /** ¿El perfil cambia de pendiente en `mid` (base o tope)? */

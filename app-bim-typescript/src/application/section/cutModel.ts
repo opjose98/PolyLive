@@ -68,10 +68,12 @@ export async function loadCutModel(
   for (const w of objects) {
     if (!(w instanceof Wall) || !w.isStraight) continue;
     const L = w.length as number;
-    const profile = resolveWallProfile(wallVerticalOf(w, baseLevelId, LEVEL_PROP), levels);
+    const profile = resolveWallProfile(wallVerticalOf(w, baseLevelId, LEVEL_PROP), levels, L);
     const bottom = profileBottom(profile);
     const seen = new Set<string>();
-    const openings = (elevOf.get(w.id as string)?.openings ?? []).map((o) => {
+    // Un hueco cuyo vano ya no existe (puerta borrada) no corta: el alzado guardado no se reconcilia al listarlo.
+    const live = (elevOf.get(w.id as string)?.openings ?? []).filter((o) => !o.vanoId || vanos.has(o.vanoId));
+    const openings = live.map((o) => {
       const v = o.vanoId ? vanos.get(o.vanoId) : undefined;
       if (o.vanoId) seen.add(o.vanoId);
       const x0 = v ? (v.offsetAlongWall as number) : o.xOffset;

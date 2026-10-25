@@ -15,6 +15,7 @@
 //   GET  /next     la app espera aquí el siguiente comando (long-poll 25 s)
 //   POST /result   la app devuelve { id, ok, result | error }
 //   POST /call     { cmd, args } → espera el resultado (para curl o scripts)
+//   Todas (menos /health) exigen la cabecera `x-polylive-bridge: 1`.
 //   GET  /health   ¿hay una app conectada?
 //
 // Sin dependencias: http y JSON-RPC por stdio a mano. Escucha solo en
@@ -83,6 +84,12 @@ function readBody(req) {
 
 const server = http.createServer(async (req, res) => {
   try {
+    // Una página web del PC podría mandar un POST "simple" a 127.0.0.1 sin preflight
+    // CORS. Una cabecera propia lo impide: el navegador pediría permiso y no se le da.
+    if (req.url !== '/health' && req.headers['x-polylive-bridge'] !== '1') {
+      res.writeHead(403).end();
+      return;
+    }
     if (req.method === 'GET' && req.url === '/next') {
       lastSeen = Date.now();
       res.pollTimer = setTimeout(() => {
@@ -133,7 +140,7 @@ server.on('error', (e) => {
   if (e.code === 'EADDRINUSE' && MCP) {
     log(`el puerto ${PORT} ya tiene un puente: se le reenvían las llamadas`);
     forward = async (cmd, args) => {
-      const r = await fetch(`http://127.0.0.1:${PORT}/call`, { method: 'POST', body: JSON.stringify({ cmd, args }) });
+      const r = await fetch(`http://127.0.0.1:${PORT}/call`, { method: 'POST', headers: { 'x-polylive-bridge': '1' }, body: JSON.stringify({ cmd, args }) });
       return r.json();
     };
     return;

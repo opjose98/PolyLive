@@ -249,14 +249,15 @@ export abstract class EditorCreation extends EditorGestures {
     let height = this.defaults.wallHeight;
     let level: string | undefined;
     if (vertical) {
-      const profile = resolveWallProfile(vertical, this.levelElevations);
+      const len = Math.hypot(end.x - start.x, end.y - start.y);
+      const profile = resolveWallProfile(vertical, this.levelElevations, len);
       const problem = profileProblem(profile);
       if (problem) {
         this.notify('error', `${problem} Ajusta la base y el tope en el selector del muro.`);
         return;
       }
       height = meters(profileHeight(profile));
-      level = hostLevelOf(vertical, this.levelElevations);
+      level = hostLevelOf(vertical, this.levelElevations, len);
     }
     this.patch({ busy: true });
     try {
@@ -716,7 +717,12 @@ export abstract class EditorCreation extends EditorGestures {
         levels: this.levelElevations,
       });
       await this.reload();
-      this.notify('success', `Muros unidos: ${r.length.toFixed(2)} m.`);
+      this.notify(
+        r.mismatch ? 'info' : 'success',
+        r.mismatch
+          ? `Muros unidos (${r.length.toFixed(2)} m). Tenían alturas distintas en el punto común: quedó la del muro seleccionado; revísalo en el alzado.`
+          : `Muros unidos: ${r.length.toFixed(2)} m.`,
+      );
       return true;
     } catch (err) {
       this.fail(err, 'No se pudieron unir los muros.');
@@ -791,7 +797,7 @@ export abstract class EditorCreation extends EditorGestures {
     let height: number;
     if (sel instanceof Wall) {
       if (!('start' in vertical)) return false;
-      const profile = resolveWallProfile(vertical, this.levelElevations);
+      const profile = resolveWallProfile(vertical, this.levelElevations, sel.length as number);
       const problem = profileProblem(profile);
       if (problem) {
         this.notify('error', problem);

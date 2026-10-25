@@ -38,14 +38,14 @@ export class SplitWallUseCase {
     const plan = planWallSplit(wall.startPoint, wall.endPoint, input.vertical, input.levels, input.distance);
     if (!plan) throw invalid(`Cada tramo debe medir al menos ${MIN_SPLIT_PIECE.toFixed(2)} m.`);
 
-    const height = (v: WallVertical) => profileHeight(resolveWallProfile(v, input.levels));
+    const height = (v: WallVertical, len: number) => profileHeight(resolveWallProfile(v, input.levels, len));
     const second = new Wall({
       id: generateId(),
       roomId: wall.roomId,
       startPoint: plan.at,
       endPoint: wall.endPoint,
       thickness: wall.thickness,
-      height: height(plan.second) as never,
+      height: height(plan.second, plan.secondLength) as never,
       material: wall.material,
       isStructural: wall.isStructural,
       vertical: plan.second,
@@ -84,8 +84,7 @@ export class SplitWallUseCase {
       copies.push(await this.store.createMeasurement(copy));
     }
 
-    await this.commandStack.execute(
-      new SplitWallCommand(
+    const command = new SplitWallCommand(
         {
           saveElevation: (e) => this.elevations.saveElevation(e),
           deleteMeasurement: (id) => this.store.deleteMeasurement(id),
@@ -95,7 +94,7 @@ export class SplitWallUseCase {
           wallId: wall.id as string,
           newWallId: second.id as string,
           before: { start: wall.startPoint, end: wall.endPoint, vertical: input.vertical, height: wall.height as number },
-          after: { start: wall.startPoint, end: plan.at, vertical: plan.first, height: height(plan.first) },
+          after: { start: wall.startPoint, end: plan.at, vertical: plan.first, height: height(plan.first, input.distance) },
           children,
           elevation: {
             before,
@@ -104,8 +103,14 @@ export class SplitWallUseCase {
           },
           measurementCopies: copies,
         },
-      ),
     );
+    try {
+      await this.commandStack.execute(command);
+    } catch (err) {
+      // Si algo falló a mitad, se devuelve todo (el tramo nuevo y las copias ya existían): sin huérfanos.
+      await command.undo(this.store).catch(() => undefined);
+      throw err;
+    }
     return { newWallId: second.id, clamped };
   }
 }

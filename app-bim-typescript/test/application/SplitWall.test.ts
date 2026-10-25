@@ -101,6 +101,17 @@ describe('planWallMerge', () => {
     expect(plan.vertical).toEqual({ start: muro, end: muro, stations: [{ at: 3, ext: cumbrera }] });
     expect(plan.flipB).toBe(true);
     expect(plan.mapB(1)).toBe(6);
+    expect(plan.mismatch).toBe(false);
+  });
+
+  it('avisa si las dos mitades llegaban a alturas distintas al punto común', () => {
+    const otra = extent({ baseLevelId: 'piso', topLevelId: 'cubierta', topOffset: -0.05, unconnectedHeight: 3.5 });
+    const plan = planWallMerge(
+      { start: { x: 0, y: 0 }, end: { x: 3, y: 0 }, vertical: { start: muro, end: cumbrera } },
+      { start: { x: 3, y: 0 }, end: { x: 7, y: 0 }, vertical: { start: otra, end: muro } },
+      LEVELS,
+    );
+    expect(typeof plan !== 'string' && plan.mismatch).toBe(true);
   });
 
   it('sin quiebre en el punto común no deja estación; no alineados no se unen', () => {
@@ -255,8 +266,11 @@ describe('SplitWallUseCase', () => {
     const e = await services.elevations.getElevation(w);
     expect(e.openings.find((o) => o.vanoId === (win.id as string))?.sillHeight).toBe(1.4);
     expect(e.openings.find((o) => o.id === 'hueco')?.xOffset).toBeCloseTo(4.5);
+    // La medición copiada al partir vuelve al muro unido como copia (y el original sigue).
+    expect(await services.store.listMeasurementsForWall(wallId(wall.id as string))).toHaveLength(2);
 
     await services.commandStack.undo();
+    expect(await services.store.listMeasurementsForWall(wallId(wall.id as string))).toHaveLength(1);
     expect((await read<Wall>(wall.id))!.endPoint).toEqual({ x: 3, y: 0 });
     expect((await read<Window>(win.id))!.parentWallId).toBe(newWallId);
     await services.commandStack.redo();

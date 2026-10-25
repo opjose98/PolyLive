@@ -2,7 +2,8 @@
 // MergeWallsUseCase.ts — Unir dos muros colineales que comparten un extremo
 // =============================================================================
 
-import { Column, Door, RevitObjectId, Wall, Window } from '../../domain/objects';
+import { Column, Door, Measurement, RevitObjectId, Wall, Window, generateId, measurementId } from '../../domain/objects';
+import type { MeasurementId } from '../../domain/objects/base';
 import { LevelElevations, WallVertical, profileHeight, resolveWallProfile } from '../../domain/objects/vertical';
 import { planWallMerge } from '../../domain/objects/wall-merge';
 import type { WallOpening } from '../../domain/objects/wall-elevation';
@@ -30,7 +31,8 @@ export class MergeWallsUseCase {
     private readonly elevations: WallElevationService,
   ) {}
 
-  async execute(input: MergeWallsInput): Promise<{ length: number }> {
+  /** `mismatch`: B tenía otra altura en el punto común y se tomó la de A (la vista lo avisa). */
+  async execute(input: MergeWallsInput): Promise<{ length: number; mismatch: boolean }> {
     const a = await this.store.readObject(input.keepId);
     const b = await this.store.readObject(input.removeId);
     if (!(a instanceof Wall) || !(b instanceof Wall)) throw invalid('Solo se unen muros.');
@@ -71,18 +73,36 @@ export class MergeWallsUseCase {
       openings: [...ea.openings.map((o) => move(o, plan.mapA, plan.flipA)), ...eb.openings.map((o) => move(o, plan.mapB, plan.flipB))],
     };
 
-    const height = profileHeight(resolveWallProfile(plan.vertical, input.levels));
-    await this.commandStack.execute(
-      new MergeWallsCommand((e) => this.elevations.saveElevation(e), {
+    const height = profileHeight(resolveWallProfile(plan.vertical, input.levels, plan.length));
+    // Las mediciones de B pasan a A como copias (sin aplicar): B queda borrado y se dejarían de ver.
+    const copies: MeasurementId[] = [];
+    for (const m of await this.store.listMeasurementsForWall(b.id as never)) {
+      if (m.reference === 'diagonal') continue;
+      copies.push(await this.store.createMeasurement(new Measurement({ ...m, id: measurementId(generateId() as string), wallId: a.id as never, appliedLength: null })));
+    }
+    const command = new MergeWallsCommand(
+      {
+        saveElevation: (e) => this.elevations.saveElevation(e),
+        deleteMeasurement: (id) => this.store.deleteMeasurement(id),
+        restoreMeasurement: (id) => this.store.restoreMeasurement(id),
+      },
+      {
         keepId: a.id as string,
         removeId: b.id as string,
         before: { start: a.startPoint, end: a.endPoint, vertical: input.keepVertical, height: a.height as number },
         after: { start: plan.start, end: plan.end, vertical: plan.vertical, height },
         children,
         elevation: { keepBefore: ea, removeBefore: eb, keepAfter },
-      }),
+        measurementCopies: copies,
+      },
     );
-    return { length: plan.length };
+    try {
+      await this.commandStack.execute(command);
+    } catch (err) {
+      await command.undo(this.store).catch(() => undefined);
+      throw err;
+    }
+    return { length: plan.length, mismatch: plan.mismatch };
   }
 }
 

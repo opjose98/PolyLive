@@ -145,12 +145,17 @@ export function resolveExtent(e: VerticalExtent, levels: LevelElevations): Resol
   return { base, top };
 }
 
-export function resolveWallProfile(v: WallVertical, levels: LevelElevations): WallProfile {
+/**
+ * Perfil en cotas absolutas. Con `length` (el largo del eje) solo cuentan las
+ * estaciones que caen dentro del muro: una que quedó fuera al acortarlo no
+ * debe subir su altura ni su restricción de Revit.
+ */
+export function resolveWallProfile(v: WallVertical, levels: LevelElevations, length?: number): WallProfile {
   const start = resolveExtent(v.start, levels);
   const end = resolveExtent(v.end, levels);
-  if (!v.stations?.length) return { start, end };
-  const stations = [...v.stations].sort((a, b) => a.at - b.at).map((s) => ({ at: s.at, ...resolveExtent(s.ext, levels) }));
-  return { start, end, stations };
+  const inside = length === undefined ? [...(v.stations ?? [])].sort((a, b) => a.at - b.at) : stationsWithin(v.stations, length);
+  if (!inside.length) return { start, end };
+  return { start, end, stations: inside.map((s) => ({ at: s.at, ...resolveExtent(s.ext, levels) })) };
 }
 
 /** Los puntos del perfil (extremos y estaciones dentro del muro), de inicio a fin. */
@@ -199,7 +204,7 @@ export function extentAt(v: WallVertical, at: number, length: number, levels: Le
   const same = (v.stations ?? []).find((s) => Math.abs(s.at - at) < 1e-3);
   if (same) return same.ext;
   const mm = (x: number) => Math.round(x * 1000) / 1000;
-  const { base, top } = profileAt(resolveWallProfile(v, levels), length, at);
+  const { base, top } = profileAt(resolveWallProfile(v, levels, length), length, at);
   const topLevelId = v.start.topLevelId ?? v.end.topLevelId;
   const topLevel = topLevelId !== null ? levels.get(topLevelId) : undefined;
   return {
@@ -264,13 +269,14 @@ interface RevitWallConstraints {
   readonly profileEdited: boolean;
 }
 
-export function revitConstraints(v: WallVertical, levels: LevelElevations): RevitWallConstraints {
-  const p = resolveWallProfile(v, levels);
+export function revitConstraints(v: WallVertical, levels: LevelElevations, length?: number): RevitWallConstraints {
+  const p = resolveWallProfile(v, levels, length);
   // Base más baja y tope más alto entre extremos y estaciones (el inicio gana empates).
+  const inside = length === undefined ? v.stations ?? [] : stationsWithin(v.stations, length);
   const all = [
     { ext: v.start, r: p.start },
     { ext: v.end, r: p.end },
-    ...(v.stations ?? []).map((s) => ({ ext: s.ext, r: resolveExtent(s.ext, levels) })),
+    ...inside.map((s) => ({ ext: s.ext, r: resolveExtent(s.ext, levels) })),
   ];
   const low = all.reduce((a, b) => (b.r.base < a.r.base - EPS ? b : a)).ext;
   const high = all.reduce((a, b) => (b.r.top > a.r.top + EPS ? b : a)).ext;
@@ -291,8 +297,8 @@ export function revitConstraints(v: WallVertical, levels: LevelElevations): Revi
  * Nivel al que pertenece el elemento en planta: el de su base más baja (la
  * "Restricción de base" de Revit). Es el piso donde se exporta a IFC.
  */
-export function hostLevelOf(v: WallVertical, levels: LevelElevations): string {
-  return revitConstraints(v, levels).baseLevelId;
+export function hostLevelOf(v: WallVertical, levels: LevelElevations, length?: number): string {
+  return revitConstraints(v, levels, length).baseLevelId;
 }
 
 /** Altura total del alzado (lo que `Wall.height` guarda como resumen). */
