@@ -59,7 +59,7 @@ export interface ResolvedExtent {
 }
 
 /** Estación resuelta: cotas absolutas a `at` metros del inicio. */
-export interface ResolvedStation extends ResolvedExtent {
+interface ResolvedStation extends ResolvedExtent {
   readonly at: number;
 }
 
@@ -154,7 +154,7 @@ export function resolveWallProfile(v: WallVertical, levels: LevelElevations): Wa
 }
 
 /** Los puntos del perfil (extremos y estaciones dentro del muro), de inicio a fin. */
-export function profilePoints(p: WallProfile, length: number): ResolvedStation[] {
+function profilePoints(p: WallProfile, length: number): ResolvedStation[] {
   return [{ at: 0, ...p.start }, ...stationsWithin(p.stations, length), { at: length, ...p.end }];
 }
 

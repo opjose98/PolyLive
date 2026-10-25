@@ -111,6 +111,19 @@ const summarize = (n: number, one: string, many: string) => (n ? `, ${n} ${n ===
 export async function exportRevitIfc(services: AppServices, ctx: ExportContext): Promise<ExportOutcome> {
   toast('Generando IFC…', { kind: 'info', durationMs: 1200 });
   try {
+    const { content, detail } = await buildRevitIfc(services, ctx);
+    return await save(ctx, 'ifc', content, detail);
+  } catch (err) {
+    console.warn('[export-ifc]', err);
+    const message = failureMessage(err, 'No se pudo exportar el IFC.');
+    toast(message, { kind: 'error' });
+    return { ok: false, message };
+  }
+}
+
+/** El IFC del espacio y su resumen, sin guardarlo (lo usa también el puente de desarrollo). */
+export async function buildRevitIfc(services: AppServices, ctx: ExportContext): Promise<{ content: string; detail: string }> {
+  {
     const none = Promise.resolve([] as ProjectMarker[]);
     const geo = ctx.projectId ? await services.topography.getGeoreference(ctx.projectId) : null;
     const space = ctx.roomId as string;
@@ -145,12 +158,7 @@ export async function exportRevitIfc(services: AppServices, ctx: ExportContext):
       summarize(beams, 'viga', 'vigas') +
       summarize(members.length - beams, 'barra de cercha/correa', 'barras de cerchas/correas') +
       (mapConversion ? ', georreferenciado' : '');
-    return await save(ctx, 'ifc', out.ifcContent, detail);
-  } catch (err) {
-    console.warn('[export-ifc]', err);
-    const message = failureMessage(err, 'No se pudo exportar el IFC.');
-    toast(message, { kind: 'error' });
-    return { ok: false, message };
+    return { content: out.ifcContent, detail };
   }
 }
 

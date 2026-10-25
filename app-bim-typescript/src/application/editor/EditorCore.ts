@@ -125,10 +125,10 @@ export interface CreationMethods {
 }
 
 export type ShapeMethod = 'polygon' | 'rect' | 'circle';
-export type FloorCreationMethod = 'zone' | ShapeMethod;
+type FloorCreationMethod = 'zone' | ShapeMethod;
 
 /** Forma en trazado para un suelo libre o un vacío (no persistida). */
-export interface ShapeDraft {
+interface ShapeDraft {
   readonly mode: 'floor' | 'void';
   /** Polígono: vértices fijados. Rectángulo y círculo: [primera esquina | centro]. */
   readonly points: readonly Point2D[];
@@ -598,6 +598,11 @@ export abstract class EditorCore {
    * Propiedades con que nace un objeto: nivel y fase activos. Van en la misma
    * escritura que lo crea, así Deshacer/Rehacer nunca ve un objeto sin ellas.
    */
+  /** Las mismas propiedades de nacimiento, para quien crea objetos por fuera del editor (puente de desarrollo). */
+  creationProps(level?: string): Record<string, string> {
+    return this.scopeProps(level);
+  }
+
   protected scopeProps(level?: string): Record<string, string> {
     const out: Record<string, string> = {};
     const lv = level ?? this.levelScope?.active;

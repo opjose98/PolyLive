@@ -60,6 +60,8 @@ import { planSvg, faceSvg } from '../../application/report/planSvg';
 import { MeasureDialog } from '../workspace/MeasureDialog';
 import { SplitWallDialog } from '../workspace/SplitWallDialog';
 import { useSurveyMenu } from '../workspace/useSurveyMenu';
+import { buildRevitIfc } from '../workspace/exportActions';
+import { updateBridgeContext } from '../../infrastructure/bridge/devBridge';
 import { saveFieldPhoto } from '../workspace/fieldPhotos';
 import { useReview } from '../workspace/review/useReview';
 import { DRAFT_HINT, draftDetail, useEditorDrafting } from '../workspace/drafting/useEditorDrafting';
@@ -1083,6 +1085,19 @@ export function SurveyScreen({
   );
   const handleZoomFit = useCallback(() => handleZoom('zoomFit'), [handleZoom]);
   // --- Menú ☰ y entregables (IFC, plano PDF, cuadro de áreas, registro fotográfico, paquete) ---
+  // Puente de desarrollo: ve este editor y exporta el IFC como el menú.
+  useEffect(() => {
+    if (!__DEV__) return;
+    updateBridgeContext({
+      editor,
+      projectId: projectId ?? null,
+      spaceId: roomId as string,
+      exportIfc: async () =>
+        (await buildRevitIfc(services, { roomId, projectId, projectName: projectName ?? 'Proyecto', spaceName: roomName ?? 'Espacio', author: operatorName })).content,
+    });
+    return () => updateBridgeContext({ editor: null, projectId: null, spaceId: null, exportIfc: undefined });
+  }, [editor, services, projectId, roomId, projectName, roomName, operatorName]);
+
   const menuItems = useSurveyMenu({
     services,
     editor,

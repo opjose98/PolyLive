@@ -40,7 +40,8 @@ import { MigrationError } from '../infrastructure/sqlite/migrations';
 import { createAppServices, AppServices } from '../application/AppServices';
 import { RoomId } from '../domain/objects';
 import { Operator } from '../domain/objects/operator';
-import { Project } from '../domain/objects/project';
+import { Project, projectId as toProjectId } from '../domain/objects/project';
+import { startDevBridge, updateBridgeContext } from '../infrastructure/bridge/devBridge';
 import { AppError } from '../shared/errors/AppError';
 import { alertDialog, ScreenShell } from './primitives';
 import { type } from './design/typography';
@@ -184,6 +185,30 @@ export default function App() {
       cancelled = true;
     };
   }, []);
+
+  // -----------------------------------------------------------------------
+  // Puente de control directo (solo desarrollo: scripts/bridge)
+  // -----------------------------------------------------------------------
+
+  const readyServices = boot.phase === 'ready' ? boot.services : null;
+  useEffect(() => {
+    if (!__DEV__ || !readyServices) return;
+    return startDevBridge(readyServices);
+  }, [readyServices]);
+  useEffect(() => {
+    if (!__DEV__ || !readyServices) return;
+    updateBridgeContext({
+      open: async (pid, sid) => {
+        if (!operator) {
+          const first = (await readyServices.store.listOperators())[0];
+          if (first) setOperator(first);
+        }
+        setActiveRoomId(null);
+        setProject(await readyServices.projectStore.readProject(toProjectId(pid)));
+        setActiveRoomId(sid as RoomId);
+      },
+    });
+  }, [readyServices, operator]);
 
   // -----------------------------------------------------------------------
   // Restauración: reiniciar la app
