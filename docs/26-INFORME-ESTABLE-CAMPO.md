@@ -251,6 +251,44 @@ corrió 0,2 m para no salirse del muro.
 **Incidencia de la prueba (no de la app):** los cuatro ventanales norte y sur de SUMB se habían borrado el 23-10 a
 las 12:28 con un deshacer del script de pruebas (la base de respaldo lo muestra); se repusieron en su posición.
 
+## 11. Estaciones de altura, suelos libres, cortes y puente de control (2026-10-24)
+
+**Pedido del dueño:** puntos de altura en el muro para culatas sin partirlo (editados con el selector de nivel),
+una herramienta para dividir muros de verdad con enganche a los cruces, ver en el alzado lo que atraviesa el muro,
+alzado de columnas, suelos libres (andenes) con formas y vacíos, una herramienta de corte, quitar los triángulos
+vacíos de los encuentros y una forma directa de controlar la app para levantar más rápido. Luego, rehacer las cuatro
+sedes con suelos y culatas en un solo muro.
+
+**En la app (rama `audit/estable-campo`):**
+
+| Pedido | Qué hay | Dónde |
+|---|---|---|
+| Puntos de altura | Un muro guarda **estaciones** (posición + base y tope atados a niveles): el alzado es un polígono. Alzado → Crear → «Punto de altura» la crea con la altura que ya había; tocar un vértice (extremo o estación) abre el selector de base y tope de la planta; una estación se arrastra a lo largo del muro; «Quitar punto». IFC: polígono del alzado y área bruta exacta | `domain/objects/vertical.ts`, `application/elevation/ElevationEditor.ts` |
+| Dividir muros | Planta → «Dividir muro»: toca el muro y se parte ahí, con enganche al cruce (X), al encuentro en T y a la mitad. «Partir» (por distancia) sigue en la hoja; **«Unir»** junta dos tramos alineados (el punto común pasa a estación si quiebra) | `domain/objects/wall-split.ts`, `wall-merge.ts` |
+| Cortes en el alzado | El alzado de un muro dibuja rayado lo que lo atraviesa: muros en T o en cruz, columnas, vigas de planta (y el hueco del vano del otro muro). La app no bloquea choques: los muestra | `domain/section/sectionCut.ts` |
+| Alzado de columnas | Hoja de la columna → «Alzado»: las cuatro caras desdobladas con lo que cruza cada una (una circular, en cuartos de perímetro) | `application/section/projection.ts` |
+| Suelos libres y vacíos | Suelo → Por recinto / Polígono / Rectángulo / Círculo; «Vacío en suelo» con las mismas formas, en suelos libres o de recinto. IFC: IfcSlab con perfil con huecos; el cuadro de áreas lista los suelos libres (S-01…) | `domain/objects/floor.ts`, `EditorCreation.ts` |
+| Corte | Planta → «Corte»: se arrastra una línea y se abre la sección con todo lo cortado (muros arriba y abajo de sus vanos, columnas, losas, vigas) y las líneas de nivel | `ui/screens/ProjectionView.tsx` |
+| Triángulos vacíos | Cada nudo de dos o más muros rellena el hueco entre ingletes (H-79) | `ui/canvas/wallGeometry.ts` |
+| Control directo | **Puente de desarrollo**: `scripts/bridge/polylive-bridge.mjs` (HTTP y MCP, registrado en `.mcp.json`) + `adb reverse tcp:8765 tcp:8765`. La app (solo `__DEV__`) ejecuta comandos con los mismos casos de uso: leer el espacio, crear muros con niveles por nombre y estaciones, vanos con antepecho, columnas, suelos, unir/partir, deshacer, exportar el IFC al PC, abrir alzados y cortes para mirarlos | `application/bridge/bridgeCommands.ts` |
+
+**En los levantamientos** (hechos por el puente y revisados con ifcopenshell y a ojo en la tableta):
+
+| Sede | Culatas en un muro (estación en la cumbrera) | Suelos de recinto | Suelos libres (plano de zonificación) |
+|---|---|---|---|
+| BRIS | ejes A, D y E (3 muros; antes 7 tramos) | Aula, Cocina, 2 baños + Bodega (abierta, libre) 11,16 | Corredor 25,40 (plano 27,83) · Exterior 16,18 (plano 12,82) |
+| SUMB | oeste y este (2 muros) | Aula 62,55 | Andén existente 17,45 (plano 17,39) |
+| MARA | 3 culatas + muro sur unido (antes partido en la T) | Aulas, Comedor y cocina, Batería | Placa deportiva 129,96 (130,32) · Circulación exterior 97,74 (96,18) · Pasillo aula 14,48 (14,46) |
+| MACO | ejes A y D (2 muros) | Aula, Comedor, Cocina, Dormitorio, Batería | Pasillo aula 18,55 (18,74) · Circulación exterior 25,12 (27,03) |
+
+Las culatas que estaban partidas se unieron con «Unir»: los vanos, antepechos y estaciones pasaron al muro único. La
+diferencia de áreas de BRIS es de reparto (el plano asigna al Corredor parte de lo que aquí es Exterior; la suma,
+41,6 contra 40,65, coincide). Los contornos exteriores se leyeron a escala del plano de zonificación contra los
+muros levantados (≈1,9 cm por píxel en MARA): conviene confirmarlos en obra.
+
+**Hallazgos de la ronda:** H-79 y H-80 corregidos; H-81 (recarga en caliente en el dev client) abierto, solo de
+desarrollo.
+
 ## Nota del build release
 
 El APK release `.qa` no terminó en este PC: Gradle falla una y otra vez con «Unable to delete directory» sobre

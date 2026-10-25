@@ -35,6 +35,9 @@ Si una fila no tiene test, es una decisión consciente y está dicho.
 | **[[Restricciones-verticales]]** | `domain/objects/vertical.ts` | `test/domain/vertical.test.ts` |
 | **[[Niveles-y-fases]]** | `domain/objects/marker.ts`, `infrastructure/sqlite/MarkerStore.ts` | `test/application/workspace.test.ts` |
 | **[[SplitWallUseCase]]** | `domain/objects/wall-split.ts`, `application/use-cases/SplitWallUseCase.ts` | `test/application/SplitWall.test.ts` |
+| **[[Suelos-libres-y-vacios]]** | `domain/objects/floor.ts`, `application/use-cases/CreateFloorUseCase.ts` | `test/editor/EditorController.test.ts`, `test/ifc/IFCRevitExport.test.ts` |
+| **[[Cortes-y-alzados-de-columna]]** | `domain/section/sectionCut.ts`, `application/section/projection.ts` | `test/section/sectionCut.test.ts` |
+| **[[Puente-de-control]]** | `application/bridge/bridgeCommands.ts`, `scripts/bridge/polylive-bridge.mjs` | `test/bridge/bridgeCommands.test.ts` |
 
 ## Geometría
 
