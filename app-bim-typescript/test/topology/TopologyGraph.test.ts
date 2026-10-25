@@ -340,3 +340,20 @@ describe('SpatialHash', () => {
     expect(() => new SpatialHash<string>({ cellSize: 0 })).toThrow();
   });
 });
+
+describe('dos grupos de muros que no se tocan', () => {
+  it('cada grupo da sus recintos, sin tomar el contorno del segundo como recinto', () => {
+    const g = new TopologyGraph();
+    g.addWalls([
+      ...rectangleWalls(),
+      // Segundo grupo, aparte: dos recintos de 3 × 2 lado a lado.
+      wall({ x: 10, y: 0 }, { x: 16, y: 0 }),
+      wall({ x: 16, y: 0 }, { x: 16, y: 2 }),
+      wall({ x: 16, y: 2 }, { x: 10, y: 2 }),
+      wall({ x: 10, y: 2 }, { x: 10, y: 0 }),
+      wall({ x: 13, y: 0 }, { x: 13, y: 2 }),
+    ]);
+    // Tres recintos de 4 lados; el contorno del segundo grupo (6 lados) no es uno.
+    expect(g.findMinimalCycles().map((c) => c.edges.length)).toEqual([4, 4, 4]);
+  });
+});

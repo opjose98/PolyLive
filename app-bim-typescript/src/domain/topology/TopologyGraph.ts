@@ -107,8 +107,8 @@ export class TopologyGraph {
    * Detecta todos los ciclos mínimos cerrados formados por aristas de muro.
    *
    * Usa traversía de caras planares (rotation system tipo DCEL). La cara
-   * exterior —el contorno del conjunto, que siempre aparece como un ciclo más—
-   * se descarta antes de devolver: es el ciclo de mayor área absoluta.
+   * exterior de cada grupo de muros conectados —su contorno, que siempre aparece
+   * como un ciclo más, recorrido al revés que los recintos— se descarta.
    */
   findMinimalCycles(): TopologyCycle[] {
     const wallEdges = pruneFilaments([...this.edges.values()].filter((e) => e.objectType === 'wall'));
@@ -154,23 +154,15 @@ export class TopologyGraph {
     }
 
     if (rawCycles.length === 0) return [];
-    if (rawCycles.length === 1) return rawCycles;
 
-    // Descartar la cara exterior: la de mayor área absoluta.
-    let maxArea = -1;
-    let outerIdx = 0;
-    for (let i = 0; i < rawCycles.length; i++) {
-      const verts = rawCycles[i].fromNodeIds
-        .map((id) => this.nodes.get(id)?.position)
-        .filter((p): p is Point2D => p !== undefined);
-      const a = Math.abs(signedArea(verts));
-      if (a > maxArea) {
-        maxArea = a;
-        outerIdx = i;
-      }
-    }
-
-    return rawCycles.filter((_, i) => i !== outerIdx);
+    // Descartar las caras exteriores: el contorno de CADA grupo de muros conectados.
+    // Con el giro más a la izquierda (nextHalfEdge) un recinto se recorre en sentido
+    // antihorario (área positiva) y todo contorno exterior en horario (negativa).
+    // Antes se descartaba solo el ciclo de mayor área: con dos grupos de muros que no
+    // se tocan, el contorno del segundo quedaba como recinto (ANDA, NARG29).
+    return rawCycles.filter(
+      (c) => signedArea(c.fromNodeIds.map((id) => this.nodes.get(id)?.position).filter((p): p is Point2D => p !== undefined)) > 1e-9,
+    );
   }
 
   // -------------------------------------------------------------------------

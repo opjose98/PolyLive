@@ -94,7 +94,7 @@ const HELP = {
     'column {at:[x,y], w, d, circular, rotation, v:{base,top}} · ' +
     'floor {zone | outline:[[x,y]…], holes, thickness} · void {floor, hole:[[x,y]…]} · ' +
     'vertical {id, v | a, b, stations} · station {wall, at, top, topOffset, base, baseOffset} (at sin top = quitarla) · ' +
-    'sill {id (puerta/ventana), sill} · props {id, set:{clave: valor}} · delete {id} · split {wall, at} · merge {wall, with} · section {a, b, name} (corte guardado) (une tramos alineados; el común pasa a estación si quiebra)',
+    'sill {id (puerta/ventana), sill} · props {id, set:{clave: valor}} · delete {id} · split {wall, at} · merge {wall, with} · section {a, b, name} (corte guardado) · zone {id, name, use} (une tramos alineados; el común pasa a estación si quiebra)',
   undo: 'Deshace el último paso.',
   redo: 'Rehace.',
   section: '{ a:[x,y], b:[x,y] } lo que corta esa línea (piezas rayadas del corte).',
@@ -309,7 +309,7 @@ async function objects(ctx: BridgeContext) {
         ...(f.outline ? { outline: f.outline.map(xy) } : {}),
         ...(f.holes?.length ? { holes: f.holes.map((h) => h.map(xy)) } : {}),
       })),
-    zones: zones.map((z) => ({ id: z.id, number: z.number, name: z.name, level: name(z.levelId) })),
+    zones: zones.map((z) => ({ id: z.id, number: z.number, name: z.name, use: z.use, level: name(z.levelId), netArea: r3(z.netArea), polygon: z.polygon.map(xy) })),
     sections: (await ctx.services.drafts.list(spaceId as string))
       .filter((d) => d.kind === 'section')
       .map((d) => ({ id: d.id, name: d.text, a: xy(d.points[0]), b: xy(d.points[1]) })),
@@ -561,6 +561,14 @@ async function ops(ctx: BridgeContext, args: Args) {
           levels: elev,
         });
         return { id: a.id, length: r.length, mismatch: r.mismatch };
+      }
+      case 'zone': {
+        // Nombre y uso de un recinto (el plano de zonificación los trae).
+        await ctx.services.zones.edit(String(o.id), {
+          ...(o.name !== undefined ? { name: String(o.name) } : {}),
+          ...(o.use !== undefined ? { use: String(o.use) } : {}),
+        });
+        return o.id;
       }
       case 'section': {
         // Corte guardado (dibujo técnico de planta, visible en todos los niveles).
