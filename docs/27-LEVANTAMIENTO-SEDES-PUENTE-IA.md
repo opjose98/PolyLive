@@ -197,8 +197,12 @@ plano cuando las hay (A-A, B-B, C-C…). En las cuatro primeras pasan por el cen
 
 ### Qué está mal o queda abierto
 
-- El IFC de los exteriores de DECI (H-86) está probado con el serializador real, pero **no se exportó desde la tableta**:
-  se desconectó del USB antes de la prueba.
+- Exteriores de DECI (H-86), exportado desde la tableta: IFC4 sin errores de esquema, 4 losas en el piso «Piso» (z −0,10 a 0,00)
+  y sin IfcSpace. Contra el plano de zonificación:
+  - placa deportiva 326,18 m² (plano 325,20) y pasillo 52,02 (51,96): coinciden;
+  - placa disponible 45,25 (41,90): su borde inclinado se leyó a escala, se pasa un 8 %;
+  - circulación exterior 1 124,27 (198,44): el polígono simplificado deja fuera parte de la franja. **Hay que
+    redibujarla con el plano.**
 - **Las lecturas de plano tienen supuestos**, listados en § 4: alturas de ventanas sin cota, ventanas sin rótulo
   (COPA), filas a escala (LIMO, DECI 11–14) y la franja de B1 en DECI. **Hay que confirmarlos en obra**: el
   levantamiento sirve de base, no de medición.
