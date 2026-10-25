@@ -56,6 +56,14 @@ import { useTopoTools } from '../workspace/topo/useTopoTools';
 import { StakeoutSheet } from '../workspace/topo/StakeoutSheet';
 import { useProgress } from '../workspace/progress/useProgress';
 import { ProgressSheets } from '../workspace/progress/ProgressSheets';
+import { useProgressReport } from '../workspace/progress/useProgressReport';
+import { objectIdOfTarget } from '../../application/progress/progressPhotos';
+import { targetKey as progressKey, targetOfKey } from '../../domain/progress/progress';
+import { EMPTY_MEMORIA_HEADER } from '../../application/progress/progressMemoria';
+import { htmlToPdf } from '../../native/export/printPdf';
+import * as FileSystemLegacy from 'expo-file-system/legacy';
+import { Floor, floorZoneId, netFloorArea } from '../../domain/objects/floor';
+import { DraftItem, sectionView } from '../../domain/drafting/drafting';
 import { planSvg, faceSvg } from '../../application/report/planSvg';
 import { MeasureDialog } from '../workspace/MeasureDialog';
 import { SplitWallDialog } from '../workspace/SplitWallDialog';
@@ -405,7 +413,11 @@ export function SurveyScreen({
     operatorName,
   });
 
-  // --- Avance de obra (M3): pintar sobre suelos y caras de muro ---
+  // --- Suelo aislado (doble toque, H-88): solo él se ve, se edita y se pinta ---
+  const [isolated, setIsolated] = useState<{ floorId: string; zoneId: string | null; key: string; title: string } | null>(null);
+  const isolateCamera = useRef<CanvasTransform | null>(null);
+
+  // --- Avance de obra (M3): pintar sobre suelos, caras de muro y columnas ---
   const progress = useProgress({
     services,
     projectId,
@@ -413,6 +425,8 @@ export function SurveyScreen({
     editor,
     operatorName,
     objectsVersion: state.objects,
+    levels: projectLevels,
+    isolatedFloorKey: isolated?.key ?? null,
   });
 
   // --- Revisión (M4): marcas y observaciones ---
@@ -450,10 +464,57 @@ export function SurveyScreen({
 
   // --- Corte y alzado de columna: vistas por plano vertical, encima de la planta ---
   const [projection, setProjection] = useState<Projection | null>(null);
+  /** Abre un corte guardado mirando hacia su lado, con su profundidad de vista (H-89). */
   const openSection = useCallback(
-    (a: Point2D, b: Point2D, name: string) => void sectionProjection(services, roomId, projectLevels, a, b, name).then(setProjection),
+    (sec: Pick<DraftItem, 'id' | 'points' | 'props' | 'text'>) => {
+      const v = sectionView(sec);
+      haptic.select();
+      void sectionProjection(services, roomId, projectLevels, v.a, v.b, sec.text || 'Corte', v.depth, sec.id).then(setProjection);
+    },
     [services, roomId, projectLevels],
   );
+  const openColumn = useCallback(
+    (column: Column) => {
+      haptic.select();
+      void columnProjection(services, roomId, projectLevels, column).then(setProjection);
+    },
+    [services, roomId, projectLevels],
+  );
+
+  // --- Aislar un suelo: encuadre, selección y vuelta ---
+  const isolateFloor = useCallback(
+    (floorId: string) => {
+      const view = editor.floorViews.find((f) => f.id === floorId);
+      if (!view) return;
+      const zoneId = view.zoneId;
+      const key = progressKey({ kind: 'floor', zoneId: zoneId ?? `floor:${floorId}` });
+      const zone = zoneId ? state.rooms.find((r) => r.id === zoneId) : undefined;
+      const floor = editor.scopedObjects.find((o) => (o.id as string) === floorId);
+      const name = (floor?.properties.name as string | undefined) || (zone ? `${zone.number !== undefined ? zoneCodeOf({ number: zone.number }) + ' ' : ''}${zone.name ?? 'Recinto'}` : 'Suelo libre');
+      if (!isolateCamera.current) isolateCamera.current = editor.getState().transform;
+      const ws = workspaceStore.getState();
+      ws.closePanels();
+      ws.closeWindow();
+      setPanelOpen(false);
+      setZoneSheetOpen(false);
+      drafting.ctl.select(null);
+      if (zoneId) editor.selectZone(zoneId);
+      else editor.select(revitObjectId(floorId));
+      editor.zoomToPoints(view.polygon, canvasSize.w, canvasSize.h, 72);
+      setIsolated({ floorId, zoneId, key, title: `Suelo · ${name}` });
+      haptic.select();
+    },
+    [editor, state.rooms, canvasSize, drafting.ctl],
+  );
+  const exitIsolation = useCallback(() => {
+    setIsolated(null);
+    if (isolateCamera.current) editor.setTransform(isolateCamera.current);
+    isolateCamera.current = null;
+  }, [editor]);
+  // Si el suelo aislado desaparece (deshacer, borrado), se sale del aislamiento.
+  useEffect(() => {
+    if (isolated && !editor.floorViews.some((f) => f.id === isolated.floorId)) exitIsolation();
+  }, [isolated, editor, state.objects, exitIsolation]);
 
   // --- Alzado (F4): vive encima de la planta, que queda intacta debajo ---
   const [elevWallId, setElevWallId] = useState<string | null>(null);
@@ -474,6 +535,19 @@ export function SurveyScreen({
       if (!s.busy) editor.refreshHistory();
     });
   }, [elevEditor, editor]);
+
+  // --- Foto de avance pendiente: se abre la cámara y al volver se guarda con su corte y elemento (H-90) ---
+  const [pendingProgressPhoto, setPendingProgressPhoto] = useState<{ targetKey?: string; position: Point2D; face?: PhotoFaceAnchor } | null>(null);
+  const requestProgressPhoto = useCallback(
+    (p: { targetKey?: string; position: Point2D; face?: PhotoFaceAnchor }) => {
+      if (!progress.state.cutId) {
+        toast('Crea un corte (en «Actividad y corte») antes de la foto de avance.', { kind: 'info' });
+        return;
+      }
+      setPendingProgressPhoto(p);
+    },
+    [progress.state.cutId],
+  );
 
   /**
    * Transición planta → alzado: la cámara vuela hasta el muro y, cuando
@@ -539,6 +613,14 @@ export function SurveyScreen({
         setZoneSheetOpen(false);
         return true;
       }
+      if (pendingProgressPhoto) {
+        setPendingProgressPhoto(null);
+        return true;
+      }
+      if (isolated) {
+        exitIsolation();
+        return true;
+      }
       if (topoBack()) return true;
       if (panelOpen) {
         setPanelOpen(false);
@@ -561,7 +643,7 @@ export function SurveyScreen({
       return false;
     });
     return () => sub.remove();
-  }, [elevWallId, onExit, panelOpen, topoBack, zoneSheetOpen, review, progress, topoTools, drafting, draftSheetOpen]);
+  }, [elevWallId, onExit, panelOpen, topoBack, zoneSheetOpen, review, progress, topoTools, drafting, draftSheetOpen, isolated, exitIsolation, pendingProgressPhoto]);
 
   const closeElevation = useCallback(() => {
     setElevWallId(null);
@@ -646,10 +728,35 @@ export function SurveyScreen({
         wsNow.closeWindow();
         return;
       }
+      // Foto de avance: queda en el corte activo, ligada a lo que hay bajo el dedo (suelo, cara de muro, columna) o libre.
+      const binding = wsNow.activeTool ? findTool(categoriesFor(wsNow.workMode, 'plan'), wsNow.activeTool.categoryId, wsNow.activeTool.toolId)?.tool.binding : null;
+      if (binding?.kind === 'progressPhoto') {
+        const world = editor.screenToWorld(x, y);
+        let targetKey: string | undefined = isolated?.key;
+        if (!targetKey) {
+          const obj = editor.objectAt(x, y, CANVAS_TOUCH_TOLERANCE_PX * STRICT_HIT_RATIO);
+          if (obj instanceof Column) targetKey = progressKey({ kind: 'column', columnId: obj.id as string });
+          else if (obj instanceof Wall) {
+            // Cara A: a la izquierda del eje (normal (−uy, ux)); B, a la derecha.
+            const ux = obj.endPoint.x - obj.startPoint.x;
+            const uy = obj.endPoint.y - obj.startPoint.y;
+            const side = (world.x - obj.startPoint.x) * -uy + (world.y - obj.startPoint.y) * ux >= 0 ? 'A' : 'B';
+            targetKey = progressKey({ kind: 'wallFace', wallId: obj.id as string, side });
+          } else {
+            const f = progress.ctl.floorAt(world, progress.floors);
+            if (f) targetKey = progressKey(f);
+          }
+        }
+        haptic.select();
+        requestProgressPhoto({ targetKey, position: world });
+        return;
+      }
       if (review.plan.tap(x, y)) return;
       // Con herramienta de dibujo, el toque es suyo; sin ella, seleccionar dibujo va después de las fotos.
       if (drafting.tool && drafting.planTap(x, y)) return;
       if (progress.handleTap(x, y)) return;
+      // Suelo aislado: nada más se selecciona (el suelo sigue elegido para editarlo).
+      if (isolated) return;
       if (topoTools.handleTap(x, y)) return;
       if (topo.handleTap(x, y)) return;
       // Un marcador de foto (visible) abre su foto, con la herramienta de selección.
@@ -672,7 +779,7 @@ export function SurveyScreen({
         if (editor.getState().tool === 'select' && after && after !== before) haptic.select();
       });
     },
-    [editor, topo.handleTap, topoTools.handleTap, progress.handleTap, review.plan, drafting.planTap, drafting.tool, drafting.ctl, onOpenPhoto],
+    [editor, topo.handleTap, topoTools.handleTap, progress.handleTap, progress.ctl, progress.floors, review.plan, drafting.planTap, drafting.tool, drafting.ctl, onOpenPhoto, isolated, requestProgressPhoto],
   );
 
   // Propiedades (con edición y borrado) solo donde se edita el modelo: en los
@@ -693,21 +800,66 @@ export function SurveyScreen({
     [editor, editable],
   );
 
+  /**
+   * Doble toque = entrar al elemento (H-88/H-89): un corte abre su vista; un
+   * muro, su alzado; una columna, sus caras desdobladas; un suelo (libre o de
+   * recinto), se aísla para editarlo y pintar su avance.
+   */
   const handleDoubleTap = useCallback(
     (x: number, y: number) => {
+      if (isolated) return;
+      const world = editor.screenToWorld(x, y);
+      const sec = drafting.ctl.hitTest({ kind: 'plan' }, world, CANVAS_TOUCH_TOLERANCE_PX / editor.getState().transform.scale);
+      if (sec?.kind === 'section' && sec.points.length >= 2) {
+        drafting.ctl.select(sec.id);
+        openSection(sec);
+        return;
+      }
       const hit = editor.selectAt(x, y, CANVAS_TOUCH_TOLERANCE_PX);
-      if (hit instanceof Wall) openElevation(hit.id as string);
+      if (hit instanceof Wall) return openElevation(hit.id as string);
+      if (hit instanceof Column) return openColumn(hit);
+      if (hit instanceof Floor) return isolateFloor(hit.id as string);
+      const zone = editor.zoneAt(x, y);
+      const zoneFloor = zone?.id ? editor.floorOfZone(zone.id) : null;
+      if (zoneFloor) isolateFloor(zoneFloor.id as string);
+      else if (zone?.id) toast('Este recinto no tiene suelo: en Levantamiento, herramienta Suelo sobre él.', { kind: 'info' });
     },
-    [editor, openElevation],
+    [editor, openElevation, openColumn, isolateFloor, isolated, drafting.ctl, openSection],
   );
 
+  // Un arrastre es del manejador de un corte (extremos, profundidad) o del editor (muros, columnas, suelos).
+  const draftDragging = useRef(false);
   const handleDragStart = useCallback(
-    (x: number, y: number) => editor.beginDrag(x, y, CANVAS_TOUCH_TOLERANCE_PX),
-    [editor],
+    (x: number, y: number) => {
+      if (editable && drafting.planHandleDrag.begin(x, y)) {
+        draftDragging.current = true;
+        return true;
+      }
+      draftDragging.current = false;
+      return editor.beginDrag(x, y, CANVAS_TOUCH_TOLERANCE_PX);
+    },
+    [editor, editable, drafting.planHandleDrag],
   );
-  const handleDragMove = useCallback((x: number, y: number) => editor.updateDrag(x, y), [editor]);
-  const handleDragEnd = useCallback((x: number, y: number) => void editor.endDrag(x, y), [editor]);
-  const handleDragCancel = useCallback(() => editor.cancelDrag(), [editor]);
+  const handleDragMove = useCallback(
+    (x: number, y: number) => (draftDragging.current ? drafting.planHandleDrag.move(x, y) : editor.updateDrag(x, y)),
+    [editor, drafting.planHandleDrag],
+  );
+  const handleDragEnd = useCallback(
+    (x: number, y: number) => {
+      if (draftDragging.current) {
+        drafting.planHandleDrag.move(x, y);
+        drafting.planHandleDrag.end();
+      } else void editor.endDrag(x, y);
+      draftDragging.current = false;
+    },
+    [editor, drafting.planHandleDrag],
+  );
+  const handleDragCancel = useCallback(() => {
+    if (draftDragging.current) drafting.planHandleDrag.cancel();
+    else editor.cancelDrag();
+    draftDragging.current = false;
+  }, [editor, drafting.planHandleDrag]);
+  const grabExtra = useCallback((x: number, y: number) => editable && drafting.planHandleDrag.hit(x, y), [editable, drafting.planHandleDrag]);
 
   const handleDelete = useCallback(() => {
     const label = OBJECT_LABEL[editor.selected?.type ?? ''] ?? 'Objeto';
@@ -747,13 +899,15 @@ export function SurveyScreen({
       rooms: state.rooms,
       roomName,
       selectedZoneId: state.selectedZoneId,
-      floors: editor.floorViews,
+      // El suelo que se arrastra va en la capa viva (su contorno resaltado), no en la planta fija.
+      floors: dragging ? editor.floorViews.filter((f) => !draggedIds(state).has(f.id)) : editor.floorViews,
       genericOpenings: state.genericOpenings,
       showNodes: state.tool === 'wall',
       measureTargetId: state.measureTargetId as string | null,
       photoMarkers: state.photoMarkers,
     }),
-    [displayObjects, dragging, state.selectedId, handles, state.rooms, roomName, state.selectedZoneId, state.tool, state.measureTargetId, state.photoMarkers, state.genericOpenings],
+    // Los suelos cambian con los objetos (displayObjects) y los recintos; el resto de `state` no los toca.
+    [displayObjects, dragging, state.selectedId, handles, state.rooms, roomName, state.selectedZoneId, state.tool, state.measureTargetId, state.photoMarkers, state.genericOpenings], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const parentWallLength = useMemo(() => {
     if (!(selected instanceof Door) && !(selected instanceof Window)) return undefined;
@@ -810,8 +964,23 @@ export function SurveyScreen({
       // Capa Coordinación: las observaciones de Revisión se ven también en los demás modos.
       markups: review.active || layers.coordinacion ? review.planMarkups : undefined,
       annotations: drafting.planShapes,
+      // Suelo aislado: solo él; muros y columnas quedan de calco para orientarse.
+      ...(isolated && {
+        objects: visibleObjects.filter((o) => (o.id as string) === isolated.floorId),
+        underlay: [...underlay, ...visibleObjects.filter((o) => o instanceof Wall || o instanceof Column)],
+        floors: canvasScene.floors.filter((f) => f.id === isolated.floorId),
+        rooms: isolated.zoneId ? canvasScene.rooms.filter((r) => r.id === isolated.zoneId) : [],
+        annotations: undefined,
+        markups: undefined,
+        benchmarks: [],
+        coordLabels: [],
+        measure: null,
+        coordGrid: null,
+        showNodes: false,
+        genericOpenings: [],
+      }),
     }),
-    [canvasScene, underlay, existingIds, visibleObjects, filters.cotas, filters.fotos, topo.planBenchmarks, topo.selectedBenchmark, topo.coordLabels, topo.active, filters.vertices, topoTools.overlay, topoGrid, progress.active, progress.planLayers, review.active, review.planMarkups, drafting.planShapes, layers],
+    [canvasScene, underlay, existingIds, visibleObjects, filters.cotas, filters.fotos, topo.planBenchmarks, topo.selectedBenchmark, topo.coordLabels, topo.active, filters.vertices, topoTools.overlay, topoGrid, progress.active, progress.planLayers, review.active, review.planMarkups, drafting.planShapes, layers, isolated],
   );
 
   // --- Selector de base y tope: qué edita ---
@@ -939,8 +1108,21 @@ export function SurveyScreen({
     if (sel instanceof Room) {
       return { typeLabel: 'Recinto', detail: state.rooms[0] ? `${state.rooms[0].area.toFixed(2)} m²` : 'abierto', props: {} };
     }
+    if (sel instanceof Floor) {
+      // Suelo libre: su propio contorno; de recinto: el neto del recinto (H-88).
+      const view = editor.floorViews.find((f) => f.id === (sel.id as string));
+      const poly = view?.polygon ?? sel.outline ?? [];
+      let per = 0;
+      for (let i = 0; i < poly.length; i++) per += Math.hypot(poly[(i + 1) % poly.length].x - poly[i].x, poly[(i + 1) % poly.length].y - poly[i].y);
+      const free = !floorZoneId(sel);
+      return {
+        typeLabel: isolated ? isolated.title : free ? 'Suelo libre' : 'Suelo',
+        detail: `neta ${netFloorArea(poly, view?.holes ?? sel.holes ?? []).toFixed(2)} m² · P ${per.toFixed(2)} m${free && editable ? ' · arrastra vértices y aristas' : ''}`,
+        props: { thickness: cm((sel.thickness as number | undefined) ?? 0.1) },
+      };
+    }
     return { typeLabel: sel.type, props: {} };
-  }, [editor, selected, state.rooms, state.selectedZoneId, levelInfo, topo.active, topo.selectedBenchmark, topo.probe, topo.geo, topo.display]);
+  }, [editor, selected, state.rooms, state.selectedZoneId, levelInfo, topo.active, topo.selectedBenchmark, topo.probe, topo.geo, topo.display, isolated, editable, state.objects]);
 
   const zoomPercent = (state.transform.scale / DEFAULT_SCALE) * 100;
   const activeActivity = progress.state.activities.find((a) => a.id === progress.state.activityId);
@@ -968,7 +1150,7 @@ export function SurveyScreen({
     async (key: PropKey, valueCm: number) => {
       const sel = editor.selected;
       const m = meters(valueCm / 100);
-      if (sel instanceof Wall && key === 'thickness') await editor.updateSelectedProperty('thickness', m);
+      if ((sel instanceof Wall || sel instanceof Floor) && key === 'thickness') await editor.updateSelectedProperty('thickness', m);
       else if (sel instanceof Column && key === 'side') {
         // Un solo paso de deshacer: antes eran dos (X y luego Y).
         await editor.updateSelectedProperty('dimensionX', m, sel.isCircular ? undefined : { dimensionY: m });
@@ -1002,6 +1184,33 @@ export function SurveyScreen({
         : [];
 
   const bpcActions: BpcAction[] = [];
+  if (isolated) {
+    // Suelo aislado: sus acciones primero (salir siempre a la vista).
+    bpcActions.push({ icon: 'arrow-u-left-top', label: 'Salir', onPress: exitIsolation });
+    if (progress.active) {
+      bpcActions.push({ icon: 'palette-outline', label: 'Actividad y corte', onPress: () => progress.openSheet('catalog') });
+      bpcActions.push({ icon: 'file-chart-outline', label: 'Reporte del suelo', onPress: () => progress.openReport({ keys: [isolated.key], title: isolated.title }) });
+      bpcActions.push({
+        icon: 'camera-plus-outline',
+        label: 'Foto',
+        onPress: () => {
+          const view = editor.floorViews.find((f) => f.id === isolated.floorId);
+          const c = view ? view.polygon.reduce((a, p) => ({ x: a.x + p.x / view.polygon.length, y: a.y + p.y / view.polygon.length }), { x: 0, y: 0 }) : editor.screenToWorld(canvasSize.w / 2, canvasSize.h / 2);
+          requestProgressPhoto({ targetKey: isolated.key, position: c });
+        },
+      });
+    } else if (editable) {
+      bpcActions.push({
+        icon: 'tune-variant',
+        label: 'Propiedades',
+        onPress: () => {
+          // También el suelo de un recinto: su espesor y sus notas.
+          editor.select(revitObjectId(isolated.floorId));
+          setPanelOpen(true);
+        },
+      });
+    }
+  }
   const draftPolygon = drafting.state.polygon;
   if (drafting.tool === 'polygon' && draftPolygon) {
     if (draftPolygon.points.length >= 3) {
@@ -1012,16 +1221,20 @@ export function SurveyScreen({
   if (drafting.state.selectedId && !drafting.tool) {
     const sec = drafting.ctl.selected;
     if (sec?.kind === 'section' && sec.points.length >= 2) {
-      bpcActions.push({ icon: 'arrow-split-vertical', label: 'Ver corte', onPress: () => openSection(sec.points[0], sec.points[1], sec.text || 'Corte') });
+      bpcActions.push({ icon: 'arrow-split-vertical', label: 'Ver corte', onPress: () => openSection(sec) });
+      if (editable) bpcActions.push({ icon: 'swap-vertical', label: 'Otro lado', onPress: () => void drafting.ctl.edit(sec.id, { props: { flip: sectionView(sec).flipped ? 0 : 1 } }) });
     }
-    bpcActions.push({ icon: 'tune-variant', label: 'Dibujo', onPress: () => setDraftSheetOpen(true) });
+    bpcActions.push({ icon: 'tune-variant', label: sec?.kind === 'section' ? 'Corte' : 'Dibujo', onPress: () => setDraftSheetOpen(true) });
   }
-  if (review.active) {
+  if (isolated) {
+    // Ya están las del suelo aislado.
+  } else if (review.active) {
     if (review.tool) bpcActions.push({ icon: 'palette', label: 'Color', onPress: () => review.ctl.cycleColor() });
     bpcActions.push({ icon: 'format-list-numbered', label: 'Observaciones', onPress: review.openList });
   } else if (progress.active) {
     bpcActions.push({ icon: 'palette-outline', label: 'Actividad y corte', onPress: () => progress.openSheet('catalog') });
-    bpcActions.push({ icon: 'file-chart-outline', label: 'Reporte', onPress: () => progress.openSheet('report') });
+    // Desde la planta general el reporte abarca todo el espacio.
+    bpcActions.push({ icon: 'file-chart-outline', label: 'Reporte', onPress: () => progress.openReport(null) });
   } else if (topoTools.tool) {
     if (topoTools.canUndoPoint) bpcActions.push({ icon: 'undo-variant', label: 'Quitar punto', onPress: topoTools.undoPoint });
     bpcActions.push({ icon: 'restart', label: 'Reiniciar', onPress: topoTools.reset });
@@ -1116,9 +1329,13 @@ export function SurveyScreen({
     bridgeUi.current.section = async (a) => {
       // Por id (un corte guardado) o por dos puntos sueltos.
       const saved = a.id ? (await services.drafts.list(roomId as string)).find((d) => d.id === a.id && d.kind === 'section') : undefined;
-      const [ax, ay] = saved ? [saved.points[0].x, saved.points[0].y] : (a.a as [number, number]);
-      const [bx, by] = saved ? [saved.points[1].x, saved.points[1].y] : (a.b as [number, number]);
-      setProjection(await sectionProjection(services, roomId, projectLevels, { x: ax, y: ay }, { x: bx, y: by }, saved?.text ?? 'Corte'));
+      if (saved) {
+        openSection(saved);
+        return;
+      }
+      const [ax, ay] = a.a as [number, number];
+      const [bx, by] = a.b as [number, number];
+      setProjection(await sectionProjection(services, roomId, projectLevels, { x: ax, y: ay }, { x: bx, y: by }, 'Corte', Number(a.depth ?? 0)));
     };
     bridgeUi.current.tool = (a) => (a.id ? editor.setTool(a.id as never) : editor.setTool('select'));
     // Nivel activo por nombre, como mover el deslizador «Nivel» (los recintos se detectan por nivel).
@@ -1126,6 +1343,74 @@ export function SurveyScreen({
       const idx = workspaceStore.getState().levels.items.findIndex((i) => i.name === a.name);
       if (idx < 0) throw new Error(`No hay nivel "${String(a.name)}".`);
       workspaceStore.getState().moveRangeThumb('levels', 'nivel', idx);
+    };
+    // --- QA del avance y los reportes (la tableta no acepta toques por adb) ---
+    bridgeUi.current.mode = (a) => workspaceStore.getState().setWorkMode(String(a.id) as never);
+    bridgeUi.current.fab = (a) => {
+      const r = workspaceStore.getState().activateTool(String(a.category), String(a.tool), a.method ? String(a.method) : undefined);
+      if (!r.ok) throw new Error(`Herramienta no disponible: ${r.reason}`);
+    };
+    bridgeUi.current.clearTool = () => workspaceStore.getState().clearTool();
+    bridgeUi.current.isolate = (a) => isolateFloor(String(a.floor));
+    bridgeUi.current.exit = () => exitIsolation();
+    bridgeUi.current.supports = () => progress.ctl.supportKeys.map((k) => ({ key: k, label: supportLabel(k), area: Number(progress.ctl.supportAreaOf(k).toFixed(2)) }));
+    bridgeUi.current.cut = async (a) => {
+      const c = await progress.ctl.addCut(a.date ? String(a.date) : undefined, a.label ? String(a.label) : '');
+      return { id: c.id, date: c.date };
+    };
+    bridgeUi.current.activity = (a) => {
+      const act = progress.ctl.getState().activities.find((x) => x.name === a.name);
+      if (!act) throw new Error(`No hay actividad "${String(a.name)}".`);
+      progress.ctl.setActivity(act.id);
+    };
+    // Pinta un rectángulo (en coordenadas del soporte) o todo el soporte con la actividad y el corte activos.
+    bridgeUi.current.paint = async (a) => {
+      const t = targetOfKey(String(a.key));
+      if (!t) throw new Error(`Soporte no válido: ${String(a.key)}`);
+      const r = a.rect as [number, number, number, number] | undefined;
+      const before = progress.ctl.getState().marks.length;
+      if (r) {
+        progress.ctl.setTool('rect');
+        progress.ctl.begin(t, { x: r[0], y: r[1] });
+        await progress.ctl.end({ x: r[2], y: r[3] });
+      } else {
+        progress.ctl.setTool('fill');
+        await progress.ctl.fill(t);
+      }
+      return { marks: progress.ctl.getState().marks.length, added: progress.ctl.getState().marks.length - before, notice: progress.ctl.getState().notice?.message ?? null };
+    };
+    bridgeUi.current.quantities = () =>
+      progress.ctl.quantities().map((q) => ({
+        support: supportLabel(q.targetKey),
+        activity: progress.ctl.getState().allActivities.find((x) => x.id === q.activityId)?.name ?? q.activityId,
+        inCut: Number(q.inCut.toFixed(2)),
+        cumulative: Number(q.cumulative.toFixed(2)),
+        supportArea: Number(q.supportArea.toFixed(2)),
+      }));
+    bridgeUi.current.report = (a) => progress.openReport(a.key ? { keys: [String(a.key)], title: supportLabel(String(a.key)) } : null);
+    bridgeUi.current.closeSheet = () => progress.closeSheet();
+    // Genera el reporte en el teléfono (PDF por expo-print, Excel con imágenes rasterizadas por Skia) y lo deja en la caché.
+    bridgeUi.current.export = async (a) => {
+      const st = progress.ctl.getState();
+      const opt = {
+        cutIds: a.cuts === 'all' ? st.cuts.map((c) => c.id) : st.cutId ? [st.cutId] : [],
+        activityIds: null,
+        scopeKeys: a.key ? [String(a.key)] : null,
+        scopeTitle: a.key ? supportLabel(String(a.key)) : 'Todo el espacio',
+        includeEmpty: true,
+        includePhotos: true,
+        includeDrawings: true,
+      };
+      const dir = FileSystemLegacy.cacheDirectory ?? '';
+      if (a.format === 'pdf') {
+        const html = await reportIO.pdfHtml(opt);
+        const pdf = await htmlToPdf(html);
+        return { uri: pdf.uri, htmlChars: html.length };
+      }
+      const bytes = await reportIO.xlsx(opt, EMPTY_MEMORIA_HEADER, new Map());
+      const uri = `${dir}qa-memoria.xlsx`;
+      await FileSystemLegacy.writeAsStringAsync(uri, uint8ArrayToBase64(bytes), { encoding: FileSystemLegacy.EncodingType.Base64 });
+      return { uri, bytes: bytes.length };
     };
   });
 
@@ -1162,12 +1447,26 @@ export function SurveyScreen({
 
   const topoVertices = useMemo(() => uniqueVertices(editor.walls), [editor, state.objects, levelInfo]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // --- Avance: nombres de soportes y planta del reporte ---
+  // --- Avance: nombres de soportes y reportes ---
   const supportLabel = useCallback(
     (key: string): string => {
+      if (key.startsWith('floor:floor:')) {
+        // Suelo libre: su nombre, o «Suelo libre N» en el orden de la planta.
+        const id = key.slice(12);
+        const free = editor.floorViews.filter((f) => !f.zoneId);
+        const f = editor.scopedObjects.find((o) => (o.id as string) === id);
+        const name = f?.properties.name as string | undefined;
+        return name ? `${name} · suelo` : `Suelo libre ${free.findIndex((x) => x.id === id) + 1}`;
+      }
       if (key.startsWith('floor:')) {
         const r = state.rooms.find((z) => z.id === key.slice(6));
         return r ? `${r.number !== undefined ? zoneCodeOf({ number: r.number }) + ' ' : ''}${r.name ?? 'Recinto'} · suelo` : 'Suelo';
+      }
+      if (key.startsWith('column:')) {
+        const id = key.slice(7);
+        const cols = editor.scopedObjects.filter((o): o is Column => o instanceof Column);
+        const i = cols.findIndex((c) => (c.id as string) === id);
+        return (cols[i]?.properties.name as string | undefined) ?? `Columna ${i + 1}`;
       }
       const [, wallDbId, side] = key.split(':');
       const i = editor.walls.findIndex((w) => (w.id as string) === wallDbId);
@@ -1177,30 +1476,17 @@ export function SurveyScreen({
     },
     [state.rooms, editor, state.objects], // eslint-disable-line react-hooks/exhaustive-deps
   );
-  const progressPlanSvg = useCallback(
-    () =>
-      planSvg({
-        walls: editor.walls.map((w) => ({ start: w.startPoint, end: w.endPoint, thickness: w.thickness as number })),
-        zones: state.rooms
-          .filter((r) => (r.netPolygon?.length ?? 0) >= 3)
-          .map((r) => ({ polygon: r.netPolygon!, label: r.name ?? 'Recinto', sublabel: `${(r.netArea ?? r.area).toFixed(2)} m²`, at: r.centroid })),
-        layers: progress.planLayers,
-      }),
-    [editor, state.rooms, progress.planLayers],
-  );
-
-  /** Caras de muro con avance pintado, como SVG (para el PDF del reporte). */
-  const progressFaceViews = useCallback(() => {
-    const keys = new Set(progress.state.marks.filter((m) => m.target.kind === 'wallFace').map((m) => `wall:${(m.target as { wallId: string }).wallId}:${(m.target as { side: string }).side}`));
-    const out: { title: string; svg: string }[] = [];
-    for (const key of keys) {
-      const [, wallDbId, side] = key.split(':');
-      const face = progress.supports.get(key);
-      const layers = progress.faceLayers(wallDbId, side as 'A' | 'B');
-      if (face && layers.length) out.push({ title: `Alzado · ${supportLabel(key)}`, svg: faceSvg(face, side === 'B', [], layers) });
-    }
-    return out;
-  }, [progress, supportLabel]);
+  const reportIO = useProgressReport({
+    services,
+    roomId,
+    editor,
+    rooms: state.rooms,
+    progress,
+    supportLabel,
+    project: projectName,
+    space: roomName ?? 'Espacio',
+    operator: operatorName,
+  });
 
   // --- Revisión: nombre y dibujo de cada vista (acta) ---
   const reviewViewName = useCallback(
@@ -1258,6 +1544,71 @@ export function SurveyScreen({
       }
     },
     [review, photoFs, services, roomId, operatorName],
+  );
+
+  /** Foto de avance: se guarda como foto de campo con su corte, su elemento y su actividad (H-90). */
+  const handleProgressPhoto = useCallback(
+    async (photo: { base64: string }) => {
+      const p = pendingProgressPhoto;
+      setPendingProgressPhoto(null);
+      const cutId = progress.state.cutId;
+      if (!p || !cutId) return;
+      try {
+        const objectId = p.targetKey ? objectIdOfTarget(p.targetKey) : null;
+        const activityId = progress.state.activityId;
+        const activity = progress.state.activities.find((a) => a.id === activityId);
+        const { bimCode } = await saveFieldPhoto({
+          services,
+          fs: photoFs,
+          roomId,
+          base64: photo.base64,
+          operator: operatorName,
+          gps,
+          notes: `Avance${activity ? ` · ${activity.name}` : ''}`,
+          extra: {
+            progress: { cutId, ...(p.targetKey ? { targetKey: p.targetKey } : {}), ...(activityId ? { activityId } : {}) },
+            marker: { position: p.position, ...(p.face ? { face: p.face } : {}), visible: true },
+            ...(objectId ? { linkedObjectId: objectId } : {}),
+          },
+        });
+        await editor.reloadPhotoMarkers();
+        toast(`Foto ${bimCode} · corte ${progress.ctl.cutName(cutId)}${p.targetKey ? ` · ${supportLabel(p.targetKey)}` : ''}`, { kind: 'success' });
+      } catch (err: unknown) {
+        alertDialog('Error', err instanceof AppError ? err.userMessage : 'No se pudo guardar la foto.');
+      }
+    },
+    [pendingProgressPhoto, progress, services, photoFs, roomId, operatorName, gps, editor, supportLabel],
+  );
+
+  /** Foto de avance en la cara de un muro (desde el alzado): en planta queda sobre su eje. */
+  const progressPhotoOnFace = useCallback(
+    (targetKey: string, face: PhotoFaceAnchor) => {
+      const wall = editor.walls.find((w) => (w.id as string) === face.wallId);
+      if (!wall) return;
+      const t = Math.max(0, Math.min(1, face.x / ((wall.length as number) || 1)));
+      const position = { x: wall.startPoint.x + (wall.endPoint.x - wall.startPoint.x) * t, y: wall.startPoint.y + (wall.endPoint.y - wall.startPoint.y) * t };
+      requestProgressPhoto({ targetKey, position, face });
+    },
+    [editor, requestProgressPhoto],
+  );
+
+  /** Propiedades de un elemento tocado en un alzado o un corte (H-91). */
+  const openObjectFromView = useCallback(
+    (id: string, kind: string) => {
+      if (kind === 'beam') {
+        drafting.ctl.select(id);
+        setDraftSheetOpen(true);
+        return;
+      }
+      const obj = state.objects.find((o) => (o.id as string) === id);
+      if (!obj) {
+        toast('Ese elemento es de otro espacio: ábrelo desde su planta.', { kind: 'info' });
+        return;
+      }
+      editor.select(obj.id);
+      setPanelOpen(true);
+    },
+    [drafting.ctl, state.objects, editor],
   );
 
   // Un solo dueño del trazo de un dedo en la planta, según la herramienta activa.
@@ -1319,7 +1670,9 @@ export function SurveyScreen({
           dragEnabled={editable && state.tool === 'select' && !state.busy}
           drawEnabled={(editable && (state.tool === 'wall' || editor.shapeDragActive)) || progress.drawEnabled || review.drawEnabled || drafting.drawEnabled}
           sketch={planSketch}
-          doubleTapEnabled={state.tool === 'select' && wsState.workMode !== 'topografia'}
+          doubleTapEnabled={state.tool === 'select' && wsState.workMode !== 'topografia' && !isolated}
+          liveStroke={progress.drawEnabled && !review.drawEnabled ? progress.liveStroke : null}
+          grabExtra={grabExtra}
           rotationSnaps={topo.rotationSnaps}
           rotationEnabled={wsState.gridRotation}
           longPressEnabled
@@ -1358,7 +1711,14 @@ export function SurveyScreen({
             onOpenDraftSheet={() => setDraftSheetOpen(true)}
             photoMarkers={state.photoMarkers}
             onFacePhoto={setPendingFacePhoto}
+            onProgressPhoto={progressPhotoOnFace}
             onOpenPhoto={onOpenPhoto}
+            onOpenObject={openObjectFromView}
+            onOpenWall={(id) => {
+              // Otro muro: su alzado reemplaza a este (la planta sigue debajo).
+              editor.select(revitObjectId(id));
+              setElevWallId(id);
+            }}
             onClose={closeElevation}
           />
         ) : projection ? (
@@ -1368,6 +1728,21 @@ export function SurveyScreen({
             width={canvasSize.w}
             height={canvasSize.h}
             chromeTop={chromeTop}
+            progress={progress}
+            onOpenObject={openObjectFromView}
+            onOpenWall={(id) => {
+              setProjection(null);
+              openElevation(id);
+            }}
+            onOpenColumn={(id) => {
+              const c = state.objects.find((o) => (o.id as string) === id);
+              if (c instanceof Column) openColumn(c);
+            }}
+            onProgressPhoto={(key) => {
+              const id = key.slice(7);
+              const c = state.objects.find((o) => (o.id as string) === id);
+              if (c instanceof Column) requestProgressPhoto({ targetKey: key, position: c.position });
+            }}
             onClose={() => setProjection(null)}
           />
         ) : (
@@ -1490,6 +1865,14 @@ export function SurveyScreen({
                   }
                 : undefined
             }
+            onIsolate={
+              selected instanceof Floor && !isolated
+                ? () => {
+                    setPanelOpen(false);
+                    isolateFloor(selected.id as string);
+                  }
+                : undefined
+            }
           />
       </BottomSheet>
 
@@ -1528,7 +1911,7 @@ export function SurveyScreen({
       </BottomSheet>
 
       {projectId ? <TopographySheets topo={topo} vertices={topoVertices} /> : null}
-      <DraftSheets drafting={drafting} open={draftSheetOpen} onClose={() => setDraftSheetOpen(false)} />
+      <DraftSheets drafting={drafting} open={draftSheetOpen} onClose={() => setDraftSheetOpen(false)} onOpenSection={openSection} />
       <ReviewSheets
         review={review}
         projectName={projectName}
@@ -1545,13 +1928,16 @@ export function SurveyScreen({
       </Modal>
       <ProgressSheets
         progress={progress}
+        io={reportIO}
+        projectKey={projectId ?? (roomId as string)}
         projectName={projectName}
         spaceName={spaceName}
-        operatorName={operatorName}
         supportLabel={supportLabel}
-        planSvg={progressPlanSvg}
-        faceViews={progressFaceViews}
       />
+      {/* --- Foto de avance (H-90): queda en el corte activo con su elemento --- */}
+      <Modal visible={pendingProgressPhoto !== null} animationType="slide" onRequestClose={() => setPendingProgressPhoto(null)}>
+        <CameraCaptureView capture={photoCapture} onCapture={handleProgressPhoto} onClose={() => setPendingProgressPhoto(null)} />
+      </Modal>
       <StakeoutSheet
         open={!!topoTools.stakeTargetGrid}
         target={topoTools.stakeTargetGrid}

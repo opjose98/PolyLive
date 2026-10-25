@@ -38,6 +38,8 @@ Si una fila no tiene test, es una decisión consciente y está dicho.
 | **[[Suelos-libres-y-vacios]]** | `domain/objects/floor.ts`, `application/use-cases/CreateFloorUseCase.ts` | `test/editor/EditorController.test.ts`, `test/ifc/IFCRevitExport.test.ts` |
 | **[[Cortes-y-alzados-de-columna]]** | `domain/section/sectionCut.ts`, `application/section/projection.ts` | `test/section/sectionCut.test.ts` |
 | **[[Puente-de-control]]** | `application/bridge/bridgeCommands.ts`, `scripts/bridge/polylive-bridge.mjs` | `test/bridge/bridgeCommands.test.ts` |
+| **[[Avance-de-obra]]** | `domain/progress/progress.ts`, `application/progress/ProgressController.ts`, `ui/canvas/liveStroke.ts` | `test/progress/progress.test.ts`, `test/progress/ProgressController.test.ts` |
+| **[[Memoria-de-cantidades]]** | `application/progress/progressMemoria.ts`, `infrastructure/export/xlsx/xlsxWriter.ts` | `test/report/memoria.test.ts` |
 | **[[Topologia-de-recintos]]** | `domain/topology/TopologyGraph.ts`, `application/editor/EditorCore.ts` | `test/topology/TopologyGraph.test.ts`, `test/editor/EditorController.test.ts` |
 
 ## Geometría

@@ -43,7 +43,12 @@ export function pickFabCategory(state: FabState, categoryId: string): FabState {
   return state.level === 'categories' ? { level: 'tools', categoryId } : state;
 }
 
-/** Ícono del botón principal en cada estado. */
-export function fabMainIcon(state: FabState): 'plus' | 'minus' | 'arrow-left' {
-  return state.level === 'closed' ? 'plus' : state.level === 'categories' ? 'minus' : 'arrow-left';
+/**
+ * Ícono del botón principal en cada estado. Cerrado y con una herramienta
+ * activa, muestra el de la herramienta hasta que se suelte: así se sabe en
+ * todo momento con qué se está trabajando.
+ */
+export function fabMainIcon(state: FabState, activeToolIcon?: string | null): string {
+  if (state.level === 'closed') return activeToolIcon ?? 'plus';
+  return state.level === 'categories' ? 'minus' : 'arrow-left';
 }

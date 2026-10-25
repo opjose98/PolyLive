@@ -61,8 +61,10 @@ type ToolBinding =
   | { readonly kind: 'station' }
   /** Herramientas del modo Topografía (M2): no crean objetos BIM, crean mojones. */
   | { readonly kind: 'topo'; readonly action: TopoAction }
-  /** Herramientas del modo Avance (M3): pintan sobre suelos y caras de muro. */
+  /** Herramientas del modo Avance (M3): pintan sobre suelos, caras de muro y columnas. */
   | { readonly kind: 'progress'; readonly tool: 'brush' | 'eraser' | 'fill' | 'rect' }
+  /** Foto de avance (H-90): queda en el corte activo, ligada al elemento tocado (o libre). */
+  | { readonly kind: 'progressPhoto' }
   /** Herramientas del modo Revisión (M4): marcas sobre el plano o el alzado. */
   | { readonly kind: 'review'; readonly tool: ReviewToolId }
   /** Dibujo técnico (F6b): cotas, textos, líneas, vigas… en planta y alzado. */
@@ -260,6 +262,12 @@ export const CATEGORIES_PROGRESS: readonly CategoryDef[] = [
       { id: 'rectangulo-avance', label: 'Rectángulo', icon: 'rectangle-outline', binding: { kind: 'progress', tool: 'rect' } },
     ],
   },
+  {
+    id: 'registro',
+    label: 'Registro',
+    icon: 'camera-outline',
+    tools: [{ id: 'foto-avance', label: 'Foto de avance', icon: 'camera-plus-outline', binding: { kind: 'progressPhoto' } }],
+  },
 ];
 
 export const CATEGORIES_REVIEW: readonly CategoryDef[] = [
@@ -313,6 +321,11 @@ export function findTool(
   const category = categories.find((c) => c.id === categoryId);
   const tool = category?.tools.find((t) => t.id === toolId);
   return category && tool ? { category, tool } : null;
+}
+
+/** Ícono de la herramienta activa (el que muestra el FAB +), o `null`. */
+export function toolIconOf(categories: readonly CategoryDef[], tool: { categoryId: string; toolId: string } | null): string | null {
+  return tool ? (findTool(categories, tool.categoryId, tool.toolId)?.tool.icon ?? null) : null;
 }
 
 // ---------------------------------------------------------------------------

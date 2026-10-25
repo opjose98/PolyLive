@@ -20,8 +20,9 @@ import type { Point2D } from '../../domain/geometry/types';
 import { Column } from '../../domain/objects/column';
 import { LEVEL_PROP, ProjectMarker } from '../../domain/objects/marker';
 import { columnVerticalOf, resolveExtent } from '../../domain/objects/vertical';
-import { CutKind, columnFaces, sectionCuts } from '../../domain/section/sectionCut';
+import { CutKind, columnFaces, sectionBeyond, sectionCuts } from '../../domain/section/sectionCut';
 import { loadCutModel } from './cutModel';
+import { isPointInPolygon } from '../../domain/geometry/polygon-utils';
 
 interface ProjectionCut {
   readonly id: string;
@@ -30,6 +31,14 @@ interface ProjectionCut {
   readonly x1: number;
   readonly y0: number;
   readonly y1: number;
+}
+
+/** Elemento visto detrás del plano (corte con profundidad): silueta y vanos, en (x, y) de la vista. */
+interface ProjectionBeyond {
+  readonly id: string;
+  readonly kind: CutKind;
+  readonly poly: readonly { readonly x: number; readonly y: number }[];
+  readonly holes: readonly (readonly { readonly x: number; readonly y: number }[])[];
 }
 
 export interface Projection {
@@ -42,15 +51,22 @@ export interface Projection {
   /** Alto útil de la vista sobre `yBase` (m). */
   readonly height: number;
   readonly cuts: readonly ProjectionCut[];
+  /** Lo que se ve detrás del plano (solo cortes con profundidad), de lo más lejano a lo más cercano. */
+  readonly beyond?: readonly ProjectionBeyond[];
   /** Columna: alto de su silueta (se dibuja como el muro); corte: sin silueta. */
   readonly silhouette: number | null;
   readonly dividers?: readonly { readonly x: number; readonly label: string }[];
+  /** Qué se está mirando: una columna (se puede pintar su avance) o un corte guardado. */
+  readonly subject?: { readonly kind: 'column'; readonly id: string } | { readonly kind: 'section'; readonly id?: string };
 }
 
 const elevationsOf = (levels: readonly ProjectMarker[]) => new Map(levels.map((m) => [m.id, m.value] as [string, number]));
 const baseOf = (levels: readonly ProjectMarker[]) => levels.find((m) => m.isBase)?.id ?? '';
 
-/** Lo que corta la línea a → b, en alzado visto desde la izquierda de la línea. */
+/**
+ * Lo que corta la línea a → b, mirando hacia su izquierda (ver `sectionView`):
+ * lo cortado, rayado, y hasta `depth` m detrás, lo visto (proyectado).
+ */
 export async function sectionProjection(
   services: AppServices,
   spaceId: RoomId,
@@ -59,24 +75,38 @@ export async function sectionProjection(
   b: Point2D,
   /** Nombre del corte guardado (Corte 1, Longitudinal…). */
   name = 'Corte',
+  /** Profundidad de vista (m); 0 = solo lo cortado. */
+  depth = 0,
+  /** Corte guardado (para seleccionarlo y reportarlo). */
+  sectionId?: string,
 ): Promise<Projection> {
   const model = await loadCutModel(services, spaceId, elevationsOf(levels), baseOf(levels));
   const length = Math.hypot(b.x - a.x, b.y - a.y);
-  const pieces = sectionCuts({ origin: a, dir: { x: b.x - a.x, y: b.y - a.y }, length, halfWidth: 0.005 }, model);
-  const zs = pieces.flatMap((p) => p.bands.flat());
+  const line = { origin: a, dir: { x: b.x - a.x, y: b.y - a.y }, length, halfWidth: 0.005 };
+  const pieces = sectionCuts(line, model);
+  const seen = sectionBeyond(line, depth, model);
+  const zs = [...pieces.flatMap((p) => p.bands.flat()), ...seen.flatMap((s) => s.poly.map((q) => q.z))];
   const yBase = Math.min(0, ...zs);
   const top = Math.max(yBase + 1, ...zs);
   const counts = new Map<CutKind, number>();
   for (const p of pieces) counts.set(p.kind, (counts.get(p.kind) ?? 0) + 1);
   const label: Record<CutKind, string> = { wall: 'muro(s)', column: 'columna(s)', slab: 'losa(s)', beam: 'viga(s)' };
+  const cutText = pieces.length ? [...counts].map(([k, n]) => `${n} ${label[k]}`).join(' · ') : 'No corta nada';
   return {
     title: name,
-    detail: pieces.length ? [...counts].map(([k, n]) => `${n} ${label[k]}`).join(' · ') : 'No corta nada',
+    detail: depth > 0 ? `${cutText} · vista ${depth.toFixed(2)} m` : cutText,
     length,
     yBase,
     height: top - yBase,
     cuts: pieces.flatMap((p) => p.bands.map(([z0, z1]) => ({ id: p.id, kind: p.kind, x0: p.x0, x1: p.x1, y0: z0 - yBase, y1: z1 - yBase }))),
+    beyond: seen.map((s) => ({
+      id: s.id,
+      kind: s.kind,
+      poly: s.poly.map((q) => ({ x: q.x, y: q.z - yBase })),
+      holes: s.holes.map((h) => h.map((q) => ({ x: q.x, y: q.z - yBase }))),
+    })),
     silhouette: null,
+    subject: { kind: 'section', ...(sectionId ? { id: sectionId } : {}) },
   };
 }
 
@@ -120,5 +150,36 @@ export async function columnProjection(
     cuts,
     silhouette: e.top - e.base,
     dividers,
+    subject: { kind: 'column', id: column.id as string },
   };
+}
+
+/**
+ * Elemento de la vista bajo un punto (x a lo largo de la vista, y sobre
+ * `yBase`, en m): lo cortado primero (el más angosto) y si no, lo visto detrás
+ * (el más cercano). Para tocarlo y ver sus propiedades (H-91).
+ */
+export function projectionElementAt(p: Projection, x: number, y: number, tol: number): { id: string; kind: CutKind } | null {
+  const cut = p.cuts
+    .filter((c) => x >= c.x0 - tol && x <= c.x1 + tol && y >= c.y0 - tol && y <= c.y1 + tol)
+    .sort((a, b) => a.x1 - a.x0 - (b.x1 - b.x0))[0];
+  if (cut) return { id: cut.id, kind: cut.kind };
+  // `beyond` viene de lejos a cerca: se busca desde el final.
+  for (let i = (p.beyond?.length ?? 0) - 1; i >= 0; i--) {
+    const b = p.beyond![i];
+    if (isPointInPolygon({ x, y }, b.poly)) return { id: b.id, kind: b.kind };
+  }
+  return null;
+}
+
+/**
+ * Perímetro y alto de una columna desdoblada: el soporte de su avance (mismo
+ * largo que su alzado: un círculo, sus cuatro cuartos de perímetro).
+ */
+export function columnUnfolded(column: Column, levels: readonly ProjectMarker[]): { perimeter: number; height: number } {
+  const e = resolveExtent(columnVerticalOf(column, baseOf(levels), LEVEL_PROP), elevationsOf(levels));
+  const w = column.dimensionX as number;
+  const circular = column.sectionShape === 'circular';
+  const d = circular ? w : ((column.dimensionY as number | undefined) ?? w);
+  return { perimeter: circular ? Math.PI * w : 2 * (w + d), height: Math.max(0, e.top - e.base) };
 }

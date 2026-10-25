@@ -23,6 +23,7 @@ import { Room } from '../../domain/objects/room';
 import { Column } from '../../domain/objects/column';
 import { Door } from '../../domain/objects/door';
 import { Window } from '../../domain/objects/window';
+import { Floor, floorZoneId, netFloorArea } from '../../domain/objects/floor';
 import type { Measurement } from '../../domain/objects/measurement';
 import { NumberField, TextField, SegmentedField, ReadonlyRow } from './fields';
 import { ActionButton } from '../primitives';
@@ -56,6 +57,8 @@ interface PropertiesPanelProps {
   onOpenColumnElevation?: () => void;
   /** Abre las fotos vinculadas a este objeto. */
   onOpenPhotos?: () => void;
+  /** Aísla el suelo (doble toque): ver y editar solo él, pintar su avance. */
+  onIsolate?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -76,6 +79,7 @@ export function PropertiesPanel({
   onMerge,
   onOpenColumnElevation,
   onOpenPhotos,
+  onIsolate,
 }: PropertiesPanelProps) {
   const styles = useStyles();
   if (!object) {
@@ -116,6 +120,7 @@ export function PropertiesPanel({
           <VanoFields vano={object} wallLength={parentWallLength} busy={busy} onCommit={onCommitProperty} />
         ) : null}
         {object instanceof Room ? <RoomFields room={object} /> : null}
+        {object instanceof Floor ? <FloorFields floor={object} busy={busy} onCommit={onCommitProperty} /> : null}
 
         {measurements && measurements.length > 0 ? (
           <MeasurementsList measurements={measurements} />
@@ -147,6 +152,9 @@ export function PropertiesPanel({
         ) : null}
         {object instanceof Wall && onMeasure ? (
           <ActionButton label="Medir" variant="secondary" onPress={onMeasure} disabled={busy} />
+        ) : null}
+        {object instanceof Floor && onIsolate ? (
+          <ActionButton label="Aislar" variant="secondary" onPress={onIsolate} disabled={busy} />
         ) : null}
         {object instanceof Column && onOpenColumnElevation ? (
           <ActionButton label="Alzado" variant="secondary" onPress={onOpenColumnElevation} disabled={busy} />
@@ -431,6 +439,42 @@ function MeasurementsList({ measurements }: { measurements: readonly Measurement
   );
 }
 
+/** Suelo: área neta (contorno menos vacíos), perímetro y espesor (H-88). */
+function FloorFields({ floor, busy, onCommit }: { floor: Floor; busy?: boolean; onCommit: (property: string, value: unknown) => void }) {
+  const outline = floor.outline ?? [];
+  const free = !floorZoneId(floor) && outline.length >= 3;
+  let perimeter = 0;
+  for (let i = 0; i < outline.length; i++) {
+    const a = outline[i];
+    const b = outline[(i + 1) % outline.length];
+    perimeter += Math.hypot(b.x - a.x, b.y - a.y);
+  }
+  return (
+    <>
+      {free ? (
+        <>
+          <ReadonlyRow label="Área neta" value={`${netFloorArea(outline, floor.holes ?? []).toFixed(2)} m²`} />
+          <ReadonlyRow label="Perímetro" value={`${perimeter.toFixed(2)} m`} />
+          <ReadonlyRow label="Vértices" value={String(outline.length)} />
+        </>
+      ) : (
+        <ReadonlyRow label="Contorno" value="El del recinto (se mueve con sus muros)" />
+      )}
+      {floor.holes?.length ? <ReadonlyRow label="Vacíos" value={String(floor.holes.length)} /> : null}
+      <NumberField
+        label="Espesor"
+        unit="m"
+        decimals={3}
+        min={0.01}
+        max={2}
+        value={(floor.thickness as number | undefined) ?? 0.1}
+        disabled={busy}
+        onCommit={(v) => onCommit('thickness', v)}
+      />
+    </>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Utilidades
 // ---------------------------------------------------------------------------
@@ -448,7 +492,9 @@ function titleFor(object: RevitObjectBase): string {
             ? 'Columna'
             : object.type === 'Room'
               ? 'Recinto'
-              : 'Forjado';
+              : object.type === 'Floor'
+                ? 'Suelo'
+                : 'Forjado';
   return name ? `${typeLabel} · ${name}` : typeLabel;
 }
 

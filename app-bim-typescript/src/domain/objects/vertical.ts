@@ -216,6 +216,25 @@ export function extentAt(v: WallVertical, at: number, length: number, levels: Le
   };
 }
 
+/**
+ * La misma restricción con el tope en la cota absoluta `z`: si está atado a
+ * un nivel cambia su desfase (sigue atado); si no, su altura desconectada.
+ */
+export function extentWithTop(e: VerticalExtent, z: number, levels: LevelElevations): VerticalExtent {
+  const mm = (x: number) => Math.round(x * 1000) / 1000;
+  const topLevel = e.topLevelId !== null ? levels.get(e.topLevelId) : undefined;
+  if (topLevel !== undefined) return { ...e, topOffset: mm(z - topLevel) };
+  return { ...e, unconnectedHeight: mm(z - resolveExtent(e, levels).base) };
+}
+
+/** La misma restricción con la base en la cota absoluta `z`; el tope no se mueve. */
+export function extentWithBase(e: VerticalExtent, z: number, levels: LevelElevations): VerticalExtent {
+  const mm = (x: number) => Math.round(x * 1000) / 1000;
+  const { top } = resolveExtent(e, levels);
+  const next = { ...e, baseOffset: mm(z - levelElevation(levels, e.baseLevelId)) };
+  return e.topLevelId !== null && levels.has(e.topLevelId) ? next : { ...next, unconnectedHeight: mm(top - z) };
+}
+
 /** Un alzado es rectangular si base y tope son iguales en los dos extremos. */
 export function isRectangularProfile(p: WallProfile): boolean {
   return [p.end, ...(p.stations ?? [])].every(

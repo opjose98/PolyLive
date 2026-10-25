@@ -104,6 +104,54 @@ describe('ProgressController', () => {
     expect(ctl.layers(false)).toHaveLength(0);
   });
 
+  it('no deja volver a ejecutar la misma actividad sobre un corte anterior; otra actividad sí (H-87)', async () => {
+    await ctl.addCut('2026-09-01');
+    ctl.setTool('fill');
+    await ctl.fill(floor);
+    await ctl.addCut('2026-10-01');
+    await ctl.fill(floor);
+    expect(ctl.getState().marks).toHaveLength(1);
+    expect(ctl.getState().notice?.message).toMatch(/ya está ejecutada/);
+    const panete = ctl.getState().activities.find((a) => a.name === 'Pañete')!;
+    ctl.setActivity(panete.id);
+    await ctl.fill(floor);
+    expect(ctl.getState().marks).toHaveLength(2);
+    expect(ctl.quantities().find((r) => r.activityId === panete.id)!.inCut).toBeCloseTo(12, 1);
+  });
+
+  it('la punta del pincel sigue al dedo y el trazo termina donde se soltó', async () => {
+    await ctl.addCut('2026-10-03');
+    ctl.setTool('brush');
+    ctl.setBrushWidth(0.4);
+    ctl.begin(floor, { x: 0.5, y: 1.5 });
+    ctl.move({ x: 0.52, y: 1.5 });
+    expect(ctl.getState().draft?.tip).toEqual({ x: 0.52, y: 1.5 });
+    expect(ctl.getState().draft?.points).toHaveLength(1);
+    const seq = ctl.getState().strokeSeq;
+    await ctl.end({ x: 0.53, y: 1.5 });
+    const shape = ctl.getState().marks[0].shape;
+    expect(shape.kind === 'stroke' && shape.points[shape.points.length - 1]).toEqual({ x: 0.53, y: 1.5 });
+    expect(ctl.getState().strokeSeq).toBe(seq + 1);
+    expect(ctl.getState().draft).toBeNull();
+  });
+
+  it('las capas de un corte no repiten lo de los anteriores', async () => {
+    await ctl.addCut('2026-09-01');
+    ctl.setTool('rect');
+    ctl.begin(floor, { x: 0, y: 0 });
+    await ctl.end({ x: 2, y: 3 });
+    const sep = ctl.getState().cutId!;
+    await ctl.addCut('2026-10-01');
+    ctl.setTool('fill');
+    await ctl.fill(floor);
+    const own = ctl.layersFor(ctl.getState().cutId, false);
+    const area = own.reduce((a, l) => a + l.runs.reduce((b, r) => b + r.w * r.h, 0), 0);
+    expect(area).toBeCloseTo(6, 1);
+    expect(ctl.parts(sep)).toHaveLength(1);
+    expect(ctl.supportKeys).toEqual([targetKey(floor)]);
+    expect(ctl.supportAreaOf(targetKey(floor))).toBeCloseTo(12);
+  });
+
   it('catálogo editable: agregar, renombrar, quitar', async () => {
     await ctl.addActivity('Impermeabilización');
     expect(ctl.activeActivity?.name).toBe('Impermeabilización');

@@ -14,7 +14,7 @@
 
 import type { Point2D } from '../../domain/geometry/types';
 import { centroid } from '../../domain/geometry/polygon-utils';
-import { DraftItem, dimensionLine, itemLength, polygonMetrics, trussSegments } from '../../domain/drafting/drafting';
+import { DraftItem, dimensionLine, itemLength, polygonMetrics, sectionHandles, sectionView, trussSegments } from '../../domain/drafting/drafting';
 import type { SketchShape } from './sketch';
 
 export interface DraftRenderContext {
@@ -138,16 +138,56 @@ export function draftShapes(items: readonly DraftItem[], ctx: DraftRenderContext
         out.push({ kind: 'label', at: off({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, -10), lines: [`Cercha ${f2(itemLength(i))} m`], color, size: 10 });
         break;
       case 'section': {
-        // Convención de corte: trazo y punto, con flechas a la izquierda de A→B (hacia donde se mira).
+        // Convención de corte: trazo y punto, con flechas hacia donde se mira (H-89, ver sectionView).
+        const v = sectionView(i);
         const len = itemLength(i) || 1;
-        const nx = -(b.y - a.y) / len;
-        const ny = (b.x - a.x) / len;
         const arrow = Math.min(0.6, len / 6);
         out.push({ kind: 'segs', segments: [[a, b]], color, widthPx: w + 1.2, dash: true });
         for (const p of [a, b]) {
-          const tip = { x: p.x + nx * arrow, y: p.y + ny * arrow };
-          out.push({ kind: 'segs', segments: [[p, tip]], color, widthPx: w + 1.2 });
-          out.push({ kind: 'label', at: { x: tip.x + nx * arrow * 0.6, y: tip.y + ny * arrow * 0.6 }, lines: [i.text || 'Corte'], color, size: 11 });
+          const tip = { x: p.x + v.dir.x * arrow, y: p.y + v.dir.y * arrow };
+          // Punta de flecha: dos trazos cortos desde la punta.
+          const hx = v.dir.x * arrow * 0.3;
+          const hy = v.dir.y * arrow * 0.3;
+          const sx = -v.dir.y * arrow * 0.2;
+          const sy = v.dir.x * arrow * 0.2;
+          out.push({
+            kind: 'segs',
+            segments: [
+              [p, tip],
+              [tip, { x: tip.x - hx + sx, y: tip.y - hy + sy }],
+              [tip, { x: tip.x - hx - sx, y: tip.y - hy - sy }],
+            ],
+            color,
+            widthPx: w + 1.2,
+          });
+          out.push({ kind: 'label', at: { x: tip.x + v.dir.x * arrow * 0.6, y: tip.y + v.dir.y * arrow * 0.6 }, lines: [i.text || 'Corte'], color, size: 11 });
+        }
+        if (i.id === ctx.selectedId) {
+          // Rango de vista: solo con el corte seleccionado (no satura la planta).
+          const far = (p: Point2D) => ({ x: p.x + v.dir.x * v.depth, y: p.y + v.dir.y * v.depth });
+          const range = [v.a, v.b, far(v.b), far(v.a)];
+          if (v.depth > 0) {
+            out.push({ kind: 'fill', points: range, color: ctx.accent, opacity: 0.08 });
+            out.push({ kind: 'segs', segments: [[range[1], range[2]], [range[2], range[3]], [range[3], range[0]]], color: ctx.accent, widthPx: 1, dash: true });
+          }
+          const h = sectionHandles(i);
+          const r = 7 * ctx.mPerPx;
+          for (const p of [h.a, h.b]) out.push({ kind: 'ring', at: p, radius: r, color: ctx.accent });
+          out.push({
+            kind: 'segs',
+            segments: [
+              [{ x: h.depth.x - r, y: h.depth.y - r }, { x: h.depth.x + r, y: h.depth.y - r }],
+              [{ x: h.depth.x + r, y: h.depth.y - r }, { x: h.depth.x + r, y: h.depth.y + r }],
+              [{ x: h.depth.x + r, y: h.depth.y + r }, { x: h.depth.x - r, y: h.depth.y + r }],
+              [{ x: h.depth.x - r, y: h.depth.y + r }, { x: h.depth.x - r, y: h.depth.y - r }],
+            ],
+            color: ctx.accent,
+            widthPx: 2,
+          });
+          out.push({ kind: 'label', at: off(h.depth, -14), lines: [`Vista ${f2(v.depth)} m`], color: ctx.accent, size: 10 });
+          // Botón de lado: un anillo con la doble flecha ⇅ (tocarlo invierte el lado de vista).
+          out.push({ kind: 'ring', at: h.flip, radius: r * 1.4, color: ctx.accent });
+          out.push({ kind: 'label', at: h.flip, lines: ['⇅'], color: ctx.accent, size: 12 });
         }
         break;
       }

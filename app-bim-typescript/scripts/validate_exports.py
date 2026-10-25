@@ -1,6 +1,6 @@
 """Valida los IFC y DXF de muestra con herramientas externas (CI).
 
-Uso: python scripts/validate_exports.py <carpeta con sample.ifc, sample.dxf y sample-project.ifc>
+Uso: python scripts/validate_exports.py <carpeta con sample.ifc, sample.dxf, sample-project.ifc y sample-memoria.xlsx>
 
 Falla (código 1) si:
   · ezdxf encuentra errores en el DXF (R2000) o un texto queda ilegible;
@@ -64,6 +64,25 @@ def check_ifc(path: str) -> list[str]:
     return problems
 
 
+def check_xlsx(path: str) -> list[str]:
+    """Memoria de cantidades (Excel): se abre sin reparar, con su encabezado, fórmulas e imágenes."""
+    try:
+        import openpyxl  # noqa: PLC0415  (opcional: la CI la instala si valida la memoria)
+    except ImportError:
+        print("XLSX: openpyxl no está instalado; se omite la validación de la memoria")
+        return []
+    problems: list[str] = []
+    wb = openpyxl.load_workbook(path)
+    ws = wb.active
+    if ws["E2"].value != "MEMORIA DE CÁLCULO DE CANTIDADES DE OBRA":
+        problems.append("XLSX: falta el título de la memoria en E2")
+    formulas = [c for row in ws.iter_rows() for c in row if isinstance(c.value, str) and c.value.startswith("=")]
+    if not formulas:
+        problems.append("XLSX: la memoria no tiene fórmulas")
+    print(f"XLSX ok: {ws.max_row} filas, {len(ws.merged_cells.ranges)} rangos combinados, {len(formulas)} fórmulas, {len(ws._images)} imágenes")
+    return problems
+
+
 def main() -> int:
     folder = sys.argv[1] if len(sys.argv) > 1 else "artifacts"
     problems = check_dxf(os.path.join(folder, "sample.dxf")) + check_ifc(os.path.join(folder, "sample.ifc"))
@@ -71,6 +90,9 @@ def main() -> int:
     project = os.path.join(folder, "sample-project.ifc")
     if os.path.exists(project):
         problems += check_ifc(project)
+    memoria = os.path.join(folder, "sample-memoria.xlsx")
+    if os.path.exists(memoria):
+        problems += check_xlsx(memoria)
     for p in problems:
         print("ERROR", p)
     return 1 if problems else 0

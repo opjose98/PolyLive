@@ -58,7 +58,15 @@ export interface ElevationScene {
   /** Trazo en curso (pincel o marca), en (u, v). Mejor por `liveSketch` del lienzo: no regraba el muro. */
   readonly sketch?: readonly SketchShape[];
   /** Elementos cortados (otros muros, columnas, vigas, losas): rectángulos en CSL, rayados. */
-  readonly cuts?: readonly { readonly x0: number; readonly x1: number; readonly y0: number; readonly y1: number; readonly kind: string }[];
+  readonly cuts?: readonly { readonly id?: string; readonly x0: number; readonly x1: number; readonly y0: number; readonly y1: number; readonly kind: string }[];
+  /** Lo visto detrás del plano (corte con profundidad): siluetas en contorno fino, de atrás hacia adelante. */
+  readonly beyond?: readonly {
+    readonly id: string;
+    readonly poly: readonly { readonly x: number; readonly y: number }[];
+    readonly holes: readonly (readonly { readonly x: number; readonly y: number }[])[];
+  }[];
+  /** Elemento cortado o visto que está seleccionado (se resalta). */
+  readonly selectedElementId?: string | null;
   /** Sin muro de fondo (corte de sección): solo lo cortado y los niveles. */
   readonly hideWall?: boolean;
   /** Divisiones verticales con rótulo (caras de una columna desdoblada). */
@@ -104,7 +112,9 @@ export function drawElevation(r: ICanvasRenderer, scene: ElevationScene): void {
   if (!scene.hideWall) drawWallSilhouette(ctx);
   if (scene.progressLayers?.length) drawFaceProgress(ctx);
   for (const o of openings) drawOpening(ctx, o);
+  if (scene.beyond?.length) drawBeyond(ctx);
   if (scene.cuts?.length) drawCuts(ctx);
+  if (scene.selectedElementId) drawSelectedElement(ctx);
   if (scene.dividers?.length) drawDividers(ctx);
   if (!scene.hideWall) drawReferenceLines(ctx);
   if (scene.profileHandles?.length) drawProfileHandles(ctx);
@@ -117,18 +127,17 @@ export function drawElevation(r: ICanvasRenderer, scene: ElevationScene): void {
 
 /** Avance sobre la cara: cada corrida de celdas como un rectángulo (respeta el espejo del lado B). */
 function drawFaceProgress({ r, scene, toScreen }: Ctx): void {
+  // Una figura por capa (sin rayas por solape de transparencia), con medio píxel de solape entre filas.
+  const pad = 0.5;
   for (const layer of scene.progressLayers ?? []) {
     r.setFillStyle(withAlpha(layer.color, 0.55 * layer.opacity));
-    for (const run of layer.runs) {
-      r.fillPolygon(
-        [
-          { x: run.x, y: run.y },
-          { x: run.x + run.w, y: run.y },
-          { x: run.x + run.w, y: run.y + run.h },
-          { x: run.x, y: run.y + run.h },
-        ].map(toScreen),
-      );
-    }
+    r.fillRects(
+      layer.runs.map((run) => {
+        const a = toScreen({ x: run.x, y: run.y });
+        const b = toScreen({ x: run.x + run.w, y: run.y + run.h });
+        return { x: Math.min(a.x, b.x) - pad, y: Math.min(a.y, b.y) - pad, w: Math.abs(b.x - a.x) + pad * 2, h: Math.abs(b.y - a.y) + pad * 2 };
+      }),
+    );
   }
 }
 
@@ -269,6 +278,49 @@ function drawCuts({ r, scene, pal, toScreen }: Ctx): void {
       r.drawLine(a.x, a.y, b.x, b.y);
     }
     r.setLineWidth(2.2 * pal.lineScale);
+    r.strokePolygon(poly);
+  }
+}
+
+/**
+ * Lo visto detrás del plano: relleno de fondo (lo de adelante tapa lo de
+ * atrás: vienen ordenados de lejos a cerca) y contorno fino, sin trama.
+ */
+function drawBeyond({ r, scene, pal, toScreen }: Ctx): void {
+  for (const b of scene.beyond ?? []) {
+    if (b.poly.length < 3) continue;
+    const poly = b.poly.map(toScreen);
+    r.setFillStyle(pal.background);
+    r.fillPolygon(poly);
+    r.setStrokeStyle(pal.ink);
+    r.setLineWidth(0.9 * pal.lineScale);
+    r.strokePolygon(poly);
+    r.setLineWidth(0.7 * pal.lineScale);
+    for (const h of b.holes) r.strokePolygon(h.map(toScreen));
+  }
+}
+
+/** El elemento seleccionado (cortado o visto) en el color de selección. */
+function drawSelectedElement({ r, scene, pal, toScreen }: Ctx): void {
+  const id = scene.selectedElementId;
+  r.setFillStyle(pal.selectionFill);
+  r.setStrokeStyle(pal.selection);
+  r.setLineWidth(2.5 * pal.lineScale);
+  for (const c of scene.cuts ?? []) {
+    if (c.id !== id) continue;
+    const poly = [
+      { x: c.x0, y: c.y0 },
+      { x: c.x1, y: c.y0 },
+      { x: c.x1, y: c.y1 },
+      { x: c.x0, y: c.y1 },
+    ].map(toScreen);
+    r.fillPolygon(poly);
+    r.strokePolygon(poly);
+  }
+  for (const b of scene.beyond ?? []) {
+    if (b.id !== id || b.poly.length < 3) continue;
+    const poly = b.poly.map(toScreen);
+    r.fillPolygon(poly);
     r.strokePolygon(poly);
   }
 }

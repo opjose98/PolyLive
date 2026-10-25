@@ -52,6 +52,7 @@ import { MAX_SCALE, MIN_SCALE } from '../../application/canvas/types';
 import { drawPlan, drawPlanOverlay, PlanScene } from './planRenderer';
 import type { LiveSource } from './liveOverlay';
 import { drawSketch, EMPTY_SKETCH, SketchSource } from './sketch';
+import { LiveStroke, useLiveStroke } from './liveStroke';
 import { CANVAS_PALETTES, CanvasPalette } from '../design/canvasThemes';
 import { sizes } from '../design/tokens';
 import { duration, LONG_PRESS_MS } from '../design/motion';
@@ -88,6 +89,12 @@ interface PlanCanvasProps {
   /** Trazo a mano en curso (pincel de Avance, marca de Revisión): capa viva propia. */
   sketch?: SketchSource;
   /**
+   * Pincel en el hilo UI: el trazo se dibuja en pantalla con cada evento del
+   * dedo, sin pasar por JS (sin retraso aunque JS esté ocupado). `clearKey`
+   * cambia cuando el trazo guardado ya está en la planta y el vivo sobra.
+   */
+  liveStroke?: LiveStroke | null;
+  /**
    * Ángulos (rad) a los que se engancha el giro con dos dedos, además de los
    * múltiplos de 90°: p. ej. el que deja el norte arriba.
    */
@@ -99,6 +106,8 @@ interface PlanCanvasProps {
   onDoubleTap?: (x: number, y: number) => void;
   onLongPress?: (x: number, y: number) => void;
   onDragStart: (x: number, y: number) => boolean;
+  /** Otros manejadores que se agarran (los del corte seleccionado): `true` si el dedo cae en uno. */
+  grabExtra?: (x: number, y: number) => boolean;
   onDragMove: (x: number, y: number) => void;
   onDragEnd: (x: number, y: number) => void;
   onDragCancel: () => void;
@@ -330,6 +339,9 @@ export function PlanCanvas(props: PlanCanvasProps) {
     { scale: camS.value },
   ]);
 
+  // --- Pincel en el hilo UI (pantalla) -------------------------------------------
+  const live = useLiveStroke(props.liveStroke, camS, TAP_SLOP_PX);
+
   // --- Rejilla -----------------------------------------------------------------
   const gridColors = useMemo(
     () => ({ line: rgba(palette.grid), dot: rgba(palette.gridDot), axis: rgba(palette.gridMajor) }),
@@ -460,7 +472,7 @@ export function PlanCanvas(props: PlanCanvasProps) {
       .averageTouches(true)
       .onBegin((e) => {
         stopCamera();
-        g.grabbing = hitsHandle(e.x, e.y);
+        g.grabbing = hitsHandle(e.x, e.y) || !!cb.current.grabExtra?.(e.x, e.y);
         g.drawing = false;
         g.panActive = false;
         if (g.grabbing && cb.current.onDragStart(e.x, e.y)) haptic.grab();
@@ -656,10 +668,10 @@ export function PlanCanvas(props: PlanCanvasProps) {
     // El toque responde AL INSTANTE: no espera a descartar un doble toque
     // (eso sumaba ~300 ms a cada selección). El doble toque se reconoce en
     // paralelo; el primer toque solo selecciona, que es inofensivo.
-    return Gesture.Simultaneous(Gesture.Exclusive(longPress, Gesture.Simultaneous(tap, doubleTap)), pan, pinch, rotation);
+    return Gesture.Simultaneous(Gesture.Exclusive(longPress, Gesture.Simultaneous(tap, doubleTap)), pan, pinch, rotation, live.gesture);
     // Los gestos solo se reconstruyen cuando cambia qué está habilitado.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.doubleTapEnabled, props.longPressEnabled, !!props.onDoubleTap, !!props.onLongPress, props.rotationEnabled]);
+  }, [props.doubleTapEnabled, props.longPressEnabled, !!props.onDoubleTap, !!props.onLongPress, props.rotationEnabled, live.gesture]);
 
   return (
     <GestureDetector gesture={gesture}>
@@ -675,6 +687,7 @@ export function PlanCanvas(props: PlanCanvasProps) {
             <Picture picture={picture} />
             <Picture picture={overlay} />
           </Group>
+          <Path path={live.path} style="stroke" strokeWidth={live.width} strokeCap="round" strokeJoin="round" color={live.color} opacity={0.5} />
           <Circle cx={pulseCx} cy={pulseCy} r={pulseR} color={palette.selection} opacity={pulseOpacity} style="stroke" strokeWidth={3} />
           <Group transform={ringTransform} opacity={ringOpacity}>
             <Circle cx={0} cy={0} r={RING_RADIUS} color={palette.selectionFill} />

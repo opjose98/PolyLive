@@ -73,9 +73,17 @@ interface ElevationViewProps {
   readonly photoMarkers?: readonly PhotoMarkerView[];
   /** Tocar con la herramienta Foto: abrir la cámara para esta cara y punto. */
   onFacePhoto?(face: PhotoFaceAnchor): void;
+  /** Foto de avance (H-90) en esta cara: queda en el corte activo ligada a la cara. */
+  onProgressPhoto?(targetKey: string, face: PhotoFaceAnchor): void;
   onOpenPhoto?(photoId: string): void;
+  /** Propiedades de un elemento que atraviesa el muro (H-91). */
+  onOpenObject?(id: string, kind: string): void;
+  /** Abrir el alzado de otro muro (el que atraviesa este). */
+  onOpenWall?(wallId: string): void;
   onClose(): void;
 }
+
+const KIND_LABEL: Readonly<Record<string, string>> = { wall: 'Muro', column: 'Columna', beam: 'Viga', slab: 'Losa' };
 
 export function ElevationView(props: ElevationViewProps) {
   const styles = useStyles();
@@ -151,11 +159,19 @@ export function ElevationView(props: ElevationViewProps) {
       facePhotos.map((m) => ({ kind: 'pin' as const, at: { x: m.face!.x, y: m.face!.y }, label: m.label ?? 'Foto', color: palette.selection })),
     [facePhotos, palette.selection],  
   );
-  const facePhotoTool = useMemo(() => {
-    if (!ws.activeTool) return false;
-    const b = findTool(categoriesFor(ws.workMode, 'elevation'), ws.activeTool.categoryId, ws.activeTool.toolId)?.tool.binding;
-    return b?.kind === 'facePhoto';
+  const toolBinding = useMemo(() => {
+    if (!ws.activeTool) return null;
+    return findTool(categoriesFor(ws.workMode, 'elevation'), ws.activeTool.categoryId, ws.activeTool.toolId)?.tool.binding ?? null;
   }, [ws.activeTool, ws.workMode]);
+  const facePhotoTool = toolBinding?.kind === 'facePhoto';
+  const progressPhotoTool = toolBinding?.kind === 'progressPhoto';
+
+  // --- Elemento que atraviesa el muro, seleccionado (H-91) ---
+  // Ligada al muro y al lado en que se eligió: al cambiar de lado o de muro deja de valer sola.
+  const viewKey = `${wallDbId}:${st.side}`;
+  const [elementPick, setElementPick] = useState<{ id: string; kind: string; viewKey: string } | null>(null);
+  const elementSel = elementPick?.viewKey === viewKey ? elementPick : null;
+  const setElementSel = useCallback((e: { id: string; kind: string } | null) => setElementPick(e ? { ...e, viewKey } : null), [viewKey]);
 
   // El trazo en curso (cota, pincel, marca) va a la capa viva del lienzo: cambia
   // con cada movimiento del dedo sin re-renderizar esta pantalla ni regrabar el muro.
@@ -262,9 +278,10 @@ export function ElevationView(props: ElevationViewProps) {
             annotations: photoPins.length ? [...(draftAnnotations ?? []), ...photoPins] : draftAnnotations,
             profileHandles: ws.workMode === 'levantamiento' ? editor.profileHandles : undefined,
             cuts: st.cuts,
+            selectedElementId: elementSel?.id ?? null,
           }
         : null,
-    [st, editor, width, height, severity, ws.grid, ws.filters.cotas, palette, visibleTypes, painting, ws.coordination, wallDbId, progress, reviewing, review, faceView, draftAnnotations, photoPins, ws.workMode],
+    [st, editor, width, height, severity, ws.grid, ws.filters.cotas, palette, visibleTypes, painting, ws.coordination, wallDbId, progress, reviewing, review, faceView, draftAnnotations, photoPins, ws.workMode, elementSel],
   );
 
   // Solo Levantamiento edita vanos; Avance y Revisión miran el alzado.
@@ -283,6 +300,14 @@ export function ElevationView(props: ElevationViewProps) {
         return;
       }
       if (reviewing && reviewGestures?.tap(x, y)) return;
+      if (progressPhotoTool && wallDbId) {
+        const p = editor.toCsl(x, y);
+        if (p.x < 0 || p.x > editor.wallLength || p.y < 0) return;
+        haptic.select();
+        const side = editor.getState().side;
+        props.onProgressPhoto?.(`wall:${wallDbId}:${side}`, { wallId: wallDbId, side, x: p.x, y: p.y });
+        return;
+      }
       if (painting && face?.tap()) return;
       if (facePhotoTool && wallDbId) {
         const p = editor.toCsl(x, y);
@@ -301,18 +326,30 @@ export function ElevationView(props: ElevationViewProps) {
           return;
         }
       }
-      const props = w.activeTool?.props;
+      const toolProps = w.activeTool?.props;
       const before = editor.getState().selectedId;
+      // Sin herramienta: un hueco o un vértice del perfil ganan; si no, el elemento que atraviesa el muro.
+      if (!w.activeTool && !editor.openingAt(x, y, TOUCH_TOL) && !editor.pointAt(x, y, TOUCH_TOL)) {
+        const hit = editor.elementAt(x, y, TOUCH_TOL);
+        if (hit) {
+          haptic.select();
+          editor.select(null);
+          editor.selectPoint(null);
+          setElementSel({ id: hit.id, kind: hit.kind });
+          return;
+        }
+      }
+      setElementSel(null);
       void editor
         .tap(x, y, TOUCH_TOL, {
-          width: props?.width !== undefined ? props.width / 100 : undefined,
+          width: toolProps?.width !== undefined ? toolProps.width / 100 : undefined,
         })
         .then(() => {
           const after = editor.getState().selectedId;
           if (after && after !== before) haptic.select();
         });
     },
-    [editor, painting, face, reviewing, reviewGestures, drafts, facePhotoTool, wallDbId, facePhotos, onFacePhoto, onOpenPhoto],
+    [editor, painting, face, reviewing, reviewGestures, drafts, facePhotoTool, progressPhotoTool, wallDbId, facePhotos, onFacePhoto, onOpenPhoto, props, setElementSel],
   );
   const onLongPress = useCallback(
     (x: number, y: number) => {
@@ -346,8 +383,19 @@ export function ElevationView(props: ElevationViewProps) {
 
   // --- BPC ---
   const sel = st.elevation?.openings.find((o) => o.id === st.selectedId) ?? null;
-  const selection: SelectionSummary | null = point && pointExt
-    ? { typeLabel: pointLabel, detail: describeExtent(constraintLevels, pointExt), props: {} }
+  const cutSel = elementSel ? st.cuts.find((c) => c.id === elementSel.id) : undefined;
+  const selection: SelectionSummary | null = elementSel
+    ? {
+        typeLabel: `${KIND_LABEL[elementSel.kind] ?? 'Elemento'} que atraviesa el muro`,
+        detail: cutSel ? `x ${cutSel.x0.toFixed(2)}–${cutSel.x1.toFixed(2)} m · h ${(cutSel.y1 - cutSel.y0).toFixed(2)} m` : undefined,
+        props: {},
+      }
+    : point && pointExt
+    ? {
+        typeLabel: pointLabel,
+        detail: `${describeExtent(constraintLevels, pointExt)}${editable ? ` · arrastra el vértice: ↕ altura${point.kind === 'station' ? ', ↔ posición' : ''}` : ''}`,
+        props: {},
+      }
     : sel
     ? {
         typeLabel: openingTypeLabel(sel.type),
@@ -407,7 +455,20 @@ export function ElevationView(props: ElevationViewProps) {
           { icon: 'check', label: 'Listo', onPress: () => editor.selectPoint(null) },
         ]
       : [];
-  const actions: BpcAction[] = draftActions.length
+  const elementActions: BpcAction[] = elementSel
+    ? [
+        ...(props.onOpenObject && elementSel.kind !== 'beam'
+          ? [{ icon: 'tune-variant', label: 'Propiedades', onPress: () => props.onOpenObject?.(elementSel.id, elementSel.kind) }]
+          : []),
+        ...(props.onOpenObject && elementSel.kind === 'beam' ? [{ icon: 'draw', label: 'Dibujo', onPress: () => props.onOpenObject?.(elementSel.id, elementSel.kind) }] : []),
+        ...(elementSel.kind === 'wall' && props.onOpenWall ? [{ icon: 'wall', label: 'Su alzado', onPress: () => props.onOpenWall?.(elementSel.id) }] : []),
+        { icon: 'check', label: 'Listo', onPress: () => setElementSel(null) },
+      ]
+    : [];
+  const wallKeys = wallDbId ? [`wall:${wallDbId}:A`, `wall:${wallDbId}:B`] : [];
+  const actions: BpcAction[] = elementActions.length
+    ? elementActions
+    : draftActions.length
     ? draftActions
     : pointActions.length
     ? pointActions
@@ -423,7 +484,8 @@ export function ElevationView(props: ElevationViewProps) {
       ? [
           ...(progress.state.canUndo ? [{ icon: 'undo-variant', label: 'Deshacer trazo', onPress: () => void progress.ctl.undo() }] : []),
           { icon: 'palette-outline', label: 'Actividad y corte', onPress: () => progress.openSheet('catalog') },
-          { icon: 'file-chart-outline', label: 'Reporte', onPress: () => progress.openSheet('report') },
+          // Desde el alzado, el reporte es de ESTE muro (sus dos caras); en la hoja se puede pasar a todo el espacio.
+          { icon: 'file-chart-outline', label: 'Reporte del muro', onPress: () => progress.openReport({ keys: wallKeys, title: wallName }) },
         ]
       : [];
 
@@ -462,6 +524,7 @@ export function ElevationView(props: ElevationViewProps) {
             onDragCancel={() => editor.cancelDrag()}
             onViewDelta={(k, dx, dy) => editor.applyViewDelta(k, dx, dy)}
             drawEnabled={(painting && !!progress?.drawEnabled) || (reviewing && !!review?.drawEnabled) || drafting2pt}
+            liveStroke={painting && !reviewing && !drafting2pt ? progress?.liveStroke : null}
             onDrawBegin={(x, y) => (reviewing ? reviewGestures?.begin(x, y) : drafting2pt ? drafts?.begin(x, y) : face?.begin(x, y))}
             onDrawMove={(x, y) => (reviewing ? reviewGestures?.move(x, y) : drafting2pt ? drafts?.move(x, y) : face?.move(x, y))}
             onDrawEnd={(x, y) => (reviewing ? reviewGestures?.end(x, y) : drafting2pt ? drafts?.end(x, y) : face?.end(x, y))}

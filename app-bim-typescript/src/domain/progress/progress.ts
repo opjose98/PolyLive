@@ -4,11 +4,18 @@
 //
 // El residente PINTA lo ejecutado sobre un SOPORTE:
 //   · un suelo (en planta), ligado a un recinto con identidad (T0/F6a);
-//   · una cara de muro (en alzado), lado A o B, sin los vanos.
+//   · una cara de muro (en alzado), lado A o B, sin los vanos;
+//   · una columna, con sus caras desdobladas (alzado de la columna).
 // Cada trazo pertenece a una ACTIVIDAD (mampostería, pañete, pintura…) y a un
 // CORTE (la fecha del reporte). La cantidad ejecutada es el área pintada
 // DENTRO del soporte. No es la suma de los trazos: dos pasadas sobre el mismo
 // sitio cuentan una vez, y el borrador resta.
+//
+// SIN DUPLICADOS ENTRE CORTES: lo que una actividad ya ejecutó en un corte
+// anterior no se puede volver a ejecutar con la misma actividad en uno
+// posterior (no se paga dos veces la misma mampostería). Otra actividad sí
+// puede pintar encima (pañete sobre la mampostería). El borrador de un corte
+// solo quita lo de ese corte: un corte anterior ya reportado no cambia.
 //
 // Cuantificación por MALLA: el soporte se muestrea en celdas de `cell` m
 // (5 cm por defecto) y cada marca, en orden, enciende o apaga las celdas que
@@ -64,6 +71,16 @@ export function todayIso(now = new Date()): string {
   return localDate(now);
 }
 
+/** Cortes en orden cronológico: por fecha y, a igual fecha, por creación. */
+export function orderedCuts(cuts: readonly ProgressCut[]): ProgressCut[] {
+  return [...cuts].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0));
+}
+
+/** Nombre corto de un corte para rótulos ("Acta 3 · 2026-10-03"). */
+export function cutLabel(c: Pick<ProgressCut, 'label' | 'date'>): string {
+  return c.label ? `${c.label} · ${c.date}` : c.date;
+}
+
 // ---------------------------------------------------------------------------
 // Soportes y marcas
 // ---------------------------------------------------------------------------
@@ -73,7 +90,9 @@ export type ProgressTarget =
   /** Suelo del recinto `zoneId`: coordenadas del modelo de la planta. */
   | { readonly kind: 'floor'; readonly zoneId: string }
   /** Cara A o B del muro: (u, v) = (a lo largo del muro desde su inicio, altura sobre CSL 0). */
-  | { readonly kind: 'wallFace'; readonly wallId: string; readonly side: 'A' | 'B' };
+  | { readonly kind: 'wallFace'; readonly wallId: string; readonly side: 'A' | 'B' }
+  /** Columna desdoblada: (u, v) = (a lo largo del perímetro desde la cara 1, altura sobre su base). */
+  | { readonly kind: 'column'; readonly columnId: string };
 
 export type ProgressShape =
   /** Pincel: polilínea con ancho (m). */
@@ -97,7 +116,15 @@ export interface ProgressMark {
 }
 
 export function targetKey(t: ProgressTarget): string {
-  return t.kind === 'floor' ? `floor:${t.zoneId}` : `wall:${t.wallId}:${t.side}`;
+  return t.kind === 'floor' ? `floor:${t.zoneId}` : t.kind === 'column' ? `column:${t.columnId}` : `wall:${t.wallId}:${t.side}`;
+}
+
+/** Soporte de una clave (`floor:…`, `wall:id:A`, `column:id`). */
+export function targetOfKey(key: string): ProgressTarget | null {
+  if (key.startsWith('floor:')) return { kind: 'floor', zoneId: key.slice(6) };
+  if (key.startsWith('column:')) return { kind: 'column', columnId: key.slice(7) };
+  const m = /^wall:(.+):([AB])$/.exec(key);
+  return m ? { kind: 'wallFace', wallId: m[1], side: m[2] as 'A' | 'B' } : null;
 }
 
 /** Superficie de un soporte: contorno exterior y huecos (vanos de un muro). */
@@ -236,6 +263,100 @@ export function coveredArea(g: Grid, on: Uint8Array): number {
   return n * g.cell * g.cell;
 }
 
+/**
+ * Cobertura de una actividad en un soporte, corte por corte, SIN duplicados:
+ * cada corte solo cuenta (y dibuja) lo que no estaba ejecutado en los
+ * anteriores. `own` = lo del corte; `after` = acumulado hasta él inclusive.
+ * Las marcas se aplican en orden de creación dentro de su corte.
+ */
+export function cutCoverages(
+  g: Grid,
+  marks: readonly Pick<ProgressMark, 'shape' | 'erase' | 'cutId' | 'createdAt'>[],
+  cutIds: readonly string[],
+): Map<string, { readonly own: Uint8Array; readonly after: Uint8Array }> {
+  const out = new Map<string, { own: Uint8Array; after: Uint8Array }>();
+  let acc = new Uint8Array(g.cols * g.rows);
+  const sorted = [...marks].sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0));
+  for (const id of cutIds) {
+    const own = coverage(g, sorted.filter((m) => m.cutId === id));
+    const next = new Uint8Array(acc.length);
+    for (let i = 0; i < own.length; i++) {
+      if (acc[i]) own[i] = 0;
+      next[i] = acc[i] | own[i];
+    }
+    out.set(id, { own, after: next });
+    acc = next;
+  }
+  return out;
+}
+
+/**
+ * Lo que una marca nueva agrega a su corte: área nueva y área que tocó pero
+ * que ya estaba ejecutada en un corte anterior (con la misma actividad).
+ */
+export function markGain(
+  support: Support,
+  marks: readonly ProgressMark[],
+  cuts: readonly ProgressCut[],
+  mark: ProgressMark,
+  cell = DEFAULT_CELL,
+): { added: number; alreadyDone: number } {
+  if (mark.erase) return { added: 0, alreadyDone: 0 };
+  const g = supportGrid(support, cell);
+  const ids = orderedCuts(cuts).map((c) => c.id);
+  const k = ids.indexOf(mark.cutId);
+  const same = marks.filter((m) => m.activityId === mark.activityId && targetKey(m.target) === targetKey(mark.target) && m.id !== mark.id);
+  const before = k > 0 ? (cutCoverages(g, same, ids.slice(0, k)).get(ids[k - 1])?.after ?? new Uint8Array(g.cols * g.rows)) : new Uint8Array(g.cols * g.rows);
+  const current = coverage(g, same.filter((m) => m.cutId === mark.cutId).sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1)));
+  const stroke = coverage(g, [mark]);
+  let added = 0;
+  let blocked = 0;
+  for (let i = 0; i < stroke.length; i++) {
+    if (!stroke[i]) continue;
+    if (before[i]) blocked++;
+    else if (!current[i]) added++;
+  }
+  return { added: added * g.cell * g.cell, alreadyDone: blocked * g.cell * g.cell };
+}
+
+/**
+ * Lo pintado como rectángulos grandes: las corridas de filas consecutivas con
+ * el mismo tramo se funden. Sirve para las medidas de la memoria de
+ * cantidades (ancho × alto de cada parte ejecutada).
+ */
+export function coverageRects(g: Grid, on: Uint8Array): { x: number; y: number; w: number; h: number }[] {
+  const open = new Map<string, { x: number; y: number; w: number; h: number }>();
+  const out: { x: number; y: number; w: number; h: number }[] = [];
+  for (let r = 0; r <= g.rows; r++) {
+    const row: [number, number][] = [];
+    if (r < g.rows) {
+      let start = -1;
+      for (let c = 0; c <= g.cols; c++) {
+        const v = c < g.cols ? on[r * g.cols + c] : 0;
+        if (v && start < 0) start = c;
+        else if (!v && start >= 0) {
+          row.push([start, c]);
+          start = -1;
+        }
+      }
+    }
+    const keys = new Set(row.map(([a, b]) => `${a}:${b}`));
+    for (const [k, rect] of open) {
+      if (!keys.has(k)) {
+        out.push(rect);
+        open.delete(k);
+      }
+    }
+    for (const [a, b] of row) {
+      const k = `${a}:${b}`;
+      const cur = open.get(k);
+      if (cur) cur.h += g.cell;
+      else open.set(k, { x: g.x0 + a * g.cell, y: g.y0 + r * g.cell, w: (b - a) * g.cell, h: g.cell });
+    }
+  }
+  return out;
+}
+
 /** Celdas encendidas como rectángulos por fila (para dibujar barato). */
 export function coverageRuns(g: Grid, on: Uint8Array): { x: number; y: number; w: number; h: number }[] {
   const out: { x: number; y: number; w: number; h: number }[] = [];
@@ -268,10 +389,28 @@ export interface QuantityRow {
   readonly supportArea: number;
 }
 
+function groupByTarget(marks: readonly ProgressMark[]): Map<string, ProgressMark[]> {
+  const byTarget = new Map<string, ProgressMark[]>();
+  for (const m of marks) {
+    const k = targetKey(m.target);
+    const list = byTarget.get(k);
+    if (list) list.push(m);
+    else byTarget.set(k, [m]);
+  }
+  return byTarget;
+}
+
+/** Ids de los cortes hasta `cutId` inclusive, en orden cronológico ([] si no existe). */
+function idsUpTo(cuts: readonly ProgressCut[], cutId: string): string[] {
+  const ids = orderedCuts(cuts).map((c) => c.id);
+  const k = ids.indexOf(cutId);
+  return k < 0 ? [] : ids.slice(0, k + 1);
+}
+
 /**
- * Cantidades de un corte, por soporte y actividad. El acumulado aplica las
- * marcas de todos los cortes hasta este (por fecha), así que borrar en un
- * corte posterior no cambia lo reportado en uno anterior.
+ * Cantidades de un corte, por soporte y actividad, sin duplicados entre
+ * cortes (ver cabecera): lo de un corte posterior nunca cambia lo reportado
+ * en uno anterior.
  */
 export function quantities(
   supports: ReadonlyMap<string, Support>,
@@ -280,29 +419,76 @@ export function quantities(
   cutId: string,
   cell = DEFAULT_CELL,
 ): QuantityRow[] {
-  const cut = cuts.find((c) => c.id === cutId);
-  if (!cut) return [];
-  const upTo = new Set(cuts.filter((c) => c.date < cut.date || (c.date === cut.date && c.createdAt <= cut.createdAt)).map((c) => c.id));
+  const ids = idsUpTo(cuts, cutId);
+  if (!ids.length) return [];
   const rows: QuantityRow[] = [];
-  const byTarget = new Map<string, ProgressMark[]>();
-  for (const m of marks) {
-    const k = targetKey(m.target);
-    byTarget.set(k, [...(byTarget.get(k) ?? []), m]);
-  }
-  for (const [key, ms] of byTarget) {
+  for (const [key, ms] of groupByTarget(marks)) {
     const support = supports.get(key);
     if (!support || support.outline.length < 3) continue;
     const g = supportGrid(support, cell);
     const area = supportArea(support);
-    const activities = [...new Set(ms.map((m) => m.activityId))];
-    for (const a of activities) {
-      const ordered = ms.filter((m) => m.activityId === a).sort((x, y) => (x.createdAt < y.createdAt ? -1 : 1));
-      const inCut = coveredArea(g, coverage(g, ordered.filter((m) => m.cutId === cutId)));
-      const cumulative = coveredArea(g, coverage(g, ordered.filter((m) => upTo.has(m.cutId))));
+    for (const a of [...new Set(ms.map((m) => m.activityId))]) {
+      const per = cutCoverages(g, ms.filter((m) => m.activityId === a), ids).get(cutId)!;
+      const inCut = coveredArea(g, per.own);
+      const cumulative = coveredArea(g, per.after);
       if (inCut > 0 || cumulative > 0) rows.push({ targetKey: key, activityId: a, inCut, cumulative, supportArea: area });
     }
   }
   return rows;
+}
+
+/** Parte ejecutada de un soporte en un corte: un rectángulo con sus medidas. */
+export interface QuantityPart {
+  readonly targetKey: string;
+  readonly activityId: string;
+  readonly cutId: string;
+  /** Rectángulo en coordenadas del soporte (m). */
+  readonly x: number;
+  readonly y: number;
+  readonly w: number;
+  readonly h: number;
+}
+
+/** Más partes que esto en un soporte: la memoria lo resume en una sola fila equivalente. */
+const MAX_PARTS_PER_SUPPORT = 6;
+
+/**
+ * Partes ejecutadas en un corte (para la memoria de cantidades): por soporte
+ * y actividad, los rectángulos de lo pintado. Si el trazo es irregular
+ * (muchas partes) devuelve una sola fila equivalente: largo = ancho del área
+ * pintada y alto = área / largo, que da el área exacta.
+ */
+export function quantityParts(
+  supports: ReadonlyMap<string, Support>,
+  marks: readonly ProgressMark[],
+  cuts: readonly ProgressCut[],
+  cutId: string,
+  cell = DEFAULT_CELL,
+): QuantityPart[] {
+  const ids = idsUpTo(cuts, cutId);
+  if (!ids.length) return [];
+  const out: QuantityPart[] = [];
+  for (const [key, ms] of groupByTarget(marks)) {
+    const support = supports.get(key);
+    if (!support || support.outline.length < 3) continue;
+    const g = supportGrid(support, cell);
+    for (const a of [...new Set(ms.map((m) => m.activityId))]) {
+      const own = cutCoverages(g, ms.filter((m) => m.activityId === a), ids).get(cutId)!.own;
+      const area = coveredArea(g, own);
+      if (area <= 0) continue;
+      const rects = coverageRects(g, own).filter((r) => r.w * r.h > 1e-6);
+      if (rects.length <= MAX_PARTS_PER_SUPPORT) {
+        for (const r of rects) out.push({ targetKey: key, activityId: a, cutId, ...r });
+        continue;
+      }
+      const x0 = Math.min(...rects.map((r) => r.x));
+      const x1 = Math.max(...rects.map((r) => r.x + r.w));
+      const y0 = Math.min(...rects.map((r) => r.y));
+      const w = Math.max(x1 - x0, cell);
+      out.push({ targetKey: key, activityId: a, cutId, x: x0, y: y0, w, h: area / w });
+    }
+  }
+  return out;
 }
 
 /** ¿Un punto (coordenadas del soporte) cae en el soporte? */
@@ -313,6 +499,22 @@ export function insideSupport(s: Support, p: Point2D): boolean {
 // ---------------------------------------------------------------------------
 // Soporte de una cara de muro
 // ---------------------------------------------------------------------------
+
+/**
+ * Columna desdoblada: sus caras una al lado de otra, (u, v) = (a lo largo del
+ * perímetro, altura sobre su base). Es un rectángulo perímetro × alto.
+ */
+export function columnSupport(perimeter: number, height: number): Support {
+  return {
+    outline: [
+      { x: 0, y: 0 },
+      { x: perimeter, y: 0 },
+      { x: perimeter, y: height },
+      { x: 0, y: height },
+    ],
+    holes: [],
+  };
+}
 
 /**
  * Cara de un muro en su sistema (u, v): u a lo largo del muro desde el

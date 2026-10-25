@@ -21,6 +21,7 @@ import type { RevitObjectBase, RevitObjectId } from '../../domain/objects/base';
 import { Wall } from '../../domain/objects/wall';
 import { Door } from '../../domain/objects/door';
 import { Window } from '../../domain/objects/window';
+import { Floor } from '../../domain/objects/floor';
 import type { Handle } from '../../application/canvas/SelectionService';
 import type { EditorController, EditorState } from '../../application/editor/EditorController';
 
@@ -85,12 +86,15 @@ export function createLiveSource(editor: EditorController): LiveSource {
           if ((o instanceof Door || o instanceof Window) && moving.has(o.parentWallId as string)) objects.push(o);
         }
       }
+      const h = s.draggingHandle;
       const snapIndicator =
-        s.dragSnappedToNode && preview instanceof Wall && s.draggingHandle
-          ? s.draggingHandle.kind === 'start'
+        s.dragSnappedToNode && preview instanceof Wall && h
+          ? h.kind === 'start'
             ? preview.startPoint
             : preview.endPoint
-          : null;
+          : s.dragSnappedToNode && preview instanceof Floor && h?.kind === 'vertex' && h.index !== undefined
+            ? (preview.outline?.[h.index] ?? null)
+            : null;
       cached = {
         wallDraft: s.wallDraft,
         shapeDraft: s.shapeDraft

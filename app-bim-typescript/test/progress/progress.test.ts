@@ -7,6 +7,11 @@ import {
   faceSupport,
   supportArea,
   targetKey,
+  targetOfKey,
+  markGain,
+  quantityParts,
+  coverageRects,
+  columnSupport,
   ProgressMark,
   ProgressCut,
   Support,
@@ -103,13 +108,89 @@ describe('avance — cantidades por corte', () => {
     expect(q2.find((r) => r.activityId === 'piso')!.cumulative).toBeCloseTo(12, 1);
   });
 
-  it('borrar en un corte posterior no cambia el anterior', () => {
+  it('borrar en un corte posterior no toca lo reportado en el anterior (H-87)', () => {
     seq = 0;
     const marks = [
       mark({ cutId: 'c1', shape: { kind: 'fill' } }),
       mark({ cutId: 'c2', erase: true, shape: { kind: 'rect', a: { x: 0, y: 0 }, b: { x: 2, y: 3 } } }),
     ];
     expect(quantities(supports, marks, cuts, 'c1')[0].cumulative).toBeCloseTo(12, 1);
-    expect(quantities(supports, marks, cuts, 'c2')[0].cumulative).toBeCloseTo(6, 1);
+    expect(quantities(supports, marks, cuts, 'c2')[0].cumulative).toBeCloseTo(12, 1);
+  });
+
+  it('la misma actividad no se cuenta dos veces en cortes distintos; otra actividad sí (H-87)', () => {
+    seq = 0;
+    const marks = [
+      mark({ cutId: 'c1', activityId: 'mamp', shape: { kind: 'rect', a: { x: 0, y: 0 }, b: { x: 2, y: 3 } } }),
+      // Se vuelve a pintar todo con mampostería en el corte 2: solo cuenta lo nuevo (6 m²).
+      mark({ cutId: 'c2', activityId: 'mamp', shape: { kind: 'fill' } }),
+      // Pañete encima de la mampostería del corte 1: es otra actividad, cuenta entero.
+      mark({ cutId: 'c2', activityId: 'panete', shape: { kind: 'rect', a: { x: 0, y: 0 }, b: { x: 2, y: 3 } } }),
+    ];
+    const q2 = quantities(supports, marks, cuts, 'c2');
+    const mamp = q2.find((r) => r.activityId === 'mamp')!;
+    expect(mamp.inCut).toBeCloseTo(6, 1);
+    expect(mamp.cumulative).toBeCloseTo(12, 1);
+    expect(q2.find((r) => r.activityId === 'panete')!.inCut).toBeCloseTo(6, 1);
+    // El corte 1 sigue igual.
+    expect(quantities(supports, marks, cuts, 'c1').find((r) => r.activityId === 'mamp')!.inCut).toBeCloseTo(6, 1);
+  });
+
+  it('markGain dice cuánto agrega una marca y cuánto ya estaba ejecutado', () => {
+    seq = 0;
+    const prev = mark({ cutId: 'c1', activityId: 'mamp', shape: { kind: 'rect', a: { x: 0, y: 0 }, b: { x: 2, y: 3 } } });
+    const again = mark({ cutId: 'c2', activityId: 'mamp', shape: { kind: 'rect', a: { x: 0, y: 0 }, b: { x: 2, y: 3 } } });
+    const wider = mark({ cutId: 'c2', activityId: 'mamp', shape: { kind: 'rect', a: { x: 0, y: 0 }, b: { x: 3, y: 3 } } });
+    const s = rectSupport(4, 3);
+    expect(markGain(s, [prev], cuts, again)).toEqual({ added: 0, alreadyDone: expect.closeTo(6, 1) });
+    const g = markGain(s, [prev], cuts, wider);
+    expect(g.added).toBeCloseTo(3, 1);
+    expect(g.alreadyDone).toBeCloseTo(6, 1);
+  });
+});
+
+describe('avance — partes para la memoria', () => {
+  const cuts: ProgressCut[] = [{ id: 'c1', projectId: 'P', date: '2026-09-01', label: '', createdAt: '2026-09-01T00:00:00Z' }];
+  const key = targetKey({ kind: 'wallFace', wallId: 'w', side: 'A' });
+
+  it('un rectángulo pintado sale como una parte con sus medidas', () => {
+    seq = 0;
+    const supports = new Map([[key, rectSupport(5, 3)]]);
+    const marks = [mark({ target: { kind: 'wallFace', wallId: 'w', side: 'A' }, shape: { kind: 'rect', a: { x: 1, y: 0 }, b: { x: 3, y: 2.5 } } })];
+    const parts = quantityParts(supports, marks, cuts, 'c1');
+    expect(parts).toHaveLength(1);
+    expect(parts[0].w).toBeCloseTo(2, 1);
+    expect(parts[0].h).toBeCloseTo(2.5, 1);
+  });
+
+  it('un trazo irregular se resume en una fila equivalente con el área exacta', () => {
+    seq = 0;
+    const supports = new Map([[key, rectSupport(5, 3)]]);
+    const stroke = { kind: 'stroke' as const, points: [{ x: 0.3, y: 0.3 }, { x: 2, y: 2.4 }, { x: 4.6, y: 0.5 }], width: 0.4 };
+    const marks = [mark({ target: { kind: 'wallFace', wallId: 'w', side: 'A' }, shape: stroke })];
+    const g = supportGrid(rectSupport(5, 3));
+    const area = coveredArea(g, coverage(g, [{ shape: stroke, erase: false }]));
+    const parts = quantityParts(supports, marks, cuts, 'c1');
+    expect(parts).toHaveLength(1);
+    expect(parts[0].w * parts[0].h).toBeCloseTo(area, 3);
+  });
+
+  it('coverageRects reproduce el área de lo pintado', () => {
+    const g = supportGrid(rectSupport(4, 3));
+    const on = coverage(g, [
+      { shape: { kind: 'rect', a: { x: 0, y: 0 }, b: { x: 1, y: 3 } }, erase: false },
+      { shape: { kind: 'rect', a: { x: 2, y: 1 }, b: { x: 4, y: 2 } }, erase: false },
+    ]);
+    const rects = coverageRects(g, on);
+    expect(rects).toHaveLength(2);
+    expect(rects.reduce((a, r) => a + r.w * r.h, 0)).toBeCloseTo(coveredArea(g, on), 6);
+  });
+
+  it('columnas: clave, soporte desdoblado y clave de vuelta', () => {
+    expect(targetKey({ kind: 'column', columnId: 'c9' })).toBe('column:c9');
+    expect(targetOfKey('column:c9')).toEqual({ kind: 'column', columnId: 'c9' });
+    expect(targetOfKey('wall:w1:B')).toEqual({ kind: 'wallFace', wallId: 'w1', side: 'B' });
+    expect(targetOfKey('floor:floor:f1')).toEqual({ kind: 'floor', zoneId: 'floor:f1' });
+    expect(supportArea(columnSupport(1.2, 2.5))).toBeCloseTo(3);
   });
 });

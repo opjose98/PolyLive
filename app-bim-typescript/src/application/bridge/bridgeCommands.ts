@@ -101,7 +101,7 @@ const HELP = {
   redo: 'Rehace.',
   section: '{ a:[x,y], b:[x,y] } lo que corta esa línea (piezas rayadas del corte).',
   columnView: '{ id } alzado desdoblado de una columna: caras y lo que las atraviesa.',
-  ui: '{ action: fit | select {id} | elevation {wall} | column {id} | section {id | a, b} | close | tool {id} | level {name} }: mueve la pantalla para revisar a ojo; «level» cambia el nivel activo (los recintos se detectan en él).',
+  ui: '{ action: fit | select {id} | elevation {wall} | column {id} | section {id | a, b, depth} | close | tool {id} | level {name} | mode {id} | fab {category, tool, method} | clearTool | isolate {floor} | exit | supports | cut {date, label} | activity {name} | paint {key, rect?} | quantities | report {key?} | closeSheet | export {format: pdf|xlsx, cuts: all|active, key?} }: mueve la pantalla para revisar a ojo; «level» cambia el nivel activo; las de avance (mode…export) sirven para la QA en la tableta.',
   exportIfc: 'IFC del espacio (el mismo del menú) como texto.',
 } as const;
 

@@ -250,6 +250,39 @@ describe('EditorController', () => {
       expect(editor.selected?.type).toBe('Floor');
     });
 
+    it('suelo libre seleccionado: sus vértices y aristas se arrastran, un paso de deshacer cada uno (H-88)', async () => {
+      editor.setNodeSnapEnabled(false);
+      editor.setSnapEnabled(false);
+      editor.setTool('floor');
+      editor.setCreationMethod('floor', 'rect');
+      editor.drawBegin(px(0), px(0));
+      editor.drawMove(px(4), px(2));
+      await editor.drawEnd(px(4), px(2));
+      editor.setTool('select');
+      await editor.handleTap(px(2), px(1), TOL_PX);
+      const handles = editor.selectedHandles;
+      expect(handles.filter((h) => h.kind === 'vertex')).toHaveLength(4);
+      expect(handles.filter((h) => h.kind === 'edge')).toHaveLength(4);
+
+      // Vértice (4, 2) → (5, 3).
+      const v = handles.find((h) => h.kind === 'vertex' && h.position.x === 4 && h.position.y === 2)!;
+      expect(editor.beginDrag(px(4), px(2), TOL_PX)).toBe(true);
+      editor.updateDrag(px(5), px(3));
+      await editor.endDrag(px(5), px(3));
+      expect(floors()[0].polygon[v.index!]).toEqual({ x: 5, y: 3 });
+
+      // Arista inferior (0,0)-(4,0) bajada 0,5 m: se desplaza en perpendicular (un toque lateral no la tuerce).
+      expect(editor.beginDrag(px(2), px(0), TOL_PX)).toBe(true);
+      editor.updateDrag(px(2.7), px(-0.5));
+      await editor.endDrag(px(2.7), px(-0.5));
+      const poly = floors()[0].polygon;
+      expect(poly.filter((p) => Math.abs(p.y + 0.5) < 1e-9).map((p) => p.x).sort()).toEqual([0, 4]);
+
+      await editor.undo();
+      expect(floors()[0].polygon.some((p) => p.y === -0.5)).toBe(false);
+      expect(floors()[0].polygon[v.index!]).toEqual({ x: 5, y: 3 });
+    });
+
     it('polígono por toques: tocar el primer vértice lo cierra; un vacío se agrega al suelo que lo contiene', async () => {
       editor.setNodeSnapEnabled(false);
       editor.setSnapEnabled(false);

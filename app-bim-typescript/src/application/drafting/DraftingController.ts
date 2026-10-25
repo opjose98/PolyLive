@@ -15,7 +15,7 @@
 
 import type { Point2D } from '../../domain/geometry/types';
 import { generateId } from '../../domain/objects/base';
-import { DRAFT_DEFAULTS, DraftItem, DraftKind, DraftView, ONE_POINT_KINDS, TWO_POINT_KINDS, dimensionLine, segmentLength, trussSegments, viewKeyOf } from '../../domain/drafting/drafting';
+import { DRAFT_DEFAULTS, DraftItem, DraftKind, DraftView, ONE_POINT_KINDS, SectionHandle, TWO_POINT_KINDS, dimensionLine, sectionHandles, sectionView, segmentLength, trussSegments, viewKeyOf } from '../../domain/drafting/drafting';
 import type { DraftStore } from '../../infrastructure/sqlite/DraftStore';
 import type { IObjectStore } from '../../domain/objects';
 import { Command, ICommand } from '../commands/Command';
@@ -33,9 +33,12 @@ export interface DraftingState {
   /** Toque con Texto o Etiqueta: la vista pide el texto. */
   readonly pendingText: { readonly view: DraftView; readonly kind: 'text' | 'tag'; readonly at: Point2D; readonly targetId?: string; readonly suggested: string } | null;
   readonly selectedId: string | null;
+  /** Manejador de un corte en arrastre: el elemento en su forma viva (no guardada). */
+  readonly handleDrag: { readonly id: string; readonly which: SectionHandle; readonly preview: DraftItem } | null;
   readonly canUndo: boolean;
   readonly canRedo: boolean;
 }
+
 
 type Op = { kind: 'create' | 'delete'; id: string } | { kind: 'edit'; before: DraftItem; after: DraftItem };
 type Listener = (s: DraftingState) => void;
@@ -87,6 +90,7 @@ export class DraftingController {
     polygon: null,
     pendingText: null,
     selectedId: null,
+    handleDrag: null,
     canUndo: false,
     canRedo: false,
   };
@@ -190,9 +194,78 @@ export class DraftingController {
       return true;
     }
     if (tool) return true;
+    // Corte seleccionado: su botón de lado lo invierte (mira al otro lado).
+    const sel = this.selected;
+    if (sel?.kind === 'section' && viewKeyOf(sel.view) === viewKeyOf(view)) {
+      const f = sectionHandles(sel).flip;
+      if (segmentLength(f, p) <= tol) {
+        await this.edit(sel.id, { props: { flip: (sel.props.flip ?? 0) >= 0.5 ? 0 : 1 } });
+        return true;
+      }
+    }
     const hit = this.hitTest(view, p, tol);
     this.patch({ selectedId: hit?.id ?? null });
     return hit !== null;
+  }
+
+  // -------------------------------------------------------------------------
+  // Manejadores del corte seleccionado (extremos y profundidad de vista)
+  // -------------------------------------------------------------------------
+
+  /** Manejador arrastrable (extremo o profundidad) del corte seleccionado bajo `p`, o `null`. */
+  sectionHandleAt(view: DraftView, p: Point2D, tol: number): SectionHandle | null {
+    const sel = this.selected;
+    if (sel?.kind !== 'section' || viewKeyOf(sel.view) !== viewKeyOf(view)) return null;
+    const h = sectionHandles(sel);
+    let best: SectionHandle | null = null;
+    let bestD = tol;
+    for (const which of ['depth', 'a', 'b'] as const) {
+      const d = segmentLength(h[which], p);
+      if (d <= bestD) {
+        best = which;
+        bestD = d;
+      }
+    }
+    return best;
+  }
+
+  /** Empieza a arrastrar un manejador del corte seleccionado si el dedo cae en uno. */
+  beginHandleDrag(view: DraftView, p: Point2D, tol: number): boolean {
+    const which = this.sectionHandleAt(view, p, tol);
+    const sel = this.selected;
+    if (!which || !sel) return false;
+    this.patch({ handleDrag: { id: sel.id, which, preview: sel } });
+    return true;
+  }
+
+  moveHandleDrag(p: Point2D): void {
+    const hd = this.state.handleDrag;
+    const item = hd ? this.state.items.find((i) => i.id === hd.id) : null;
+    if (!hd || !item) return;
+    let preview: DraftItem;
+    if (hd.which === 'depth') {
+      const v = sectionView(item);
+      const depth = Math.max(0, Math.round(((p.x - v.a.x) * v.dir.x + (p.y - v.a.y) * v.dir.y) * 100) / 100);
+      preview = { ...item, props: { ...item.props, depth } };
+    } else {
+      const points = hd.which === 'a' ? [p, item.points[1]] : [item.points[0], p];
+      if (segmentLength(points[0], points[1]) < MIN_DRAFT_LENGTH) return;
+      preview = { ...item, points };
+    }
+    this.patch({ handleDrag: { ...hd, preview } });
+  }
+
+  async endHandleDrag(): Promise<void> {
+    const hd = this.state.handleDrag;
+    this.patch({ handleDrag: null });
+    if (!hd) return;
+    const before = this.state.items.find((i) => i.id === hd.id);
+    if (!before || before === hd.preview) return;
+    await this.edit(hd.id, hd.which === 'depth' ? { props: { depth: hd.preview.props.depth ?? 0 } } : { points: hd.preview.points });
+  }
+
+  cancelHandleDrag(): void {
+    if (this.state.handleDrag) this.patch({ handleDrag: null });
   }
 
   begin(view: DraftView, p: Point2D): void {

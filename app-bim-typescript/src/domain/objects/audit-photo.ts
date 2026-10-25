@@ -66,7 +66,17 @@ export interface PhotoMetadata {
   operator?: string;
   /** Sello de evidencia (integridad + autor declarado), al capturar. */
   seal?: EvidenceSeal;
+  /** Foto de avance (H-90): el corte en que se tomó y, si se ligó, el elemento y la actividad. */
+  progress?: PhotoProgressTag;
   [key: string]: unknown;
+}
+
+/** Corte (y elemento) de una foto de avance: con esto entra al registro fotográfico del reporte. */
+export interface PhotoProgressTag {
+  readonly cutId: string;
+  /** Soporte del avance (`floor:…`, `wall:id:A`, `column:id`); sin él, foto libre. */
+  readonly targetKey?: string;
+  readonly activityId?: string;
 }
 
 /** Prefijo de los códigos BIM de foto. */

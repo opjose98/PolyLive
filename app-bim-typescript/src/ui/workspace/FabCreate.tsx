@@ -14,7 +14,7 @@ import { Text, View } from 'react-native';
 import Animated, { FadeOut, ZoomIn } from 'react-native-reanimated';
 import { useStore } from 'zustand';
 import { workspaceStore } from '../../state/workspaceStore';
-import { categoriesFor, isToolEnabled } from '../../application/workspace/catalog';
+import { categoriesFor, isToolEnabled, toolIconOf } from '../../application/workspace/catalog';
 import { fabMainIcon } from '../../application/workspace/fabMachine';
 import type { ActiveTool } from '../../application/workspace/bpcContext';
 import { IconButton, Icon, Tappable, toast } from '../primitives';
@@ -43,8 +43,10 @@ export const FabCreate = React.memo(function FabCreate({ onToolActivated }: FabC
   const fab = useStore(workspaceStore, (s) => s.fab);
   const mode = useStore(workspaceStore, (s) => s.mode);
   const workMode = useStore(workspaceStore, (s) => s.workMode);
+  const activeTool = useStore(workspaceStore, (s) => s.activeTool);
   // Catálogo contextual: depende del modo de trabajo y de la vista.
   const categories = categoriesFor(workMode, mode);
+  const toolIcon = toolIconOf(categories, activeTool);
   const ws = workspaceStore.getState;
 
   const activate = (categoryId: string, toolId: string, methodId?: string) => {
@@ -125,13 +127,28 @@ export const FabCreate = React.memo(function FabCreate({ onToolActivated }: FabC
         ) : null}
       </View>
       <IconButton
-        icon={fabMainIcon(fab)}
-        label={fab.level === 'closed' ? 'Crear' : fab.level === 'categories' ? 'Cerrar' : 'Volver'}
+        icon={fabMainIcon(fab, toolIcon)}
+        label={
+          fab.level === 'closed'
+            ? activeTool && toolIcon
+              ? `Herramienta activa: ${activeTool.label}. Tocar para cambiarla`
+              : 'Crear'
+            : fab.level === 'categories'
+              ? 'Cerrar'
+              : 'Volver'
+        }
         variant="filled"
         size={sizes.fabCreate}
         onPress={() => ws().pressFabMain()}
         haptic="select"
       />
+      {fab.level === 'closed' && activeTool && toolIcon ? (
+        <View style={styles.activeBadge} pointerEvents="none">
+          <Text style={styles.activeBadgeText} numberOfLines={1}>
+            {activeTool.label}
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 });
@@ -164,4 +181,16 @@ const useStyles = themedStyles((colors) => ({
   miniBtnOff: { backgroundColor: colors.background },
   levelTag: { paddingHorizontal: spacing.sm, paddingVertical: 2, backgroundColor: colors.surface, borderRadius: radius.sm, ...elevation[1] },
   levelText: { ...type.caption, color: colors.textSecondary, textTransform: 'uppercase' },
+  // Nombre de la herramienta activa bajo el FAB (el ícono solo puede no bastar).
+  activeBadge: {
+    position: 'absolute',
+    right: 0,
+    bottom: -spacing.lg,
+    maxWidth: sizes.fabCreate + spacing.xl,
+    paddingHorizontal: spacing.xs,
+    backgroundColor: colors.surface,
+    borderRadius: radius.sm,
+    ...elevation[1],
+  },
+  activeBadgeText: { ...type.caption, color: colors.accentText, textAlign: 'center' },
 }));

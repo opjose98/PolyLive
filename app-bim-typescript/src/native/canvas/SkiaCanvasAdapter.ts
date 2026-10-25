@@ -23,6 +23,12 @@ export interface ICanvasRenderer {
   fillRect(x: number, y: number, w: number, h: number): void;
   strokeRect(x: number, y: number, w: number, h: number): void;
   fillPolygon(points: { x: number; y: number }[]): void;
+  /**
+   * Muchos rectángulos rellenados como UNA figura (celdas de avance): con
+   * transparencia, rellenarlos por separado oscurece donde se tocan y se ven
+   * rayas; en una sola figura el color queda parejo.
+   */
+  fillRects(rects: readonly { x: number; y: number; w: number; h: number }[]): void;
   /** Contorno de un polígono (cerrado). Complemento de `fillPolygon`. */
   strokePolygon(points: { x: number; y: number }[]): void;
   drawLine(x1: number, y1: number, x2: number, y2: number): void;
@@ -111,6 +117,14 @@ export class SkiaCanvasAdapter implements ICanvasRenderer {
 
     this.syncFillPaint();
     this.canvas.drawPath(polyPath(points, true), this.fillPaint);
+  }
+
+  fillRects(rects: readonly { x: number; y: number; w: number; h: number }[]): void {
+    if (!rects.length) return;
+    this.syncFillPaint();
+    const b = Skia.PathBuilder.Make();
+    for (const r of rects) b.addRect(Skia.XYWHRect(r.x, r.y, r.w, r.h));
+    this.canvas.drawPath(b.detach(), this.fillPaint);
   }
 
   strokePolygon(points: { x: number; y: number }[]): void {

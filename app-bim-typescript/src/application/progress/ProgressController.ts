@@ -17,7 +17,7 @@
 
 import type { Point2D } from '../../domain/geometry/types';
 import { generateId } from '../../domain/objects/base';
-import { Activity, ACTIVITY_COLORS, ProgressCut, ProgressMark, ProgressShape, ProgressTarget, QuantityRow, Support, coverage, coverageRuns, insideSupport, quantities, supportGrid, targetKey, todayIso } from '../../domain/progress/progress';
+import { Activity, ACTIVITY_COLORS, ProgressCut, ProgressMark, ProgressShape, ProgressTarget, QuantityPart, QuantityRow, Support, coverageRuns, cutCoverages, cutLabel, insideSupport, markGain, orderedCuts, quantities, quantityParts, supportArea, supportGrid, targetKey, todayIso } from '../../domain/progress/progress';
 import type { ProgressStore } from '../../infrastructure/sqlite/ProgressStore';
 
 export type ProgressTool = 'brush' | 'eraser' | 'fill' | 'rect';
@@ -26,6 +26,8 @@ interface ProgressDraft {
   readonly target: ProgressTarget;
   readonly tool: 'brush' | 'eraser' | 'rect';
   readonly points: readonly Point2D[];
+  /** Donde está el dedo ahora (el trazo llega hasta aquí aunque el punto no se haya agregado). */
+  readonly tip: Point2D;
   readonly width: number;
   readonly color: string;
 }
@@ -52,6 +54,8 @@ export interface ProgressState {
   /** Ancho del pincel (m). */
   readonly brushWidth: number;
   readonly draft: ProgressDraft | null;
+  /** Sube cada vez que termina un trazo (guardado, rechazado o cancelado): el lienzo borra su trazo vivo. */
+  readonly strokeSeq: number;
   readonly canUndo: boolean;
   readonly canRedo: boolean;
   readonly notice: { kind: 'info' | 'error' | 'success'; message: string } | null;
@@ -74,6 +78,7 @@ export class ProgressController {
     tool: null,
     brushWidth: 0.3,
     draft: null,
+    strokeSeq: 0,
     canUndo: false,
     canRedo: false,
     notice: null,
@@ -240,41 +245,57 @@ export class ProgressController {
   begin(target: ProgressTarget, p: Point2D): void {
     const tool = this.state.tool;
     if (tool !== 'brush' && tool !== 'eraser' && tool !== 'rect') return;
-    if (!this.supportOf(target) || !this.ready()) return;
-    this.patch({ draft: { target, tool, points: [p], width: this.state.brushWidth, color: this.color() } });
+    if (!this.supportOf(target) || !this.ready()) {
+      this.rejectStroke();
+      return;
+    }
+    this.patch({ draft: { target, tool, points: [p], tip: p, width: this.state.brushWidth, color: this.color() } });
+  }
+
+  /** El trazo que empezó no va a ningún lado (sin soporte bajo el dedo, sin corte): el lienzo borra su trazo vivo. */
+  rejectStroke(): void {
+    this.patch({ strokeSeq: this.state.strokeSeq + 1 });
   }
 
   move(p: Point2D): void {
     const d = this.state.draft;
     if (!d) return;
     if (d.tool === 'rect') {
-      this.patch({ draft: { ...d, points: [d.points[0], p] } });
+      this.patch({ draft: { ...d, points: [d.points[0], p], tip: p } });
       return;
     }
     const last = d.points[d.points.length - 1];
-    // Puntos más cerca que un cuarto del ancho no agregan nada a la cobertura.
-    if (Math.hypot(p.x - last.x, p.y - last.y) < d.width / 4) return;
-    this.patch({ draft: { ...d, points: [...d.points, p] } });
+    // La punta sigue siempre al dedo; un punto solo se agrega cada octavo de ancho
+    // (antes, cada cuarto: el trazo quedaba 7,5 cm detrás del dedo con 30 cm de pincel).
+    if (Math.hypot(p.x - last.x, p.y - last.y) < Math.max(0.01, d.width / 8)) {
+      this.patch({ draft: { ...d, tip: p } });
+      return;
+    }
+    this.patch({ draft: { ...d, points: [...d.points, p], tip: p } });
   }
 
   cancel(): void {
-    if (this.state.draft) this.patch({ draft: null });
+    if (this.state.draft) this.patch({ draft: null, strokeSeq: this.state.strokeSeq + 1 });
   }
 
   async end(p?: Point2D): Promise<void> {
     if (p) this.move(p);
     const d = this.state.draft;
-    this.patch({ draft: null });
     if (!d) return;
-    let shape: ProgressShape;
+    let shape: ProgressShape | null = null;
     if (d.tool === 'rect') {
       const [a, b = a] = d.points;
-      if (Math.abs(a.x - b.x) < 0.02 || Math.abs(a.y - b.y) < 0.02) return;
-      shape = { kind: 'rect', a, b };
+      if (Math.abs(a.x - b.x) >= 0.02 && Math.abs(a.y - b.y) >= 0.02) shape = { kind: 'rect', a, b };
     } else {
-      shape = { kind: 'stroke', points: d.points, width: d.width };
+      const last = d.points[d.points.length - 1];
+      const points = Math.hypot(d.tip.x - last.x, d.tip.y - last.y) > 1e-6 ? [...d.points, d.tip] : d.points;
+      shape = { kind: 'stroke', points, width: d.width };
     }
-    await this.addMark(d.target, shape, d.tool === 'eraser');
+    if (!shape) {
+      this.patch({ draft: null, strokeSeq: this.state.strokeSeq + 1 });
+      return;
+    }
+    await this.addMark(d.target, shape, d.tool === 'eraser', true);
   }
 
   /** Relleno: todo el soporte con la actividad activa. */
@@ -283,7 +304,12 @@ export class ProgressController {
     await this.addMark(target, { kind: 'fill' }, false);
   }
 
-  private addMark(target: ProgressTarget, shape: ProgressShape, erase: boolean): Promise<void> {
+  /**
+   * Agrega una marca. Si lo que pinta ya está ejecutado con la misma actividad
+   * en un corte anterior, no se guarda (nada nuevo) o se avisa cuánto se
+   * descontó: no se cobra dos veces la misma obra.
+   */
+  private addMark(target: ProgressTarget, shape: ProgressShape, erase: boolean, endsStroke = false): Promise<void> {
     const mark: ProgressMark = {
       id: generateId() as string,
       spaceId: this.spaceId,
@@ -295,10 +321,23 @@ export class ProgressController {
       operator: this.operator,
       createdAt: new Date().toISOString(),
     };
+    const stroke = endsStroke ? { draft: null, strokeSeq: this.state.strokeSeq + 1 } : {};
+    const support = this.supportOf(target);
+    if (support && !erase) {
+      const gain = markGain(support, this.state.marks, this.state.cuts, mark);
+      if (gain.added < 1e-6) {
+        this.patch(stroke);
+        if (gain.alreadyDone > 1e-6) this.notify('info', `${this.activeActivity?.name ?? 'Esa actividad'} ya está ejecutada ahí en un corte anterior: no se cuenta otra vez.`);
+        return Promise.resolve();
+      }
+      if (gain.alreadyDone > 0.005) {
+        this.notify('info', `Se descontaron ${gain.alreadyDone.toFixed(2)} m² ya ejecutados en cortes anteriores.`);
+      }
+    }
     // Se ve al instante; la escritura va en cola (pintar rápido no debe chocar en SQLite).
     this.undoStack.push(mark.id);
     this.redoStack = [];
-    this.patch({ marks: [...this.state.marks, mark], canUndo: true, canRedo: false });
+    this.patch({ ...stroke, marks: [...this.state.marks, mark], canUndo: true, canRedo: false });
     const run = () => this.store.addMark(mark);
     this.writes = this.writes.then(run, run).catch(() => {
       this.notify('error', 'No se pudo guardar el trazo.');
@@ -337,32 +376,47 @@ export class ProgressController {
     const c = this.layerCache;
     const s = this.state;
     if (c && c.marks === s.marks && c.cutId === s.cutId && c.supports === this.supports && c.previous === previous) return c.layers;
-    const cut = this.activeCut;
-    const before = new Set(cut ? s.cuts.filter((x) => x.date < cut.date || (x.date === cut.date && x.createdAt < cut.createdAt)).map((x) => x.id) : []);
+    const layers = this.layersFor(s.cutId, previous, s.marks);
+    this.layerCache = { marks: s.marks, cutId: s.cutId, supports: this.supports, previous, layers };
+    return layers;
+  }
+
+  /**
+   * Capas de un corte cualquiera (para los reportes): lo del corte opaco y,
+   * si `previous`, lo de los cortes anteriores tenue. Sin duplicados: lo de
+   * un corte nunca repite lo ya ejecutado antes con la misma actividad.
+   */
+  layersFor(cutId: string | null, previous = true, marks: readonly ProgressMark[] = this.state.marks, onlyKeys?: ReadonlySet<string>): ProgressLayer[] {
+    const s = this.state;
+    const ids = orderedCuts(s.cuts).map((x) => x.id);
+    const k = cutId ? ids.indexOf(cutId) : -1;
+    const upTo = k >= 0 ? ids.slice(0, k + 1) : ids;
     const colorOf = new Map(s.allActivities.map((a) => [a.id, a.color]));
     const layers: ProgressLayer[] = [];
     const byTarget = new Map<string, ProgressMark[]>();
-    for (const m of s.marks) {
-      const k = targetKey(m.target);
-      byTarget.set(k, [...(byTarget.get(k) ?? []), m]);
+    for (const m of marks) {
+      const key = targetKey(m.target);
+      if (onlyKeys && !onlyKeys.has(key)) continue;
+      const list = byTarget.get(key);
+      if (list) list.push(m);
+      else byTarget.set(key, [m]);
     }
     for (const [key, ms] of byTarget) {
       const support = this.supports.get(key);
       if (!support || support.outline.length < 3) continue;
       const g = supportGrid(support);
-      const activities = [...new Set(ms.map((m) => m.activityId))];
-      for (const a of activities) {
-        const own = ms.filter((m) => m.activityId === a);
+      for (const a of [...new Set(ms.map((m) => m.activityId))]) {
+        const per = cutCoverages(g, ms.filter((m) => m.activityId === a), upTo);
         const color = colorOf.get(a) ?? '#888888';
-        if (previous) {
-          const prev = coverageRuns(g, coverage(g, own.filter((m) => before.has(m.cutId))));
+        if (previous && k > 0) {
+          const prev = coverageRuns(g, per.get(upTo[k - 1])!.after);
           if (prev.length) layers.push({ targetKey: key, color, opacity: PREVIOUS_CUT_OPACITY, runs: prev });
         }
-        const now = coverageRuns(g, coverage(g, own.filter((m) => m.cutId === s.cutId)));
+        const own = k >= 0 ? per.get(cutId!)!.own : null;
+        const now = own ? coverageRuns(g, own) : [];
         if (now.length) layers.push({ targetKey: key, color, opacity: 1, runs: now });
       }
     }
-    this.layerCache = { marks: s.marks, cutId: s.cutId, supports: this.supports, previous, layers };
     return layers;
   }
 
@@ -370,5 +424,27 @@ export class ProgressController {
   quantities(cutId = this.state.cutId): QuantityRow[] {
     if (!cutId) return [];
     return quantities(this.supports, this.state.marks, this.state.cuts, cutId);
+  }
+
+  /** Partes ejecutadas (rectángulos con medidas) de un corte, para la memoria. */
+  parts(cutId: string): QuantityPart[] {
+    return quantityParts(this.supports, this.state.marks, this.state.cuts, cutId);
+  }
+
+  /** Todos los soportes conocidos (para reportar también los que no tienen avance). */
+  get supportKeys(): string[] {
+    return [...this.supports.keys()];
+  }
+
+  /** Área de un soporte (m²). */
+  supportAreaOf(key: string): number {
+    const s = this.supports.get(key);
+    return s ? supportArea(s) : 0;
+  }
+
+  /** Nombre del corte para rótulos. */
+  cutName(id: string): string {
+    const c = this.state.cuts.find((x) => x.id === id);
+    return c ? cutLabel(c) : 'Corte';
   }
 }

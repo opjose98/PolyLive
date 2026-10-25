@@ -27,7 +27,7 @@ import { RevitObjectBase, RevitObjectId } from '../../domain/objects/base';
 import { Wall } from '../../domain/objects/wall';
 import { Column } from '../../domain/objects/column';
 import { Room } from '../../domain/objects/room';
-import { Floor } from '../../domain/objects/floor';
+import { Floor, floorZoneId } from '../../domain/objects/floor';
 import { Door } from '../../domain/objects/door';
 import { Window } from '../../domain/objects/window';
 
@@ -39,12 +39,16 @@ import { Window } from '../../domain/objects/window';
  * Punto de agarre de un objeto seleccionado.
  * - `start` / `end`: extremos de un muro (arrastrarlos re-traza el muro)
  * - `center`: mueve el objeto entero (punto medio de un muro, centro de una columna)
+ * - `vertex` / `edge`: vértice o punto medio de arista `index` de un suelo libre
+ *   (arrastrar un vértice lo mueve; una arista mueve sus dos vértices)
  */
-type HandleKind = 'start' | 'end' | 'center';
+type HandleKind = 'start' | 'end' | 'center' | 'vertex' | 'edge';
 
 export interface Handle {
   readonly kind: HandleKind;
   readonly position: Point2D;
+  /** Vértice o arista (desde el vértice `index` al siguiente) de un suelo. */
+  readonly index?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -140,6 +144,19 @@ export class SelectionService {
 
     if (object instanceof Column) {
       return [{ kind: 'center', position: object.position }];
+    }
+
+    // Suelo libre: sus vértices y el punto medio de cada arista. Un suelo de
+    // recinto no tiene: su contorno es el del recinto (se mueve con los muros).
+    if (object instanceof Floor && object.outline && object.outline.length >= 3 && !floorZoneId(object)) {
+      const pts = object.outline;
+      return [
+        ...pts.map((p, index): Handle => ({ kind: 'vertex', position: p, index })),
+        ...pts.map((p, index): Handle => {
+          const q = pts[(index + 1) % pts.length];
+          return { kind: 'edge', position: { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 }, index };
+        }),
+      ];
     }
 
     return [];

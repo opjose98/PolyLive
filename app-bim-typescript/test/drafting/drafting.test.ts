@@ -5,7 +5,7 @@ import { Database } from '../../src/infrastructure/sqlite/database';
 import { DraftStore } from '../../src/infrastructure/sqlite/DraftStore';
 import { CommandStack } from '../../src/application/state/CommandStack';
 import { DraftingController, distanceToItem } from '../../src/application/drafting/DraftingController';
-import { dimensionLine, itemLength, polygonMetrics, trussSegments, DraftView } from '../../src/domain/drafting/drafting';
+import { dimensionLine, itemLength, polygonMetrics, trussSegments, DraftView, SECTION_DEFAULT_DEPTH, sectionHandles, sectionView } from '../../src/domain/drafting/drafting';
 
 const plan: DraftView = { kind: 'plan' };
 const face: DraftView = { kind: 'wallFace', wallId: 'w1', side: 'A' };
@@ -59,6 +59,36 @@ describe('DraftingController', () => {
     expect(itemLength(d)).toBeCloseTo(3.25);
     expect(d.props.offset).toBe(0.4);
     expect(d.levelId).toBe('L0');
+  });
+
+  it('corte seleccionado: arrastrar la profundidad y un extremo, tocar ⇅ invierte el lado (H-89)', async () => {
+    ctl.setTool('section');
+    ctl.begin(plan, { x: 0, y: 0 });
+    const s = (await ctl.end({ x: 4, y: 0 }))!;
+    expect(s.text).toBe('Corte 1');
+    expect(s.props).toMatchObject({ depth: SECTION_DEFAULT_DEPTH, flip: 0 });
+    ctl.setTool(null);
+    ctl.select(s.id);
+
+    // Profundidad: el cuadrado está en (2, −3); se arrastra hasta y = −1,25.
+    expect(ctl.sectionHandleAt(plan, { x: 2, y: -3.05 }, 0.2)).toBe('depth');
+    expect(ctl.beginHandleDrag(plan, { x: 2, y: -3 }, 0.2)).toBe(true);
+    ctl.moveHandleDrag({ x: 2.4, y: -1.25 });
+    expect(ctl.getState().handleDrag?.preview.props.depth).toBe(1.25);
+    await ctl.endHandleDrag();
+    expect(ctl.selected?.props.depth).toBe(1.25);
+
+    // Extremo B a (5, 1).
+    expect(ctl.beginHandleDrag(plan, { x: 4, y: 0 }, 0.2)).toBe(true);
+    ctl.moveHandleDrag({ x: 5, y: 1 });
+    await ctl.endHandleDrag();
+    expect(ctl.selected?.points[1]).toEqual({ x: 5, y: 1 });
+
+    // Botón de lado.
+    const flip = sectionHandles(ctl.selected!).flip;
+    expect(await ctl.tap(plan, flip, 0.2)).toBe(true);
+    expect(ctl.selected?.props.flip).toBe(1);
+    expect(ctl.getState().selectedId).toBe(s.id);
   });
 
   it('viga con la sección de las píldoras; cercha en alzado', async () => {
@@ -193,5 +223,19 @@ describe('DraftingController con la historia del levantamiento', () => {
     await ctl.redo();
     expect(ctl.getState().items).toHaveLength(1);
     expect(events.slice(2)).toEqual(['undo', 'undo', 'undo', 'redo']);
+  });
+});
+
+describe('corte: lado de vista y manejadores (H-89)', () => {
+  const section = (props: Record<string, number> = {}) => ({ points: [{ x: 0, y: 0 }, { x: 4, y: 0 }], props });
+
+  it('mira hacia la izquierda de A→B en la planta; flip mira al otro lado', () => {
+    expect(sectionView(section()).dir).toEqual({ x: 0, y: -1 });
+    expect(sectionView(section()).depth).toBe(SECTION_DEFAULT_DEPTH);
+    const f = sectionView(section({ flip: 1, depth: 2 }));
+    expect(f.flipped).toBe(true);
+    expect(f.a).toEqual({ x: 4, y: 0 });
+    expect(f.dir.y).toBeCloseTo(1);
+    expect(sectionHandles(section({ depth: 2 })).depth).toEqual({ x: 2, y: -2 });
   });
 });

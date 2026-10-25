@@ -269,6 +269,8 @@ interface DragJoints {
 
 export type DragTarget =
   | ({ kind: 'center'; dx: number; dy: number; preview: RevitObjectBase | null; snappedToNode: false } & DragJoints)
+  /** Contorno de un suelo libre con un vértice o una arista movidos. */
+  | ({ kind: 'outline'; outline: Point2D[]; dx: number; dy: number; preview: RevitObjectBase | null; snappedToNode: boolean } & DragJoints)
   | ({
       kind: 'start' | 'end';
       point: Point2D;
@@ -1013,6 +1015,11 @@ export abstract class EditorCore {
       else if (o instanceof Floor && o.outline) pts.push(...o.outline);
     }
     this.fitPoints(pts, viewportWidth, viewportHeight, paddingPx);
+  }
+
+  /** Encuadra unos puntos (un suelo aislado, un contorno) con un margen. */
+  zoomToPoints(pts: readonly Point2D[], viewportWidth: number, viewportHeight: number, paddingPx = 64): void {
+    this.fitPoints([...pts], viewportWidth, viewportHeight, paddingPx);
   }
 
   protected fitPoints(pts: Point2D[], viewportWidth: number, viewportHeight: number, paddingPx: number): void {

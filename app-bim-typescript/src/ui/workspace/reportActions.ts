@@ -5,7 +5,8 @@
 import { saveBase64ToUserFolder, saveTextToUserFolder } from '../../native/export/saveToUserFolder';
 import { folderHint } from './folderHint';
 import * as FileSystem from 'expo-file-system/legacy';
-import { shareExistingFile } from '../../native/export/shareFile';
+import { shareExistingFile, shareFile } from '../../native/export/shareFile';
+import { uint8ArrayToBase64 } from '../../shared/encoding/base64';
 import { htmlToPdf } from '../../native/export/printPdf';
 import { toast } from '../primitives';
 import { haptic } from '../design/haptics';
@@ -53,6 +54,42 @@ export function savePdf(filename: string, html: string): Promise<void> {
       toast(`PDF guardado en ${r.folderLabel}`, { kind: 'success' });
     } else if (r.reason !== 'cancelled') toast('No se pudo guardar el PDF', { kind: 'error' });
   });
+}
+
+const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+/** Guarda la memoria de cantidades (.xlsx) en la carpeta elegida. */
+export function saveXlsx(filename: string, build: () => Promise<Uint8Array>): Promise<void> {
+  return guard('Excel', async () => {
+    toast('Generando memoria en Excel…', { kind: 'info', durationMs: 1400 });
+    const bytes = await build();
+    await folderHint();
+    // Tipo genérico: con el de Excel algunos Android agregan otra extensión al nombre.
+    const r = await saveBase64ToUserFolder(filename, uint8ArrayToBase64(bytes), 'application/octet-stream');
+    if (r.ok) {
+      haptic.commit();
+      toast(`Excel guardado en ${r.folderLabel}`, { kind: 'success' });
+    } else if (r.reason !== 'cancelled') toast('No se pudo guardar el Excel', { kind: 'error' });
+  });
+}
+
+/** Comparte la memoria de cantidades (.xlsx). */
+export function shareXlsx(filename: string, build: () => Promise<Uint8Array>): Promise<void> {
+  return guard('Excel', async () => {
+    toast('Generando memoria en Excel…', { kind: 'info', durationMs: 1400 });
+    const bytes = await build();
+    const r = await shareFile(filename, uint8ArrayToBase64(bytes), { base64: true, mimeType: XLSX_MIME, dialogTitle: 'Memoria de cantidades' });
+    if (!r.ok) toast(r.reason === 'unavailable' ? 'Compartir no está disponible' : 'No se pudo compartir el Excel', { kind: 'error' });
+  });
+}
+
+/** Guarda un PDF cuyo HTML se arma en el momento (puede leer fotos: es asíncrono). */
+export function savePdfFrom(filename: string, build: () => Promise<string>): Promise<void> {
+  return guard('PDF', async () => savePdf(filename, await build()));
+}
+
+export function sharePdfFrom(build: () => Promise<string>, dialogTitle: string, filename?: string): Promise<void> {
+  return guard('PDF', async () => sharePdf(await build(), dialogTitle, filename));
 }
 
 /** Comparte el PDF (WhatsApp, correo, Drive…) sin pasar por una carpeta. */

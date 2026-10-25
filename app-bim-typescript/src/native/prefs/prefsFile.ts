@@ -14,6 +14,18 @@ const FILE = `${FileSystem.documentDirectory}prefs.json`;
 interface PrefsFile {
   workspace?: WorkspacePrefs;
   app?: AppPrefs;
+  /** Encabezado del contrato e ítems de la memoria de cantidades, por proyecto. */
+  memoria?: Record<string, MemoriaPrefs>;
+}
+
+/**
+ * Lo que se escribe a mano en la memoria (contrato, firmas, código e ítem de
+ * cada actividad). shortcut: vive en el teléfono, no viaja en el paquete
+ * .polylive; si hiciera falta compartirlo, pasarlo a una tabla del proyecto.
+ */
+export interface MemoriaPrefs {
+  header?: Record<string, string>;
+  items?: Record<string, { code: string; description: string; unit: string }>;
 }
 
 export interface AppPrefs {
@@ -48,4 +60,19 @@ export async function loadAppPrefs(): Promise<AppPrefs> {
 export async function saveAppPrefs(app: AppPrefs): Promise<void> {
   const cur = await read();
   await write({ app: { ...cur.app, ...app } });
+}
+
+export async function loadMemoriaPrefs(projectKey: string): Promise<MemoriaPrefs> {
+  return (await read()).memoria?.[projectKey] ?? {};
+}
+
+export async function saveMemoriaPrefs(projectKey: string, patch: MemoriaPrefs): Promise<void> {
+  const cur = await read();
+  const prev = cur.memoria?.[projectKey] ?? {};
+  await write({
+    memoria: {
+      ...cur.memoria,
+      [projectKey]: { header: { ...prev.header, ...patch.header }, items: { ...prev.items, ...patch.items } },
+    },
+  });
 }

@@ -12,7 +12,7 @@
 
 import type { AppServices } from '../../application/AppServices';
 import type { AuditPhotoId, RoomId } from '../../domain/objects/base';
-import { PHOTO_BIM_CODE_PREFIX, PhotoGeoTag } from '../../domain/objects/audit-photo';
+import { PHOTO_BIM_CODE_PREFIX, PhotoGeoTag, PhotoMetadata } from '../../domain/objects/audit-photo';
 import { generateBimCode } from '../../domain/objects/project';
 import type { ExpoFileSystem } from '../../native/filesystem/ExpoFileSystem';
 import type { ExpoGpsProvider } from '../../native/location/ExpoGpsProvider';
@@ -27,6 +27,8 @@ interface SaveFieldPhotoInput {
   readonly notes?: string;
   /** Si se pasa, se intenta una posición GPS (sin bloquear si no hay fix). */
   readonly gps?: ExpoGpsProvider;
+  /** Metadatos adicionales (p. ej. el corte de una foto de avance). */
+  readonly extra?: Partial<PhotoMetadata>;
 }
 
 export async function saveFieldPhoto(i: SaveFieldPhotoInput): Promise<{ photoId: AuditPhotoId; bimCode: string }> {
@@ -49,7 +51,7 @@ export async function saveFieldPhoto(i: SaveFieldPhotoInput): Promise<{ photoId:
     roomId: i.roomId,
     photoData: base64ToUint8Array(i.base64),
     filename: saved.filename,
-    metadata: { bimCode, geo, operator: i.operator || undefined, ...(i.notes ? { notes: i.notes } : {}) },
+    metadata: { ...i.extra, bimCode, geo, operator: i.operator || undefined, ...(i.notes ? { notes: i.notes } : {}) },
   });
   return { photoId: result.photoId, bimCode };
 }

@@ -29,7 +29,7 @@ import { Window } from '../../domain/objects/window';
 import { ElevationSnapshot, ElevationSnapshotCommand, VanoSnapshot } from '../commands/ElevationSnapshotCommand';
 import { revitObjectId } from '../../domain/objects/base';
 import { LEVEL_PROP, ProjectMarker } from '../../domain/objects/marker';
-import { LevelElevations, VerticalExtent, WallProfile, WallVertical, extentAt, profileBottom, profileHeight, profileProblem, resolveWallProfile, wallVerticalOf, withStation, withoutStation } from '../../domain/objects/vertical';
+import { LevelElevations, VerticalExtent, WallProfile, WallVertical, extentAt, extentWithBase, extentWithTop, profileAt, profileBottom, profileHeight, profileProblem, resolveWallProfile, wallVerticalOf, withStation, withoutStation } from '../../domain/objects/vertical';
 import { OpeningType, WallElevation, WallOpening, WallOpeningId, WallQuantification, computeQuantification, effectiveLeftHeight, effectiveRightHeight, levelsFromProfile, openingEnd, openingTop, OPENING_DEFAULTS, profileStations } from '../../domain/objects/wall-elevation';
 import { reportFailure } from '../../shared/diagnostics';
 import { CutKind, sectionCuts } from '../../domain/section/sectionCut';
@@ -40,9 +40,8 @@ import { ElevationSeverity, ElevationViewport, snapXSmart, snapYSmart } from './
 export type ElevationTool = 'select' | OpeningType | 'station';
 export type WallSide = 'A' | 'B';
 
-/** Punto del perfil: un extremo del muro o una estación (por su posición). */
 /** Pieza cortada en el alzado, en CSL (x a lo largo del muro, y sobre su base más baja). */
-interface ElevationCut {
+export interface ElevationCut {
   readonly id: string;
   readonly kind: CutKind;
   readonly x0: number;
@@ -51,6 +50,7 @@ interface ElevationCut {
   readonly y1: number;
 }
 
+/** Punto del perfil: un extremo del muro o una estación (por su posición). */
 export type ProfilePointRef = { readonly kind: 'start' } | { readonly kind: 'end' } | { readonly kind: 'station'; readonly at: number };
 
 /** Distancia mínima de una estación a los extremos y a otra estación. */
@@ -105,8 +105,21 @@ export class ElevationEditor {
   private levels: readonly ProjectMarker[] = [];
   private size = { w: 360, h: 480 };
   private drag: { origin: { x: number; y: number }; opening: WallOpening; moved: boolean } | null = null;
-  /** Estación arrastrada: su posición original y la actual. */
-  private stationDrag: { from: number; at: number; moved: boolean; base: WallVertical } | null = null;
+  /**
+   * Vértice del perfil arrastrado (H-87). Una estación se mueve a lo largo del
+   * muro (eje x) o sube y baja (eje y): el eje lo decide el primer movimiento.
+   * Un extremo solo sube y baja. `which` = el vértice agarrado (tope o base).
+   */
+  private pointDrag: {
+    ref: ProfilePointRef;
+    which: 'top' | 'base';
+    startScreen: { x: number; y: number };
+    axis: 'x' | 'y' | null;
+    from: number;
+    at: number;
+    moved: boolean;
+    base: WallVertical;
+  } | null = null;
   /** Restricción en edición (selector o arrastre) aún sin guardar. */
   private preview: WallVertical | null = null;
 
@@ -357,6 +370,18 @@ export class ElevationEditor {
     return null;
   }
 
+  /**
+   * Elemento que atraviesa el muro bajo un punto de pantalla (otro muro, una
+   * columna, una viga): se puede tocar para ver o editar sus propiedades (H-91).
+   */
+  elementAt(x: number, y: number, tolPx: number): ElevationCut | null {
+    const p = this.toCsl(x, y);
+    const tol = tolPx / this.state.viewport.scale;
+    // El más angosto gana (una columna dentro de un muro que llega en T).
+    const hits = this.state.cuts.filter((c) => p.x >= c.x0 - tol && p.x <= c.x1 + tol && p.y >= c.y0 - tol && p.y <= c.y1 + tol);
+    return hits.sort((a, b) => a.x1 - a.x0 - (b.x1 - b.x0))[0] ?? null;
+  }
+
   // --- Puntos del perfil (extremos y estaciones) ---------------------------
 
   /** Vértices del perfil para dibujar: x, base y tope en CSL, y si es el seleccionado. */
@@ -375,18 +400,35 @@ export class ElevationEditor {
 
   /** Punto del perfil bajo el dedo (su vértice de tope o de base). */
   pointAt(x: number, y: number, tolPx: number): ProfilePointRef | null {
+    return this.vertexAt(x, y, tolPx)?.ref ?? null;
+  }
+
+  /** Vértice del perfil bajo el dedo: el punto y si es su tope o su base. */
+  private vertexAt(x: number, y: number, tolPx: number): { ref: ProfilePointRef; which: 'top' | 'base' } | null {
     const handles = this.profileHandles;
-    let best: { ref: ProfilePointRef; d: number } | null = null;
+    let best: { ref: ProfilePointRef; which: 'top' | 'base'; d: number } | null = null;
     handles.forEach((h, i) => {
-      for (const yy of [h.top, h.base]) {
-        const s = this.toScreen({ x: h.x, y: yy });
+      for (const which of ['top', 'base'] as const) {
+        const s = this.toScreen({ x: h.x, y: which === 'top' ? h.top : h.base });
         const d = Math.hypot(s.x - x, s.y - y);
         if (d > tolPx || (best && d >= best.d)) continue;
         const ref: ProfilePointRef = i === 0 ? { kind: 'start' } : i === handles.length - 1 ? { kind: 'end' } : { kind: 'station', at: h.x };
-        best = { ref, d };
+        best = { ref, which, d };
       }
     });
-    return (best as { ref: ProfilePointRef } | null)?.ref ?? null;
+    return best ? { ref: (best as { ref: ProfilePointRef }).ref, which: (best as { which: 'top' | 'base' }).which } : null;
+  }
+
+  /**
+   * Cota absoluta para un vértice arrastrado a la altura `y` de pantalla: se
+   * engancha a las líneas de nivel cercanas y, si no, va al centímetro.
+   */
+  private snappedCota(y: number, tolPx: number): number {
+    const csl = this.toCsl(0, y).y;
+    for (const l of this.state.levelLines) {
+      if (Math.abs((l.y - csl) * this.state.viewport.scale) <= tolPx) return l.cota;
+    }
+    return Math.round((this.state.baseElevation + csl) * 100) / 100;
   }
 
   selectPoint(ref: ProfilePointRef | null): void {
@@ -398,7 +440,10 @@ export class ElevationEditor {
   get selectedPointExtent(): VerticalExtent | null {
     const v = this.preview ?? this.state.vertical;
     const ref = this.state.selectedPoint;
-    if (!v || !ref) return null;
+    return v && ref ? this.extentOfRef(v, ref) : null;
+  }
+
+  private extentOfRef(v: WallVertical, ref: ProfilePointRef): VerticalExtent | null {
     if (ref.kind === 'start') return v.start;
     if (ref.kind === 'end') return v.end;
     return v.stations?.find((s) => Math.abs(s.at - ref.at) < 1e-3)?.ext ?? null;
@@ -429,8 +474,12 @@ export class ElevationEditor {
     return ok;
   }
 
-  /** Nueva estación a `x` (CSL) con la altura que el muro ya tiene ahí. */
-  async addStationAt(x: number): Promise<boolean> {
+  /**
+   * Nueva estación a `x` (CSL) con la altura que el muro ya tiene ahí o, si se
+   * da `topCota` (se tocó por encima del tope), con el tope en esa cota: así
+   * se marca una cumbrera tocando donde está.
+   */
+  async addStationAt(x: number, topCota?: number): Promise<boolean> {
     const { wall, vertical } = this.state;
     if (!wall || !vertical) return false;
     const L = this.wallLength;
@@ -443,7 +492,8 @@ export class ElevationEditor {
       this.selectPoint({ kind: 'station', at: (vertical.stations ?? []).find((s) => Math.abs(s.at - at) < MIN_STATION_GAP)!.at });
       return false;
     }
-    const ext = extentAt(vertical, at, L, this.levelElevations);
+    const here = extentAt(vertical, at, L, this.levelElevations);
+    const ext = topCota !== undefined ? extentWithTop(here, topCota, this.levelElevations) : here;
     const ok = await this.saveVertical(withStation(vertical, { at, ext }));
     if (ok) this.selectPoint({ kind: 'station', at });
     return ok;
@@ -476,8 +526,17 @@ export class ElevationEditor {
     if (!elevation || !wall || this.state.busy) return;
     if (tool === 'station') {
       const hit = this.pointAt(x, y, tolPx);
-      if (hit) this.selectPoint(hit);
-      else await this.addStationAt(this.stationX(this.toCsl(x, y).x, tolPx));
+      if (hit) {
+        this.selectPoint(hit);
+        return;
+      }
+      const sx = this.stationX(this.toCsl(x, y).x, tolPx);
+      // Tocar por encima del tope (o casi sobre él) fija la altura de la estación ahí.
+      const v = this.state.vertical;
+      const topHere = v ? profileAt(resolveWallProfile(v, this.levelElevations, this.wallLength), this.wallLength, sx).top : null;
+      const cota = this.snappedCota(y, tolPx);
+      const tol = tolPx / this.state.viewport.scale;
+      await this.addStationAt(sx, topHere !== null && cota >= topHere - tol ? cota : undefined);
       return;
     }
     if (tool === 'select') {
@@ -514,10 +573,25 @@ export class ElevationEditor {
   /** Empieza a arrastrar el hueco seleccionado si el dedo lo toca. */
   beginDrag(x: number, y: number, tolPx: number): boolean {
     const point = this.state.selectedPoint;
-    if (point?.kind === 'station') {
-      const hit = this.pointAt(x, y, tolPx);
-      if (hit?.kind === 'station' && Math.abs(hit.at - point.at) < 1e-3 && this.state.vertical) {
-        this.stationDrag = { from: point.at, at: point.at, moved: false, base: this.state.vertical };
+    if (point && this.state.vertical) {
+      const hit = this.vertexAt(x, y, tolPx);
+      const same =
+        hit &&
+        hit.ref.kind === point.kind &&
+        (point.kind !== 'station' || (hit.ref.kind === 'station' && Math.abs(hit.ref.at - point.at) < 1e-3));
+      if (hit && same) {
+        const at = point.kind === 'station' ? point.at : point.kind === 'start' ? 0 : this.wallLength;
+        this.pointDrag = {
+          ref: point,
+          which: hit.which,
+          startScreen: { x, y },
+          // Un extremo solo cambia de altura.
+          axis: point.kind === 'station' ? null : 'y',
+          from: at,
+          at,
+          moved: false,
+          base: this.state.vertical,
+        };
         return true;
       }
     }
@@ -531,19 +605,36 @@ export class ElevationEditor {
   }
 
   updateDrag(x: number, y: number, tolPx: number): void {
-    const sd = this.stationDrag;
+    const pd = this.pointDrag;
     const wall = this.state.wall;
-    if (sd && wall && this.stored) {
-      const vertical = sd.base;
-      const at = this.stationX(this.toCsl(x, y).x, tolPx);
-      const others = (vertical.stations ?? []).filter((s) => Math.abs(s.at - sd.from) > 1e-3);
-      if (Math.abs(at - sd.at) < 1e-4 || others.some((s) => Math.abs(s.at - at) < MIN_STATION_GAP)) return;
-      const ext = vertical.stations?.find((s) => Math.abs(s.at - sd.from) < 1e-3)?.ext;
+    if (pd && wall && this.stored) {
+      if (!pd.axis) {
+        const dx = x - pd.startScreen.x;
+        const dy = y - pd.startScreen.y;
+        if (Math.hypot(dx, dy) < 6) return;
+        pd.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+      }
+      const vertical = pd.base;
+      if (pd.axis === 'x' && pd.ref.kind === 'station') {
+        const at = this.stationX(this.toCsl(x, y).x, tolPx);
+        const others = (vertical.stations ?? []).filter((s) => Math.abs(s.at - pd.from) > 1e-3);
+        if (Math.abs(at - pd.at) < 1e-4 || others.some((s) => Math.abs(s.at - at) < MIN_STATION_GAP)) return;
+        const ext = vertical.stations?.find((s) => Math.abs(s.at - pd.from) < 1e-3)?.ext;
+        if (!ext) return;
+        pd.at = at;
+        pd.moved = true;
+        this.preview = withStation(withoutStation(vertical, pd.from), { at, ext });
+        this.patch({ selectedPoint: { kind: 'station', at } });
+        this.publish(wall, this.stored);
+        return;
+      }
+      // Eje y: el tope (o la base) del vértice va a la cota del dedo.
+      const ext = this.extentOfRef(vertical, pd.ref);
       if (!ext) return;
-      sd.at = at;
-      sd.moved = true;
-      this.preview = withStation(withoutStation(vertical, sd.from), { at, ext });
-      this.patch({ selectedPoint: { kind: 'station', at } });
+      const cota = this.snappedCota(y, tolPx);
+      const next = pd.which === 'top' ? extentWithTop(ext, cota, this.levelElevations) : extentWithBase(ext, cota, this.levelElevations);
+      pd.moved = true;
+      this.preview = this.withPointExtent(vertical, pd.ref, next);
       this.publish(wall, this.stored);
       return;
     }
@@ -573,11 +664,11 @@ export class ElevationEditor {
   }
 
   cancelDrag(): void {
-    if (this.stationDrag) {
-      const from = this.stationDrag.from;
-      this.stationDrag = null;
+    if (this.pointDrag) {
+      const ref = this.pointDrag.ref;
+      this.pointDrag = null;
       this.preview = null;
-      this.patch({ selectedPoint: { kind: 'station', at: from } });
+      this.patch({ selectedPoint: ref });
       if (this.state.wall && this.stored) this.publish(this.state.wall, this.stored);
     }
     this.drag = null;
@@ -585,13 +676,16 @@ export class ElevationEditor {
   }
 
   async endDrag(): Promise<void> {
-    const sd = this.stationDrag;
-    if (sd) {
-      this.stationDrag = null;
+    const pd = this.pointDrag;
+    if (pd) {
+      this.pointDrag = null;
       const next = this.preview;
       this.preview = null;
-      if (sd.moved && next) {
-        if (!(await this.saveVertical(next))) this.patch({ selectedPoint: { kind: 'station', at: sd.from } });
+      if (pd.moved && next) {
+        if (!(await this.saveVertical(next))) {
+          this.patch({ selectedPoint: pd.ref });
+          if (this.state.wall && this.stored) this.publish(this.state.wall, this.stored);
+        }
       }
       return;
     }

@@ -38,7 +38,7 @@ export const DRAFT_HINT: Record<DraftKind, string> = {
   beam: 'Arrastra el eje de la viga',
   truss: 'Arrastra de apoyo a apoyo',
   purlin: 'Toca donde va la correa (en sección)',
-  section: 'Arrastra la línea de corte · se mira hacia su izquierda · «Ver corte» la abre',
+  section: 'Arrastra la línea de corte · se mira hacia su izquierda · doble toque la abre',
 };
 
 /** Texto que propone la Etiqueta para el objeto tocado. */

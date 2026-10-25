@@ -110,6 +110,48 @@ export function trussParts(a: Point2D, b: Point2D, depth: number, panels = 4): {
   return { chords, webs };
 }
 
+/** Profundidad de vista de un corte sin `depth` guardado (m). */
+export const SECTION_DEFAULT_DEPTH = 3;
+
+/**
+ * Cómo mira un corte (H-89). La línea A→B se mira hacia su IZQUIERDA tal como
+ * se ve en la planta (Y hacia abajo): con A→B hacia la derecha de la
+ * pantalla, se mira hacia arriba, y en la vista A queda a la izquierda.
+ * `flip` (props.flip = 1) mira al otro lado: la línea se toma de B a A.
+ * `depth` = hasta dónde se ve lo que hay detrás del plano de corte.
+ */
+export function sectionView(i: Pick<DraftItem, 'points' | 'props'>): { a: Point2D; b: Point2D; depth: number; dir: Point2D; flipped: boolean } {
+  const flipped = (i.props.flip ?? 0) >= 0.5;
+  const [p0, p1] = i.points;
+  const a = flipped ? p1 : p0;
+  const b = flipped ? p0 : p1;
+  const len = segmentLength(a, b) || 1;
+  return {
+    a,
+    b,
+    depth: Math.max(0, i.props.depth ?? SECTION_DEFAULT_DEPTH),
+    dir: { x: (b.y - a.y) / len, y: -(b.x - a.x) / len },
+    flipped,
+  };
+}
+
+/** Manejadores de un corte seleccionado: sus extremos, la profundidad de vista y el botón de lado. */
+export type SectionHandle = 'a' | 'b' | 'depth' | 'flip';
+
+/** Puntos de los manejadores de un corte (en la vista). */
+export function sectionHandles(i: Pick<DraftItem, 'points' | 'props'>): Record<SectionHandle, Point2D> {
+  const v = sectionView(i);
+  const mid = { x: (v.a.x + v.b.x) / 2, y: (v.a.y + v.b.y) / 2 };
+  // El botón de lado va del lado contrario al de vista, para no tapar el rango.
+  const off = Math.min(0.6, segmentLength(v.a, v.b) / 6);
+  return {
+    a: i.points[0],
+    b: i.points[1],
+    depth: { x: mid.x + v.dir.x * v.depth, y: mid.y + v.dir.y * v.depth },
+    flip: { x: mid.x - v.dir.x * off, y: mid.y - v.dir.y * off },
+  };
+}
+
 /** Defaults por herramienta (el catálogo los muestra como píldoras). */
 export const DRAFT_DEFAULTS: Readonly<Record<DraftKind, Readonly<Record<string, number>>>> = {
   dimension: { offset: 0.4 },
@@ -121,5 +163,5 @@ export const DRAFT_DEFAULTS: Readonly<Record<DraftKind, Readonly<Record<string, 
   beam: { width: 0.3, depth: 0.4 },
   truss: { depth: 0.6 },
   purlin: { width: 0.1, depth: 0.2 },
-  section: {},
+  section: { depth: SECTION_DEFAULT_DEPTH, flip: 0 },
 };

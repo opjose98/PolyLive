@@ -15,6 +15,9 @@ tags: #dominio #suelo #anden #cuantificacion
   también sirve para un andén perimetral (el edificio queda como hueco).
 - Formas: polígono por toques (tocar el primer vértice o «Cerrar»), rectángulo y círculo arrastrados.
   Círculo = polígono de 48 lados.
+- **Edición (H-88):** seleccionado se resalta y da área neta, perímetro y espesor; sus vértices y el centro de cada
+  arista se arrastran (la arista se desplaza en perpendicular). Doble toque **aísla** el suelo (libre o de
+  recinto) para editarlo y pintar su avance.
 - Cuantificación: IFC `IfcSlab` con `IfcArbitraryProfileDefWithVoids` y `NetArea`; cuadro de áreas S-01… aparte de
   los recintos; Avance los pinta como un soporte más.
 

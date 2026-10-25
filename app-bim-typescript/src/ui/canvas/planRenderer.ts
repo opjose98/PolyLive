@@ -38,6 +38,7 @@ import { Room } from '../../domain/objects/room';
 import { Column } from '../../domain/objects/column';
 import { Door } from '../../domain/objects/door';
 import { Window } from '../../domain/objects/window';
+import { Floor } from '../../domain/objects/floor';
 import { worldToScreen } from '../../domain/geometry/coordinates';
 import { isPointInPolygon } from '../../domain/geometry/polygon-utils';
 import type { Handle } from '../../application/canvas/SelectionService';
@@ -267,14 +268,17 @@ export function drawPlan(r: ICanvasRenderer, scene: PlanScene): void {
 
 /** Avance: cada corrida de celdas pintadas como un rectángulo del color de su actividad. */
 function drawProgress({ r, scene, scale, toScreen }: Ctx): void {
-  // Medio píxel de solape: sin él se ven costuras entre filas de celdas.
+  // Medio píxel de solape cierra las costuras entre filas; al ser una sola figura
+  // por capa, el solape no oscurece (antes se veían rayas con zoom).
   const pad = 0.5;
   for (const layer of scene.progressLayers ?? []) {
     r.setFillStyle(withAlpha(layer.color, 0.55 * layer.opacity));
-    for (const run of layer.runs) {
-      const p = toScreen({ x: run.x, y: run.y });
-      r.fillRect(p.x - pad, p.y - pad, run.w * scale + pad * 2, run.h * scale + pad * 2);
-    }
+    r.fillRects(
+      layer.runs.map((run) => {
+        const p = toScreen({ x: run.x, y: run.y });
+        return { x: p.x - pad, y: p.y - pad, w: run.w * scale + pad * 2, h: run.h * scale + pad * 2 };
+      }),
+    );
   }
 }
 
@@ -871,6 +875,11 @@ function drawSelection(ctx: Ctx): void {
     const shape = columnShape(selected, toScreen, scale);
     if (shape.circle) r.strokeCircle(shape.circle.c.x, shape.circle.c.y, shape.circle.r + 3);
     else if (shape.poly) r.strokePolygon(shape.poly);
+  } else if (selected instanceof Floor) {
+    // Suelo libre: su contorno (el vivo, si se está arrastrando); de recinto: el de su vista.
+    const poly = selected.outline?.length ? selected.outline : scene.floors?.find((f) => f.id === (selected.id as string))?.polygon;
+    // Solo el contorno: un relleno taparía los colores del avance pintado.
+    if (poly && poly.length >= 3) r.strokePolygon(poly.map(toScreen));
   } else if (selected instanceof Room && selected.geometry.length >= 3) {
     r.strokePolygon(selected.geometry.map(toScreen));
   } else if (selected instanceof Door || selected instanceof Window) {
@@ -886,13 +895,20 @@ function drawSelection(ctx: Ctx): void {
     }
   }
 
-  // Handles: círculo con borde, visibles sobre cualquier fondo.
+  // Handles: círculo con borde, visibles sobre cualquier fondo. El de una
+  // arista de suelo es un cuadrado chico (se distingue del vértice).
   for (const handle of scene.handles) {
     const p = toScreen(handle.position);
     r.setFillStyle(pal.handleFill);
-    r.fillCircle(p.x, p.y, sizes.handleRadius);
     r.setStrokeStyle(pal.selection);
     r.setLineWidth(stroke);
+    if (handle.kind === 'edge') {
+      const s = sizes.handleRadius * 0.8;
+      r.fillRect(p.x - s, p.y - s, s * 2, s * 2);
+      r.strokeRect(p.x - s, p.y - s, s * 2, s * 2);
+      continue;
+    }
+    r.fillCircle(p.x, p.y, sizes.handleRadius);
     r.strokeCircle(p.x, p.y, sizes.handleRadius);
   }
 }

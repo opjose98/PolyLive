@@ -15,13 +15,14 @@
 
 import React, { useLayoutEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Canvas, Fill, Group, Picture, createPicture } from '@shopify/react-native-skia';
+import { Canvas, Fill, Group, Path, Picture, createPicture } from '@shopify/react-native-skia';
 import { useDerivedValue, useSharedValue } from 'react-native-reanimated';
 import type { SkCanvas } from '@shopify/react-native-skia';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { SkiaCanvasAdapter } from '../../native/canvas/SkiaCanvasAdapter';
 import { drawElevation, ElevationScene, elevationToScreen } from './elevationRenderer';
 import { drawSketch, EMPTY_SKETCH, SketchSource } from './sketch';
+import { LiveStroke, useLiveStroke } from './liveStroke';
 import { CANVAS_PALETTES } from '../design/canvasThemes';
 import { LONG_PRESS_MS } from '../design/motion';
 import { haptic } from '../design/haptics';
@@ -52,6 +53,8 @@ interface ElevationCanvasProps {
    * con cada movimiento del dedo sin regrabar el muro ni re-renderizar la pantalla.
    */
   readonly liveSketch?: SketchSource;
+  /** Pincel en el hilo UI (ver liveStroke.ts). */
+  readonly liveStroke?: LiveStroke | null;
 }
 
 export const ElevationCanvas = React.memo(function ElevationCanvas(props: ElevationCanvasProps) {
@@ -88,6 +91,9 @@ export const ElevationCanvas = React.memo(function ElevationCanvas(props: Elevat
   const dY = useSharedValue(0);
   const delta = useRef({ s: 1, x: 0, y: 0 }).current;
   const view = useDerivedValue(() => [{ translateX: dX.value }, { translateY: dY.value }, { scale: dS.value }]);
+  const baseScale = scene.viewport.scale;
+  const pxPerMeter = useDerivedValue(() => baseScale * dS.value, [baseScale]);
+  const live = useLiveStroke(props.liveStroke, pxPerMeter, 4);
   // Llegó el alzado regrabado con la vista nueva: la cámara del gesto vuelve a cero.
   useLayoutEffect(() => {
     delta.s = 1;
@@ -218,9 +224,9 @@ export const ElevationCanvas = React.memo(function ElevationCanvas(props: Elevat
       });
 
     // Toque inmediato (sin esperar al doble toque); ver PlanCanvas.
-    return Gesture.Simultaneous(Gesture.Exclusive(longPress, Gesture.Simultaneous(tap, doubleTap)), pan, pinch);
+    return Gesture.Simultaneous(Gesture.Exclusive(longPress, Gesture.Simultaneous(tap, doubleTap)), pan, pinch, live.gesture);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [live.gesture]);
 
   return (
     <GestureDetector gesture={gesture}>
@@ -231,6 +237,7 @@ export const ElevationCanvas = React.memo(function ElevationCanvas(props: Elevat
             <Picture picture={picture} />
             {livePicture ? <Picture picture={livePicture} /> : null}
           </Group>
+          <Path path={live.path} style="stroke" strokeWidth={live.width} strokeCap="round" strokeJoin="round" color={live.color} opacity={0.5} />
         </Canvas>
       </View>
     </GestureDetector>

@@ -52,6 +52,9 @@ class RecordingRenderer implements ICanvasRenderer {
   fillPolygon(points: { x: number; y: number }[]): void {
     this.record('fillPolygon', [points]);
   }
+  fillRects(rects: readonly { x: number; y: number; w: number; h: number }[]): void {
+    this.record('fillRects', [rects]);
+  }
   strokePolygon(points: { x: number; y: number }[]): void {
     this.record('strokePolygon', [points]);
   }

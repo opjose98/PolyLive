@@ -2,7 +2,7 @@
 // sectionCut.test.ts — Qué corta un plano vertical
 // =============================================================================
 
-import { columnFaces, CutWall, sectionCuts } from '../../src/domain/section/sectionCut';
+import { columnFaces, CutWall, sectionBeyond, sectionCuts } from '../../src/domain/section/sectionCut';
 
 const flatWall = (id: string, start: [number, number], end: [number, number], top = 2.5, openings: CutWall['openings'] = []): CutWall => ({
   id,
@@ -68,5 +68,36 @@ describe('columnFaces', () => {
     const wall = flatWall('m', [-3, 0], [3, 0]);
     const hits = faces.map((f) => sectionCuts(f.line, { walls: [wall] }).length);
     expect(hits).toEqual([0, 1, 0, 1]);
+  });
+});
+
+describe('sectionBeyond — lo visto detrás del plano (H-89)', () => {
+  // Corte de (0,0) a (6,0): mira hacia su izquierda en la planta (Y abajo) = hacia y < 0.
+  const line = { origin: { x: 0, y: 0 }, dir: { x: 1, y: 0 }, length: 6, halfWidth: 0.005 };
+
+  it('ve el muro paralelo que está dentro de la profundidad, con su vano; no el del otro lado ni el lejano', () => {
+    const model = {
+      walls: [
+        flatWall('detras', [0, -2], [6, -2], 2.5, [{ x0: 2, x1: 3, z0: 1, z1: 2 }]),
+        flatWall('lejos', [0, -9], [6, -9]),
+        flatWall('espalda', [0, 2], [6, 2]),
+      ],
+    };
+    const seen = sectionBeyond(line, 3, model);
+    expect(seen.map((s) => s.id)).toEqual(['detras']);
+    const [w] = seen;
+    expect(Math.min(...w.poly.map((p) => p.x))).toBeCloseTo(0);
+    expect(Math.max(...w.poly.map((p) => p.x))).toBeCloseTo(6);
+    expect(Math.max(...w.poly.map((p) => p.z))).toBeCloseTo(2.5);
+    expect(w.holes).toHaveLength(1);
+    expect(w.holes[0].map((p) => p.x)).toEqual([2, 3, 3, 2]);
+    // Sin profundidad no se ve nada.
+    expect(sectionBeyond(line, 0, model)).toEqual([]);
+  });
+
+  it('ordena de lo más lejano a lo más cercano (lo cercano tapa lo lejano al dibujar)', () => {
+    const col = (id: string, y: number) => ({ id, footprint: [{ x: 1, y: y - 0.1 }, { x: 1.2, y: y - 0.1 }, { x: 1.2, y: y + 0.1 }, { x: 1, y: y + 0.1 }], base: 0, top: 3 });
+    const seen = sectionBeyond(line, 5, { columns: [col('cerca', -1), col('lejos', -4)] });
+    expect(seen.map((s) => s.id)).toEqual(['lejos', 'cerca']);
   });
 });

@@ -13,6 +13,8 @@ import { Wall } from '../../domain/objects/wall';
 import { Column } from '../../domain/objects/column';
 import { Door } from '../../domain/objects/door';
 import { Window } from '../../domain/objects/window';
+import { Floor } from '../../domain/objects/floor';
+import type { Point2D } from '../../domain/geometry/types';
 
 import { lineShape } from '../../domain/geometry/shapes';
 import { touchToleranceMeters } from '../canvas/SelectionService';
@@ -143,7 +145,9 @@ export abstract class EditorGestures extends EditorCore {
 
     this.patch({ busy: true });
     try {
-      if (target.plan) {
+      if (target.kind === 'outline') {
+        await this.services.useCases.updateObjectProperty.execute({ objectId: sel.id, property: 'outline', newValue: target.outline });
+      } else if (target.plan) {
         // Muro con uniones: todos los muros afectados, un solo paso de deshacer.
         await this.services.useCases.reshapeWalls.execute({ changes: target.plan });
       } else if (target.kind === 'center') {
@@ -187,6 +191,10 @@ export abstract class EditorGestures extends EditorCore {
     if (!handle || !origin || !sel) return null;
 
     const world = this.screenToWorld(screenX, screenY);
+
+    if ((handle.kind === 'vertex' || handle.kind === 'edge') && sel instanceof Floor && sel.outline && handle.index !== undefined) {
+      return this.floorOutlineTarget(sel, sel.outline, handle.kind, handle.index, world, origin);
+    }
 
     if (handle.kind === 'center') {
       const dx = world.x - origin.x;
@@ -276,6 +284,46 @@ export abstract class EditorGestures extends EditorCore {
       plan: null,
       linked: [],
     };
+  }
+
+  /**
+   * Suelo libre con un vértice movido (se engancha a nudos de muro, vértices
+   * de recinto y puntos medios, como un muro) o una arista desplazada en
+   * perpendicular a sí misma (un rectángulo sigue siendo rectángulo).
+   */
+  protected floorOutlineTarget(
+    sel: Floor,
+    outline: readonly Point2D[],
+    kind: 'vertex' | 'edge',
+    index: number,
+    world: Point2D,
+    origin: Point2D,
+  ): DragTarget {
+    const next = outline.map((p) => ({ ...p }));
+    let snappedToNode = false;
+    let dx = 0;
+    let dy = 0;
+    if (kind === 'vertex') {
+      const tol = touchToleranceMeters(this.dragTolerancePx, this.state.transform.scale);
+      const node = this.state.nodeSnapEnabled ? this.selection.findNearestNode({ worldPoint: world, walls: this.walls, thresholdMeters: tol }) : null;
+      const point = node ?? this.extraSnap(world, tol as number, this.walls) ?? world;
+      snappedToNode = point !== world;
+      dx = point.x - outline[index].x;
+      dy = point.y - outline[index].y;
+      next[index] = { x: point.x, y: point.y };
+    } else {
+      const a = outline[index];
+      const b = outline[(index + 1) % outline.length];
+      const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+      const nx = -(b.y - a.y) / len;
+      const ny = (b.x - a.x) / len;
+      const d = (world.x - origin.x) * nx + (world.y - origin.y) * ny;
+      dx = nx * d;
+      dy = ny * d;
+      next[index] = { x: a.x + dx, y: a.y + dy };
+      next[(index + 1) % outline.length] = { x: b.x + dx, y: b.y + dy };
+    }
+    return { kind: 'outline', outline: next, dx, dy, preview: cloneWith(sel, { outline: next }), snappedToNode, plan: null, linked: [] };
   }
 
   /**

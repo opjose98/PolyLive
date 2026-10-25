@@ -14,7 +14,7 @@ import { Door } from '../../src/domain/objects/door';
 import { roomId, revitObjectId, wallId } from '../../src/domain/objects/base';
 import { meters } from '../../src/domain/geometry/types';
 import { ProjectMarker } from '../../src/domain/objects/marker';
-import { extent } from '../../src/domain/objects/vertical';
+import { extent, resolveWallProfile } from '../../src/domain/objects/vertical';
 import { drawElevation } from '../../src/ui/canvas/elevationRenderer';
 import type { ICanvasRenderer } from '../../src/native/canvas/SkiaCanvasAdapter';
 
@@ -169,6 +169,39 @@ describe('ElevationEditor', () => {
     expect(w.vertical?.stations).toBeUndefined();
   });
 
+  it('punto de altura: tocar por encima del tope crea la estación a esa altura (H-87)', async () => {
+    const rect = extent({ baseLevelId: 'n0', topLevelId: 'n1', unconnectedHeight: 3 });
+    expect(await ed.saveVertical({ start: rect, end: rect })).toBe(true);
+    ed.setTool('station');
+    // x = 2 m, y = 4.2 m (por encima del tope a 3 m).
+    await ed.tap(200, 80, 22);
+    const w = (await services.store.readObject(revitObjectId('w1'))) as Wall;
+    expect(w.vertical?.stations).toHaveLength(1);
+    // Sigue atado al Nivel 1, con desfase: el muro sigue a su nivel si este cambia.
+    expect(w.vertical?.stations?.[0].ext).toMatchObject({ topLevelId: 'n1', topOffset: 1.2 });
+  });
+
+  it('punto de altura: el vértice seleccionado sube y baja arrastrándolo y se engancha a los niveles (H-87)', async () => {
+    ed.setTool('select');
+    // Muro sin restricciones guardadas (2,8 m): el extremo A se arrastra hasta el Nivel 1 (3 m).
+    await ed.tap(0, 220, 22); // tope del extremo A: (0, 2.8)
+    expect(ed.getState().selectedPoint).toEqual({ kind: 'start' });
+    expect(ed.beginDrag(0, 220, 22)).toBe(true);
+    ed.updateDrag(0, 195, 22); // ≈ 3.05 m: a menos de 22 px de la línea del Nivel 1
+    await ed.endDrag();
+    let w = (await services.store.readObject(revitObjectId('w1'))) as Wall;
+    const p1 = resolveWallProfile(w.vertical!, new Map([['n0', 0], ['n1', 3]]), 4);
+    expect(p1.start.top).toBeCloseTo(3);
+    expect(p1.end.top).toBeCloseTo(2.8);
+
+    // Sin nivel cerca: al centímetro.
+    expect(ed.beginDrag(0, 200, 22)).toBe(true);
+    ed.updateDrag(0, 140, 22); // 3.6 m
+    await ed.endDrag();
+    w = (await services.store.readObject(revitObjectId('w1'))) as Wall;
+    expect(resolveWallProfile(w.vertical!, new Map([['n0', 0], ['n1', 3]]), 4).start.top).toBeCloseTo(3.6);
+  });
+
   it('un muro que llega en T se ve cortado en el alzado (sin bloquear nada)', async () => {
     await services.store.createObject(
       new Wall({ id: revitObjectId('w2'), roomId: ROOM, startPoint: { x: 2, y: 0 }, endPoint: { x: 2, y: 3 }, thickness: meters(0.2), height: meters(2.5) }),
@@ -179,6 +212,10 @@ describe('ElevationEditor', () => {
     expect(cuts[0]).toMatchObject({ id: 'w2', kind: 'wall', y0: 0, y1: 2.5 });
     expect(cuts[0].x0).toBeCloseTo(1.9);
     expect(cuts[0].x1).toBeCloseTo(2.1);
+    // Tocar el muro cortado lo encuentra (para ver sus propiedades, H-91); fuera de él, nada.
+    ed.setViewport({ scale: 100, offsetX: 0, offsetY: 500 });
+    expect(ed.elementAt(200, 400, 22)?.id).toBe('w2');
+    expect(ed.elementAt(350, 400, 22)).toBeNull();
   });
 
   it('el renderer dibuja en espejo el lado B', () => {

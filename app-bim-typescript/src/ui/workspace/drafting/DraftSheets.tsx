@@ -6,7 +6,7 @@ import React, { useEffect, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { BottomSheet, ActionButton, toast } from '../../primitives';
 import { NumberField, ReadonlyRow, TextField } from '../../components/fields';
-import { DraftItem, itemLength, polygonMetrics } from '../../../domain/drafting/drafting';
+import { DraftItem, SECTION_DEFAULT_DEPTH, itemLength, polygonMetrics, sectionView } from '../../../domain/drafting/drafting';
 import { spacing } from '../../design/tokens';
 import { type } from '../../design/typography';
 import { themedStyles } from '../../design/theme';
@@ -26,13 +26,38 @@ export const KIND_LABEL: Record<DraftItem['kind'], string> = {
   section: 'Corte',
 };
 
-export function DraftSheets({ drafting, open, onClose }: { drafting: Drafting; open: boolean; onClose: () => void }) {
+export function DraftSheets({
+  drafting,
+  open,
+  onClose,
+  onOpenSection,
+}: {
+  drafting: Drafting;
+  open: boolean;
+  onClose: () => void;
+  /** Abre la vista de un corte (desde su hoja). */
+  onOpenSection?: (item: DraftItem) => void;
+}) {
   const item = drafting.ctl.selected;
   const pending = drafting.state.pendingText;
   return (
     <>
-      <BottomSheet open={open && !!item} onClose={onClose} heightRatio={0.55}>
-        {item ? <ItemBody drafting={drafting} item={item} onClose={onClose} /> : null}
+      <BottomSheet open={open && !!item} onClose={onClose} heightRatio={0.6}>
+        {item ? (
+          <ItemBody
+            drafting={drafting}
+            item={item}
+            onClose={onClose}
+            onOpenSection={
+              onOpenSection
+                ? (i) => {
+                    onClose();
+                    onOpenSection(i);
+                  }
+                : undefined
+            }
+          />
+        ) : null}
       </BottomSheet>
       <BottomSheet open={!!pending} onClose={() => drafting.ctl.cancelText()} heightRatio={0.4}>
         {pending ? <TextBody drafting={drafting} /> : null}
@@ -41,7 +66,17 @@ export function DraftSheets({ drafting, open, onClose }: { drafting: Drafting; o
   );
 }
 
-function ItemBody({ drafting, item, onClose }: { drafting: Drafting; item: DraftItem; onClose: () => void }) {
+function ItemBody({
+  drafting,
+  item,
+  onClose,
+  onOpenSection,
+}: {
+  drafting: Drafting;
+  item: DraftItem;
+  onClose: () => void;
+  onOpenSection?: (item: DraftItem) => void;
+}) {
   const styles = useStyles();
   const { ctl, editable } = drafting;
   const cmNum = (key: string, label: string, def: number) => (
@@ -91,6 +126,32 @@ function ItemBody({ drafting, item, onClose }: { drafting: Drafting; item: Draft
         </>
       ) : null}
       {item.kind === 'truss' ? cmNum('depth', 'Altura de la cercha', 0.6) : null}
+      {item.kind === 'section' ? (
+        <>
+          <TextField label="Nombre del corte" value={item.text} disabled={!editable} commitOn="blur" onCommit={(text) => void ctl.edit(item.id, { text })} />
+          <NumberField
+            label="Rango de vista (profundidad)"
+            unit="m"
+            decimals={2}
+            min={0}
+            max={100}
+            value={item.props.depth ?? SECTION_DEFAULT_DEPTH}
+            disabled={!editable}
+            onCommit={(depth) => void ctl.edit(item.id, { props: { depth } })}
+          />
+          <ReadonlyRow label="Lado de vista" value={sectionView(item).flipped ? 'Derecha de A→B' : 'Izquierda de A→B'} />
+          {editable ? (
+            <ActionButton
+              label="Mirar al otro lado"
+              icon="swap-vertical"
+              variant="secondary"
+              onPress={() => void ctl.edit(item.id, { props: { flip: sectionView(item).flipped ? 0 : 1 } })}
+            />
+          ) : null}
+          {onOpenSection ? <ActionButton label="Ver corte" icon="arrow-split-vertical" onPress={() => onOpenSection(item)} /> : null}
+          <Text style={styles.hint}>En la planta, con el corte seleccionado: arrastra el cuadrado para cambiar la profundidad y los extremos para moverlo; toca ⇅ para mirar al otro lado.</Text>
+        </>
+      ) : null}
       {editable ? (
         <ActionButton
           label="Borrar"

@@ -16,6 +16,7 @@ import {
   filtersFor,
   modeBlock,
   isToolEnabled,
+  toolIconOf,
 } from '../../src/application/workspace/catalog';
 import { FAB_CLOSED, fabMainIcon, pickFabCategory, pressFabMain } from '../../src/application/workspace/fabMachine';
 import { valueFromDrag, nudgeProp } from '../../src/application/workspace/propDrag';
@@ -83,7 +84,7 @@ describe('catálogo', () => {
       .flatMap((c) => c.tools)
       .filter(isToolEnabled)
       .map((t) => t.id);
-    expect(enabled).toEqual(['mojon', 'punto-gps', 'coordenada', 'inverso', 'area', 'replanteo', 'pincel', 'borrador', 'relleno', 'rectangulo-avance', 'trazo', 'flecha', 'rectangulo-rev', 'texto-rev', 'nube']);
+    expect(enabled).toEqual(['mojon', 'punto-gps', 'coordenada', 'inverso', 'area', 'replanteo', 'pincel', 'borrador', 'relleno', 'rectangulo-avance', 'foto-avance', 'trazo', 'flecha', 'rectangulo-rev', 'texto-rev', 'nube']);
   });
 });
 
@@ -101,6 +102,16 @@ describe('FAB de creación', () => {
     expect(s.level).toBe('categories');
     s = pressFabMain(s);
     expect(s.level).toBe('closed');
+  });
+
+  it('cerrado con una herramienta activa muestra su ícono hasta soltarla', () => {
+    const icon = toolIconOf(CATEGORIES_PLAN, { categoryId: 'arquitectonico', toolId: 'muro' });
+    expect(icon).toBe('wall');
+    expect(fabMainIcon(FAB_CLOSED, icon)).toBe('wall');
+    expect(fabMainIcon(FAB_CLOSED, null)).toBe('plus');
+    // Abierto vuelve a ser navegación.
+    expect(fabMainIcon(pressFabMain(FAB_CLOSED), icon)).toBe('minus');
+    expect(toolIconOf(CATEGORIES_PLAN, null)).toBeNull();
   });
 
   it('elegir categoría con el FAB cerrado no hace nada', () => {

@@ -215,6 +215,121 @@ export function sectionCuts(line: CutLine, model: CutModel): CutPiece[] {
   return out.sort((a, b) => a.x0 - b.x0);
 }
 
+// ---------------------------------------------------------------------------
+// Lo que se ve DETRÁS del plano de corte (H-89)
+// ---------------------------------------------------------------------------
+
+/** Elemento visto (no cortado) dentro de la profundidad de vista: su silueta en (x, z). */
+export interface BeyondPiece {
+  readonly id: string;
+  readonly kind: CutKind;
+  /** Distancia al plano de corte (m): se dibuja de lo más lejano a lo más cercano. */
+  readonly dist: number;
+  readonly poly: readonly { readonly x: number; readonly z: number }[];
+  /** Vanos vistos en un muro (rectángulos en x, z). */
+  readonly holes: readonly (readonly { readonly x: number; readonly z: number }[])[];
+}
+
+/** Polígono (local) recortado a la franja de vista v ∈ [−depth, 0]. */
+function clipToView(poly: readonly Point2D[], toLocal: (p: Point2D) => Local, depth: number, length: number): Local[] {
+  let p = poly.map(toLocal);
+  p = clipHalf(p, 0, 1); // v ≤ 0
+  p = clipHalf(p, depth, -1); // v ≥ −depth
+  // Recorte a lo largo de la línea [0, length].
+  const clipX = (q: Local[], limit: number, sign: 1 | -1): Local[] => {
+    const inside = (a: Local) => sign * a.x <= limit + EPS;
+    const out: Local[] = [];
+    for (let i = 0; i < q.length; i++) {
+      const a = q[i];
+      const b = q[(i + 1) % q.length];
+      if (inside(a)) out.push(a);
+      if (inside(a) !== inside(b)) {
+        const t = (limit * sign - a.x) / (b.x - a.x);
+        out.push({ x: sign * limit, v: a.v + (b.v - a.v) * t });
+      }
+    }
+    return out;
+  };
+  p = clipX(p, length, 1);
+  p = clipX(p, 0, -1);
+  return p;
+}
+
+const spanOf = (p: readonly Local[]): [number, number] | null => {
+  if (p.length < 3) return null;
+  const x0 = Math.min(...p.map((q) => q.x));
+  const x1 = Math.max(...p.map((q) => q.x));
+  return x1 - x0 >= MIN_PIECE ? [x0, x1] : null;
+};
+const distOf = (p: readonly Local[]) => Math.abs(p.reduce((a, q) => a + q.v, 0) / p.length);
+const rect = (x0: number, x1: number, z0: number, z1: number) => [
+  { x: x0, z: z0 },
+  { x: x1, z: z0 },
+  { x: x1, z: z1 },
+  { x: x0, z: z1 },
+];
+
+/**
+ * Lo que se ve detrás del plano, mirando hacia `v < 0` (el lado de vista del
+ * corte) hasta `depth` m: muros con su perfil y sus vanos, columnas, vigas y
+ * cantos de losa, proyectados sobre el plano. De lo más lejano a lo más
+ * cercano: dibujados en ese orden, lo de adelante tapa lo de atrás.
+ */
+export function sectionBeyond(line: CutLine, depth: number, model: CutModel): BeyondPiece[] {
+  if (depth <= MIN_PIECE) return [];
+  const { toLocal } = frame(line);
+  const out: BeyondPiece[] = [];
+
+  for (const w of model.walls ?? []) {
+    const clipped = clipToView(strip(w.start, w.end, w.thickness), toLocal, depth, line.length);
+    const span = spanOf(clipped);
+    if (!span) continue;
+    const S = toLocal(w.start);
+    const E = toLocal(w.end);
+    const L = Math.hypot(w.end.x - w.start.x, w.end.y - w.start.y) || 1;
+    const oblique = Math.abs(E.x - S.x) > 1e-6;
+    // s (a lo largo del muro) de un x de la vista; un muro perpendicular al corte es una franja: sus dos caras.
+    const sAt = (x: number) => (oblique ? Math.max(0, Math.min(L, ((x - S.x) / (E.x - S.x)) * L)) : L / 2);
+    const xs: number[] = [];
+    const n = Math.min(40, Math.max(1, Math.ceil((span[1] - span[0]) / 0.5)));
+    for (let k = 0; k <= n; k++) xs.push(span[0] + ((span[1] - span[0]) * k) / n);
+    const bottom = xs.map((x) => ({ x, z: w.profileAt(sAt(x)).base }));
+    const top = xs.map((x) => ({ x, z: w.profileAt(sAt(x)).top })).reverse();
+    const holes = oblique
+      ? w.openings
+          .map((o) => {
+            const a = S.x + (o.x0 / L) * (E.x - S.x);
+            const b = S.x + (o.x1 / L) * (E.x - S.x);
+            const x0 = Math.max(span[0], Math.min(a, b));
+            const x1 = Math.min(span[1], Math.max(a, b));
+            return x1 - x0 >= MIN_PIECE ? rect(x0, x1, o.z0, o.z1) : null;
+          })
+          .filter((h): h is ReturnType<typeof rect> => h !== null)
+      : [];
+    out.push({ id: w.id, kind: 'wall', dist: distOf(clipped), poly: [...bottom, ...top], holes });
+  }
+
+  for (const c of model.columns ?? []) {
+    const clipped = clipToView(c.footprint, toLocal, depth, line.length);
+    const span = spanOf(clipped);
+    if (span && c.top - c.base > MIN_PIECE) out.push({ id: c.id, kind: 'column', dist: distOf(clipped), poly: rect(span[0], span[1], c.base, c.top), holes: [] });
+  }
+
+  for (const b of model.beams ?? []) {
+    const clipped = clipToView(strip(b.a, b.b, b.width), toLocal, depth, line.length);
+    const span = spanOf(clipped);
+    if (span) out.push({ id: b.id, kind: 'beam', dist: distOf(clipped), poly: rect(span[0], span[1], b.top - b.depth, b.top), holes: [] });
+  }
+
+  for (const sl of model.slabs ?? []) {
+    const clipped = clipToView(sl.outline, toLocal, depth, line.length);
+    const span = spanOf(clipped);
+    if (span) out.push({ id: sl.id, kind: 'slab', dist: distOf(clipped), poly: rect(span[0], span[1], sl.top - sl.thickness, sl.top), holes: [] });
+  }
+
+  return out.sort((a, b) => b.dist - a.dist);
+}
+
 /**
  * Caras de una columna rectangular girada, en orden antihorario desde la cara
  * inferior (−Y local): cada una es una línea de corte de banda fina hacia

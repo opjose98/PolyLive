@@ -76,6 +76,9 @@ export function useDrafting(input: DraftingInput) {
           for (const k of Object.keys(next) as (keyof DraftingState)[]) {
             if (k === 'draft') {
               if (!!prev.draft !== !!next.draft) return next;
+            } else if (k === 'handleDrag') {
+              // El arrastre de un manejador va a la capa viva: a la pantalla solo le importa si hay uno.
+              if ((prev.handleDrag?.id ?? null) !== (next.handleDrag?.id ?? null)) return next;
             } else if (prev[k] !== next[k]) return next;
           }
           return prev;
@@ -114,11 +117,12 @@ export function useDrafting(input: DraftingInput) {
     [showDims],
   );
   const transform = editor.getState().transform;
-  /** Formas de la planta (en metros del modelo). */
+  const draggingId = st.handleDrag?.id ?? null;
+  /** Formas de la planta (en metros del modelo). El corte cuyo manejador se arrastra va en la capa viva. */
   const planShapes = useMemo(
-    () => draftShapes(visible(ctl.itemsIn({ kind: 'plan' })), renderCtx(1 / transform.scale, -1)),
+    () => draftShapes(visible(ctl.itemsIn({ kind: 'plan' }).filter((i) => i.id !== draggingId)), renderCtx(1 / transform.scale, -1)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [ctl, st.items, st.selectedId, levelId, renderCtx, transform.scale, visible],
+    [ctl, st.items, st.selectedId, levelId, renderCtx, transform.scale, visible, draggingId],
   );
 
   /** Formas de una cara de muro, con `mPerPx` de su vista. */
@@ -150,14 +154,17 @@ export function useDrafting(input: DraftingInput) {
       subscribe: (cb) => ctl.subscribe(() => cb()),
       get: () => {
         const s = ctl.getState();
-        const k = [s.draft, s.polygon, s.props];
+        const k = [s.draft, s.polygon, s.props, s.handleDrag];
         if (k.every((x, i) => x === key[i])) return cached;
         key = k;
-        cached = previewFor({ kind: 'plan' }, 1 / editor.getState().transform.scale, -1);
+        const mPerPx = 1 / editor.getState().transform.scale;
+        cached = previewFor({ kind: 'plan' }, mPerPx, -1);
+        // El corte cuyo manejador se arrastra, en su forma viva (seleccionado: con su rango de vista).
+        if (s.handleDrag) cached = [...cached, ...draftShapes([s.handleDrag.preview], { ...renderCtx(mPerPx, -1), selectedId: s.handleDrag.id })];
         return cached;
       },
     };
-  }, [ctl, previewFor, editor]);
+  }, [ctl, previewFor, editor, renderCtx]);
 
   // --- Gestos en la planta: los puntos se pegan a nodos de muro ---
   const snapped = useCallback(
@@ -202,6 +209,21 @@ export function useDrafting(input: DraftingInput) {
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [ctl, editor, touchTolerancePx, input.tagAt, snapped],
+  );
+
+  /** Manejadores del corte seleccionado en la planta (extremos y profundidad). `begin` dice si agarró uno. */
+  const planHandleDrag = useMemo(
+    () => ({
+      /** ¿Cae el dedo en un manejador del corte seleccionado? (sin empezar nada) */
+      hit: (x: number, y: number): boolean =>
+        !ctl.getState().tool && ctl.sectionHandleAt({ kind: 'plan' }, editor.screenToWorld(x, y), touchTolerancePx / editor.getState().transform.scale) !== null,
+      begin: (x: number, y: number): boolean =>
+        !ctl.getState().tool && ctl.beginHandleDrag({ kind: 'plan' }, editor.screenToWorld(x, y), touchTolerancePx / editor.getState().transform.scale),
+      move: (x: number, y: number) => ctl.moveHandleDrag(ctl.getState().handleDrag?.which === 'depth' ? editor.screenToWorld(x, y) : snapped(x, y)),
+      end: () => void ctl.endHandleDrag(),
+      cancel: () => ctl.cancelHandleDrag(),
+    }),
+    [ctl, editor, touchTolerancePx, snapped],
   );
 
   const drawEnabled = !!tool && TWO_POINT_KINDS.includes(tool);
@@ -254,6 +276,7 @@ export function useDrafting(input: DraftingInput) {
     previewFor,
     planTap,
     planDraw,
+    planHandleDrag,
     faceGestures,
   };
 }
