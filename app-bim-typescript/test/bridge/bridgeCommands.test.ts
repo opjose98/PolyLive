@@ -78,3 +78,44 @@ describe('puente: comandos', () => {
     await expect(runBridgeCommand({ ...ctx, editor: null, spaceId: null }, 'objects')).rejects.toThrow(/open/);
   });
 });
+
+describe('puente: corte y columna', () => {
+  it('un corte a través de un muro con ventana y de una columna embebida', async () => {
+    const dbPath = path.join(os.tmpdir(), `bridge2-${Date.now()}.db`);
+    const db = new Database(dbPath);
+    await db.open();
+    await db.migrate();
+    const services = createAppServices(db);
+    const project = await services.projects.createProject({ name: 'Sede', author: 'QA' });
+    const { room } = await services.projects.createSpace({ projectId: project.id, name: 'Aula' });
+    const editor = new EditorController({ services, roomId: room.roomId, roomObjectId: room.id, initialTransform: { scale: 100, offsetX: 0, offsetY: 0 } });
+    await editor.init();
+    const ctx: BridgeContext = { services, editor, projectId: project.id as string, spaceId: room.roomId as string };
+    await runBridgeCommand(ctx, 'setLevels', { levels: [{ name: 'Piso', value: 0 }, { name: 'Muro', value: 2.5 }] });
+    const [wall] = (await runBridgeCommand(ctx, 'ops', { list: [{ op: 'wall', start: [0, 0], end: [6, 0], thickness: 0.2, v: { base: 'Piso', top: 'Muro' } }] })) as string[];
+    const [, col] = (await runBridgeCommand(ctx, 'ops', {
+      list: [
+        { op: 'window', wall, offset: 1, width: 1, height: 1, sill: 1 },
+        { op: 'column', at: [4, 0], w: 0.25, d: 0.25, v: { base: 'Piso', top: 'Muro', topOffset: 0.2 } },
+      ],
+    })) as string[];
+
+    // Corte perpendicular por la ventana: el muro abajo y arriba del hueco.
+    const s1 = (await runBridgeCommand(ctx, 'section', { a: [1.5, -1], b: [1.5, 1] })) as { cuts: { kind: string; y0: number; y1: number }[] };
+    expect(s1.cuts.filter((c) => c.kind === 'wall').map((c) => [c.y0, c.y1])).toEqual([
+      [0, 1],
+      [2, 2.5],
+    ]);
+    // Corte por la columna: la columna sobresale 20 cm del muro.
+    const s2 = (await runBridgeCommand(ctx, 'section', { a: [4, -1], b: [4, 1] })) as { cuts: { kind: string; y1: number }[] };
+    expect(s2.cuts.find((c) => c.kind === 'column')?.y1).toBeCloseTo(2.7);
+
+    // Alzado de la columna: el muro atraviesa dos de sus caras.
+    const cv = (await runBridgeCommand(ctx, 'columnView', { id: col })) as { length: number; cuts: { id: string }[]; dividers: unknown[] };
+    expect(cv.length).toBeCloseTo(1);
+    expect(cv.dividers).toHaveLength(4);
+    expect(cv.cuts.filter((c) => c.id === wall)).toHaveLength(2);
+    await db.close();
+    fs.rmSync(dbPath, { force: true });
+  });
+});

@@ -69,10 +69,10 @@ export function createLiveSource(editor: EditorController): LiveSource {
     subscribe: (onChange) => editor.subscribe(() => onChange()),
     get: () => {
       const s = editor.getState();
-      const key = [s.wallDraft, s.shapeDraft, s.dragPreview, s.draggingHandle, s.dragSnappedToNode, s.dragLinked, s.objects, s.selectedId];
+      const key = [s.wallDraft, s.shapeDraft, s.sectionDraft, s.dragPreview, s.draggingHandle, s.dragSnappedToNode, s.dragLinked, s.objects, s.selectedId];
       if (key.every((k, i) => k === cacheKey[i])) return cached;
       cacheKey = key;
-      if (!s.wallDraft && !s.shapeDraft && !isDragging(s)) {
+      if (!s.wallDraft && !s.shapeDraft && !s.sectionDraft && !isDragging(s)) {
         cached = EMPTY;
         return cached;
       }
@@ -95,7 +95,9 @@ export function createLiveSource(editor: EditorController): LiveSource {
         wallDraft: s.wallDraft,
         shapeDraft: s.shapeDraft
           ? { points: editor.shapeDraftPolygon ?? s.shapeDraft.points, closed: editor.shapeMethodActive !== 'polygon' }
-          : null,
+          : s.sectionDraft
+            ? { points: [s.sectionDraft.a, s.sectionDraft.b], closed: false }
+            : null,
         objects,
         selectedId: preview ? preview.id : null,
         handles: preview ? editor.selectedHandles : [],
@@ -115,6 +117,8 @@ export function sameStructure(a: EditorState, b: EditorState): boolean {
   for (const k of Object.keys(b) as (keyof EditorState)[]) {
     if (k === 'wallDraft') {
       if (!!a.wallDraft !== !!b.wallDraft || !!a.wallDraft?.start !== !!b.wallDraft?.start) return false;
+    } else if (k === 'sectionDraft') {
+      if (!!a.sectionDraft !== !!b.sectionDraft) return false;
     } else if (k === 'shapeDraft') {
       // La forma en trazado se dibuja en la capa viva; a la pantalla solo le importa cuántos vértices tiene.
       if ((a.shapeDraft?.points.length ?? -1) !== (b.shapeDraft?.points.length ?? -1)) return false;

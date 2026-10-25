@@ -261,6 +261,7 @@ export function ElevationView(props: ElevationViewProps) {
             markups: (reviewing || ws.coordination) && review && faceView ? review.shapesFor(faceView) : undefined,
             annotations: photoPins.length ? [...(draftAnnotations ?? []), ...photoPins] : draftAnnotations,
             profileHandles: ws.workMode === 'levantamiento' ? editor.profileHandles : undefined,
+            cuts: st.cuts,
           }
         : null,
     [st, editor, width, height, severity, ws.grid, ws.filters.cotas, palette, visibleTypes, painting, ws.coordination, wallDbId, progress, reviewing, review, faceView, draftAnnotations, photoPins, ws.workMode],

@@ -169,6 +169,18 @@ describe('ElevationEditor', () => {
     expect(w.vertical?.stations).toBeUndefined();
   });
 
+  it('un muro que llega en T se ve cortado en el alzado (sin bloquear nada)', async () => {
+    await services.store.createObject(
+      new Wall({ id: revitObjectId('w2'), roomId: ROOM, startPoint: { x: 2, y: 0 }, endPoint: { x: 2, y: 3 }, thickness: meters(0.2), height: meters(2.5) }),
+    );
+    await ed.load(false);
+    const cuts = ed.getState().cuts;
+    expect(cuts).toHaveLength(1);
+    expect(cuts[0]).toMatchObject({ id: 'w2', kind: 'wall', y0: 0, y1: 2.5 });
+    expect(cuts[0].x0).toBeCloseTo(1.9);
+    expect(cuts[0].x1).toBeCloseTo(2.1);
+  });
+
   it('el renderer dibuja en espejo el lado B', () => {
     const calls: { op: string; args: unknown[] }[] = [];
     const r = new Proxy({} as ICanvasRenderer, {

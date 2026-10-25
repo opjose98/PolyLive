@@ -59,6 +59,11 @@ export abstract class EditorCreation extends EditorGestures {
   // El muro se crea con snap a nodo (primero) o angular respecto al inicio.
 
   drawBegin(screenX: number, screenY: number): void {
+    if (this.state.tool === 'section') {
+      const { point } = this.snapDrawPoint(screenX, screenY, undefined);
+      this.patch({ sectionDraft: { a: point, b: point } });
+      return;
+    }
     if (this.shapeDragActive) {
       const { point } = this.snapDrawPoint(screenX, screenY, undefined);
       this.patch({ shapeDraft: { mode: this.state.tool === 'void' ? 'void' : 'floor', points: [point], cursor: point } });
@@ -76,6 +81,11 @@ export abstract class EditorCreation extends EditorGestures {
   }
 
   drawMove(screenX: number, screenY: number): void {
+    const sec = this.state.sectionDraft;
+    if (sec && this.state.tool === 'section') {
+      this.patch({ sectionDraft: { a: sec.a, b: this.snapDrawPoint(screenX, screenY, sec.a).point } });
+      return;
+    }
     const shape = this.state.shapeDraft;
     if (shape && this.shapeDragActive) {
       const { point } = this.snapDrawPoint(screenX, screenY, this.shapeMethodActive === 'rect' ? undefined : shape.points[0]);
@@ -89,6 +99,15 @@ export abstract class EditorCreation extends EditorGestures {
   }
 
   async drawEnd(screenX: number, screenY: number): Promise<void> {
+    if (this.state.tool === 'section') {
+      this.drawMove(screenX, screenY);
+      const sec = this.state.sectionDraft;
+      if (!sec) return;
+      const long = Math.hypot(sec.b.x - sec.a.x, sec.b.y - sec.a.y) >= 0.3;
+      this.patch({ sectionDraft: null, ...(long ? { sectionLine: sec } : {}) });
+      if (!long) this.notify('info', 'Arrastra una línea de al menos 30 cm por donde quieres cortar.');
+      return;
+    }
     if (this.shapeDragActive) {
       this.drawMove(screenX, screenY);
       const poly = this.shapeDraftPolygon;
@@ -113,6 +132,7 @@ export abstract class EditorCreation extends EditorGestures {
 
   /** El gesto se abandonó (entró un segundo dedo, o el sistema lo canceló). */
   drawCancel(): void {
+    if (this.state.sectionDraft) this.patch({ sectionDraft: null });
     if (this.shapeDragActive && this.state.shapeDraft) this.patch({ shapeDraft: null });
     const draft = this.state.wallDraft;
     if (!draft) return;

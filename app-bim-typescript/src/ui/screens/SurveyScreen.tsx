@@ -59,6 +59,8 @@ import { ProgressSheets } from '../workspace/progress/ProgressSheets';
 import { planSvg, faceSvg } from '../../application/report/planSvg';
 import { MeasureDialog } from '../workspace/MeasureDialog';
 import { SplitWallDialog } from '../workspace/SplitWallDialog';
+import { ProjectionView } from './ProjectionView';
+import { Projection, columnProjection, sectionProjection } from '../../application/section/projection';
 import { useSurveyMenu } from '../workspace/useSurveyMenu';
 import { buildRevitIfc } from '../workspace/exportActions';
 import { updateBridgeContext } from '../../infrastructure/bridge/devBridge';
@@ -445,6 +447,20 @@ export function SurveyScreen({
   const [draftSheetOpen, setDraftSheetOpen] = useState(false);
 
   const topoBack = topo.back;
+
+  // --- Corte y alzado de columna: vistas por plano vertical, encima de la planta ---
+  const [projection, setProjection] = useState<Projection | null>(null);
+  const sectionLine = state.sectionLine;
+  useEffect(() => {
+    if (!sectionLine) return;
+    let cancelled = false;
+    void sectionProjection(services, roomId, projectLevels, sectionLine.a, sectionLine.b).then((p) => {
+      if (!cancelled) setProjection(p);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [sectionLine, services, roomId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- Alzado (F4): vive encima de la planta, que queda intacta debajo ---
   const [elevWallId, setElevWallId] = useState<string | null>(null);
@@ -1272,7 +1288,7 @@ export function SurveyScreen({
           palette={canvasPalette}
           grid={{ show: gridLines || gridDots, lines: gridLines, dots: gridDots }}
           dragEnabled={editable && state.tool === 'select' && !state.busy}
-          drawEnabled={(editable && (state.tool === 'wall' || editor.shapeDragActive)) || progress.drawEnabled || review.drawEnabled || drafting.drawEnabled}
+          drawEnabled={(editable && (state.tool === 'wall' || state.tool === 'section' || editor.shapeDragActive)) || progress.drawEnabled || review.drawEnabled || drafting.drawEnabled}
           sketch={planSketch}
           doubleTapEnabled={state.tool === 'select' && wsState.workMode !== 'topografia'}
           rotationSnaps={topo.rotationSnaps}
@@ -1315,6 +1331,15 @@ export function SurveyScreen({
             onFacePhoto={setPendingFacePhoto}
             onOpenPhoto={onOpenPhoto}
             onClose={closeElevation}
+          />
+        ) : projection ? (
+          <ProjectionView
+            projection={projection}
+            levels={projectLevels}
+            width={canvasSize.w}
+            height={canvasSize.h}
+            chromeTop={chromeTop}
+            onClose={() => setProjection(null)}
           />
         ) : (
           <>
@@ -1401,6 +1426,14 @@ export function SurveyScreen({
                 ? () => {
                     editor.setTool('measure');
                     setPanelOpen(false);
+                  }
+                : undefined
+            }
+            onOpenColumnElevation={
+              selected instanceof Column
+                ? () => {
+                    setPanelOpen(false);
+                    void columnProjection(services, roomId, projectLevels, selected).then(setProjection);
                   }
                 : undefined
             }

@@ -39,6 +39,7 @@ import {
   withStation,
 } from '../../domain/objects/vertical';
 import type { WallOpeningId } from '../../domain/objects/wall-elevation';
+import { columnProjection, sectionProjection } from '../section/projection';
 
 /** Lo que el puente necesita de la app en marcha (lo registran App y SurveyScreen). */
 export interface BridgeContext {
@@ -83,6 +84,8 @@ const HELP = {
     'sill {id (puerta/ventana), sill} · props {id, set:{clave: valor}} · delete {id} · split {wall, at}',
   undo: 'Deshace el último paso.',
   redo: 'Rehace.',
+  section: '{ a:[x,y], b:[x,y] } lo que corta esa línea (piezas rayadas del corte).',
+  columnView: '{ id } alzado desdoblado de una columna: caras y lo que las atraviesa.',
   exportIfc: 'IFC del espacio (el mismo del menú) como texto.',
 } as const;
 
@@ -110,6 +113,16 @@ export async function runBridgeCommand(ctx: BridgeContext, cmd: string, args: Ar
     case 'redo':
       await editorOf(ctx).redo();
       return { ok: true };
+    case 'section': {
+      const [ax, ay] = args.a as Xy;
+      const [bx, by] = args.b as Xy;
+      return sectionProjection(ctx.services, scope(ctx).spaceId as never, await markers(ctx, 'level'), { x: ax, y: ay }, { x: bx, y: by });
+    }
+    case 'columnView': {
+      const c = await ctx.services.store.readObject(revitObjectId(String(args.id)));
+      if (!(c instanceof Column)) throw new Error(`"${String(args.id)}" no es una columna.`);
+      return columnProjection(ctx.services, scope(ctx).spaceId as never, await markers(ctx, 'level'), c);
+    }
     case 'exportIfc':
       if (!ctx.exportIfc) throw new Error('Abre un espacio para exportar su IFC.');
       return { ifc: await ctx.exportIfc() };

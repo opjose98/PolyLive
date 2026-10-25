@@ -175,6 +175,7 @@ export const CATEGORIES_PLAN: readonly CategoryDef[] = [
       { id: 'vacio', label: 'Vacío en suelo', icon: 'vector-difference-ab', binding: { kind: 'plan', tool: 'void' }, methods: SHAPE_METHODS },
       { id: 'vano', label: 'Vano', icon: 'rectangle-outline', props: { width: 80 }, binding: { kind: 'plan', tool: 'opening' } },
       { id: 'dividir', label: 'Dividir muro', icon: 'content-cut', binding: { kind: 'plan', tool: 'split' } },
+      { id: 'corte', label: 'Corte', icon: 'arrow-split-vertical', binding: { kind: 'plan', tool: 'section' } },
     ],
   },
   {

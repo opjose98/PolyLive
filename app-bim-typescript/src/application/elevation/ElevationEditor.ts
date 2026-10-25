@@ -32,6 +32,8 @@ import { LEVEL_PROP, ProjectMarker } from '../../domain/objects/marker';
 import { LevelElevations, VerticalExtent, WallProfile, WallVertical, extentAt, profileBottom, profileHeight, profileProblem, resolveWallProfile, wallVerticalOf, withStation, withoutStation } from '../../domain/objects/vertical';
 import { OpeningType, WallElevation, WallOpening, WallOpeningId, WallQuantification, computeQuantification, effectiveLeftHeight, effectiveRightHeight, levelsFromProfile, openingEnd, openingTop, OPENING_DEFAULTS, profileStations } from '../../domain/objects/wall-elevation';
 import { reportFailure } from '../../shared/diagnostics';
+import { CutKind, sectionCuts } from '../../domain/section/sectionCut';
+import { loadCutModel } from '../section/cutModel';
 import type { AppServices } from '../AppServices';
 import { ElevationSeverity, ElevationViewport, snapXSmart, snapYSmart } from './WallElevationService';
 
@@ -39,6 +41,16 @@ export type ElevationTool = 'select' | OpeningType | 'station';
 export type WallSide = 'A' | 'B';
 
 /** Punto del perfil: un extremo del muro o una estación (por su posición). */
+/** Pieza cortada en el alzado, en CSL (x a lo largo del muro, y sobre su base más baja). */
+interface ElevationCut {
+  readonly id: string;
+  readonly kind: CutKind;
+  readonly x0: number;
+  readonly x1: number;
+  readonly y0: number;
+  readonly y1: number;
+}
+
 export type ProfilePointRef = { readonly kind: 'start' } | { readonly kind: 'end' } | { readonly kind: 'station'; readonly at: number };
 
 /** Distancia mínima de una estación a los extremos y a otra estación. */
@@ -70,6 +82,11 @@ export interface ElevationEditorState {
   readonly dragPreview: WallOpening | null;
   /** Punto del perfil seleccionado (abre el selector de base y tope). */
   readonly selectedPoint: ProfilePointRef | null;
+  /**
+   * Lo que atraviesa el muro (otros muros, columnas, vigas): rectángulos en CSL
+   * que el alzado dibuja rayados. La app no bloquea choques; los muestra.
+   */
+  readonly cuts: readonly ElevationCut[];
   readonly busy: boolean;
   readonly notice: { kind: 'info' | 'error' | 'success'; message: string } | null;
 }
@@ -110,6 +127,7 @@ export class ElevationEditor {
       selectedId: null,
       dragPreview: null,
       selectedPoint: null,
+      cuts: [],
       busy: false,
       notice: null,
     };
@@ -172,6 +190,7 @@ export class ElevationEditor {
       this.stored = await this.services.elevations.getElevation(wall);
       this.publish(wall, this.stored);
       if (fit) this.zoomToFit();
+      await this.loadCuts(wall);
     } catch (err) {
       // La vista llama a load() sin esperar: un error aquí no debe quedar
       // como promesa rechazada sin manejar.
@@ -194,6 +213,25 @@ export class ElevationEditor {
       baseElevation,
       levelLines: this.levels.map((m) => ({ id: m.id, name: m.name, y: m.value - baseElevation, cota: m.value })),
       selectedId,
+    });
+  }
+
+  /** Muros, columnas y vigas que entran en el espesor del muro, en CSL. */
+  private async loadCuts(wall: Wall): Promise<void> {
+    const base = this.levels.find((m) => m.isBase)?.id ?? '';
+    const model = await loadCutModel(this.services, wall.roomId, this.levelElevations, base);
+    const pieces = sectionCuts(
+      {
+        origin: wall.startPoint,
+        dir: { x: wall.endPoint.x - wall.startPoint.x, y: wall.endPoint.y - wall.startPoint.y },
+        length: wall.length as number,
+        halfWidth: (wall.thickness as number) / 2 + 0.005,
+      },
+      { ...model, walls: model.walls?.filter((w) => w.id !== (wall.id as string)), slabs: [] },
+    );
+    const y0 = this.state.baseElevation;
+    this.patch({
+      cuts: pieces.flatMap((p) => p.bands.map(([z0, z1]) => ({ id: p.id, kind: p.kind, x0: p.x0, x1: p.x1, y0: z0 - y0, y1: z1 - y0 }))),
     });
   }
 

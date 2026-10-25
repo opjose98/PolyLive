@@ -24,6 +24,7 @@ import type { ElevationSeverity, ElevationViewport } from '../../application/ele
 import { CANVAS_PALETTES, CanvasPalette } from '../design/canvasThemes';
 import { drawSketch, SketchShape } from './sketch';
 import { withAlpha } from '../design/tokens';
+import { hatchSegments } from './wallGeometry';
 
 export interface ElevationScene {
   readonly elevation: WallElevation;
@@ -56,6 +57,12 @@ export interface ElevationScene {
   readonly annotations?: readonly SketchShape[];
   /** Trazo en curso (pincel o marca), en (u, v). Mejor por `liveSketch` del lienzo: no regraba el muro. */
   readonly sketch?: readonly SketchShape[];
+  /** Elementos cortados (otros muros, columnas, vigas, losas): rectángulos en CSL, rayados. */
+  readonly cuts?: readonly { readonly x0: number; readonly x1: number; readonly y0: number; readonly y1: number; readonly kind: string }[];
+  /** Sin muro de fondo (corte de sección): solo lo cortado y los niveles. */
+  readonly hideWall?: boolean;
+  /** Divisiones verticales con rótulo (caras de una columna desdoblada). */
+  readonly dividers?: readonly { readonly x: number; readonly label: string }[];
   /** Puntos del perfil (extremos y estaciones) tocables: base y tope en CSL. */
   readonly profileHandles?: readonly { x: number; base: number; top: number; selected: boolean; station: boolean }[];
 }
@@ -94,12 +101,14 @@ export function drawElevation(r: ICanvasRenderer, scene: ElevationScene): void {
 
   if (scene.showGrid) drawHeightGrid(ctx);
   drawLevelLines(ctx);
-  drawWallSilhouette(ctx);
+  if (!scene.hideWall) drawWallSilhouette(ctx);
   if (scene.progressLayers?.length) drawFaceProgress(ctx);
   for (const o of openings) drawOpening(ctx, o);
-  drawReferenceLines(ctx);
+  if (scene.cuts?.length) drawCuts(ctx);
+  if (scene.dividers?.length) drawDividers(ctx);
+  if (!scene.hideWall) drawReferenceLines(ctx);
   if (scene.profileHandles?.length) drawProfileHandles(ctx);
-  if (scene.showLabels) drawElevationLabels(ctx);
+  if (scene.showLabels && !scene.hideWall) drawElevationLabels(ctx);
   drawLevelLabels(ctx);
   if (scene.annotations?.length) drawSketch(r, scene.annotations, toScreen, viewport.scale);
   if (scene.markups?.length) drawSketch(r, scene.markups, toScreen, viewport.scale);
@@ -240,6 +249,44 @@ function drawOpening({ r, scene, pal, toScreen }: Ctx, opening: WallOpening): vo
       r.setLineWidth(2);
       r.strokeCircle(p.x, p.y, 7);
     }
+  }
+}
+
+/** Lo cortado: relleno de fondo, trama a 45° y contorno grueso (convención de sección). */
+function drawCuts({ r, scene, pal, toScreen }: Ctx): void {
+  for (const c of scene.cuts ?? []) {
+    const poly = [
+      { x: c.x0, y: c.y0 },
+      { x: c.x1, y: c.y0 },
+      { x: c.x1, y: c.y1 },
+      { x: c.x0, y: c.y1 },
+    ].map(toScreen);
+    r.setFillStyle(c.kind === 'slab' ? pal.existingFill : pal.background);
+    r.fillPolygon(poly);
+    r.setStrokeStyle(pal.ink);
+    r.setLineWidth(0.8 * pal.lineScale);
+    for (const [a, b] of hatchSegments(poly, (c.kind === 'column' ? 5 : 8) * pal.lineScale, c.kind === 'column' ? -Math.PI / 4 : Math.PI / 4)) {
+      r.drawLine(a.x, a.y, b.x, b.y);
+    }
+    r.setLineWidth(2.2 * pal.lineScale);
+    r.strokePolygon(poly);
+  }
+}
+
+/** Aristas de la columna desdoblada, con el nombre de cada cara arriba. */
+function drawDividers({ r, scene, pal, toScreen }: Ctx): void {
+  const top = Math.max(scene.elevation.levels.coronacion, ...(scene.cuts ?? []).map((c) => c.y1));
+  r.setStrokeStyle(pal.ink);
+  r.setLineWidth(1.2 * pal.lineScale);
+  const xs = (scene.dividers ?? []).map((d) => d.x);
+  for (const [i, d] of (scene.dividers ?? []).entries()) {
+    const a = toScreen({ x: d.x, y: 0 });
+    const b = toScreen({ x: d.x, y: top });
+    if (i > 0) r.drawLine(a.x, a.y, b.x, b.y);
+    const next = xs[i + 1] ?? scene.wallLength;
+    const c = toScreen({ x: (d.x + next) / 2, y: top });
+    r.setFillStyle(pal.label);
+    r.drawText(d.label, c.x, c.y - 10, 11, 'center');
   }
 }
 
