@@ -37,7 +37,9 @@ export interface SketchSource {
   get(): readonly SketchShape[];
 }
 
-export const EMPTY_SKETCH: SketchSource = { subscribe: () => () => undefined, get: () => [] };
+// El mismo arreglo siempre: useSyncExternalStore toma un arreglo nuevo por un cambio y entra en bucle.
+const NO_SHAPES: readonly SketchShape[] = [];
+export const EMPTY_SKETCH: SketchSource = { subscribe: () => () => undefined, get: () => NO_SHAPES };
 
 /** Une varias capas vivas en una (el lienzo tiene una sola). Conserva la identidad mientras nada cambie. */
 export function mergeSketches(...sources: readonly SketchSource[]): SketchSource {
