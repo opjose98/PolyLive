@@ -18,13 +18,14 @@ import type { AppServices } from '../AppServices';
 import type { EditorController } from '../editor/EditorController';
 import type { Point2D } from '../../domain/geometry/types';
 import { meters } from '../../domain/geometry/types';
-import { revitObjectId, wallId as toWallId } from '../../domain/objects/base';
+import { generateId, revitObjectId, wallId as toWallId } from '../../domain/objects/base';
 import { Wall } from '../../domain/objects/wall';
 import { Door } from '../../domain/objects/door';
 import { Window } from '../../domain/objects/window';
 import { Column } from '../../domain/objects/column';
 import { Floor, floorZoneId } from '../../domain/objects/floor';
-import { LEVEL_PROP, PHASE_PROP, ProjectMarker } from '../../domain/objects/marker';
+import { BASE_MARKER_NAME, LEVEL_PROP, LEVEL_TEMPLATE, PHASE_PROP, ProjectMarker } from '../../domain/objects/marker';
+import { applySpaceSetup } from '../projects/spaceSetup';
 import {
   LevelElevations,
   VerticalExtent,
@@ -79,6 +80,8 @@ interface ExtentSpec {
 const HELP = {
   help: 'Esta lista.',
   projects: 'Proyectos con sus espacios (ids y nombres).',
+  createProject:
+    '{ name, code?, author?, space, levels: [{ name, value }], phases?: [nombre] } crea el proyecto y su espacio con niveles y fases (como el diálogo); luego «open».',
   open: '{ project, space } (id o nombre): abre el espacio en la tableta.',
   levels: 'Niveles y fases del espacio abierto.',
   setLevels: '{ levels: [{ name, value }] } crea o ajusta niveles por nombre (no borra; los objetos siguen atados).',
@@ -91,7 +94,7 @@ const HELP = {
     'column {at:[x,y], w, d, circular, rotation, v:{base,top}} · ' +
     'floor {zone | outline:[[x,y]…], holes, thickness} · void {floor, hole:[[x,y]…]} · ' +
     'vertical {id, v | a, b, stations} · station {wall, at, top, topOffset, base, baseOffset} (at sin top = quitarla) · ' +
-    'sill {id (puerta/ventana), sill} · props {id, set:{clave: valor}} · delete {id} · split {wall, at} · merge {wall, with} (une tramos alineados; el común pasa a estación si quiebra)',
+    'sill {id (puerta/ventana), sill} · props {id, set:{clave: valor}} · delete {id} · split {wall, at} · merge {wall, with} · section {a, b, name} (corte guardado) (une tramos alineados; el común pasa a estación si quiebra)',
   undo: 'Deshace el último paso.',
   redo: 'Rehace.',
   section: '{ a:[x,y], b:[x,y] } lo que corta esa línea (piezas rayadas del corte).',
@@ -108,6 +111,8 @@ export async function runBridgeCommand(ctx: BridgeContext, cmd: string, args: Ar
       return { ok: true, projectId: ctx.projectId, spaceId: ctx.spaceId };
     case 'projects':
       return listProjects(ctx);
+    case 'createProject':
+      return createProject(ctx, args);
     case 'open':
       return open(ctx, args);
     case 'levels':
@@ -163,6 +168,21 @@ async function listProjects(ctx: BridgeContext) {
     });
   }
   return out;
+}
+
+async function createProject(ctx: BridgeContext, args: Args) {
+  const name = String(args.name ?? '').trim();
+  if (!name) throw new Error('Falta el nombre del proyecto.');
+  const project = await ctx.services.projects.createProject({
+    name,
+    ...(args.code ? { bimCode: String(args.code) } : {}),
+    ...(args.author ? { author: String(args.author) } : {}),
+  });
+  const { room } = await ctx.services.projects.createSpace({ projectId: project.id, name: String(args.space ?? 'Espacio 1') });
+  const levels = (args.levels as { name: string; value: number }[] | undefined) ?? [...LEVEL_TEMPLATE];
+  const phases = (args.phases as string[] | undefined) ?? [BASE_MARKER_NAME.phase];
+  await applySpaceSetup(ctx.services.markers, { projectId: project.id as string, spaceId: room.roomId as string }, { levels, phases });
+  return { project: project.id, code: project.bimCode, space: room.roomId };
 }
 
 async function open(ctx: BridgeContext, args: Args) {
@@ -290,6 +310,9 @@ async function objects(ctx: BridgeContext) {
         ...(f.holes?.length ? { holes: f.holes.map((h) => h.map(xy)) } : {}),
       })),
     zones: zones.map((z) => ({ id: z.id, number: z.number, name: z.name, level: name(z.levelId) })),
+    sections: (await ctx.services.drafts.list(spaceId as string))
+      .filter((d) => d.kind === 'section')
+      .map((d) => ({ id: d.id, name: d.text, a: xy(d.points[0]), b: xy(d.points[1]) })),
   };
 }
 
@@ -538,6 +561,24 @@ async function ops(ctx: BridgeContext, args: Args) {
           levels: elev,
         });
         return { id: a.id, length: r.length, mismatch: r.mismatch };
+      }
+      case 'section': {
+        // Corte guardado (dibujo técnico de planta, visible en todos los niveles).
+        const [ax, ay] = o.a as Xy;
+        const [bx, by] = o.b as Xy;
+        const id = generateId() as string;
+        await ctx.services.drafts.add({
+          id,
+          spaceId: scope(ctx).spaceId,
+          view: { kind: 'plan' },
+          levelId: '',
+          kind: 'section',
+          points: [{ x: ax, y: ay }, { x: bx, y: by }],
+          text: String(o.name ?? 'Corte'),
+          props: {},
+          createdAt: new Date().toISOString(),
+        });
+        return id;
       }
       case 'split': {
         const wall = await wallOf(o.wall);

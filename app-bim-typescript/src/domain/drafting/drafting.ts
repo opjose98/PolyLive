@@ -16,10 +16,11 @@ import { polygonArea } from '../geometry/polygon-utils';
 
 export type DraftView = { readonly kind: 'plan' } | { readonly kind: 'wallFace'; readonly wallId: string; readonly side: 'A' | 'B' };
 
-export type DraftKind = 'dimension' | 'text' | 'tag' | 'coordinate' | 'line' | 'polygon' | 'beam' | 'truss' | 'purlin';
+/** `section`: línea de corte guardada (su vista se abre desde la selección). */
+export type DraftKind = 'dimension' | 'text' | 'tag' | 'coordinate' | 'line' | 'polygon' | 'beam' | 'truss' | 'purlin' | 'section';
 
 /** Herramientas que se dibujan arrastrando de A a B. */
-export const TWO_POINT_KINDS: readonly DraftKind[] = ['dimension', 'line', 'beam', 'truss'];
+export const TWO_POINT_KINDS: readonly DraftKind[] = ['dimension', 'line', 'beam', 'truss', 'section'];
 /** Herramientas de un solo toque. */
 export const ONE_POINT_KINDS: readonly DraftKind[] = ['text', 'tag', 'coordinate', 'purlin'];
 
@@ -120,4 +121,5 @@ export const DRAFT_DEFAULTS: Readonly<Record<DraftKind, Readonly<Record<string, 
   beam: { width: 0.3, depth: 0.4 },
   truss: { depth: 0.6 },
   purlin: { width: 0.1, depth: 0.2 },
+  section: {},
 };

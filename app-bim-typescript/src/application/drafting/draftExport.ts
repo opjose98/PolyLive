@@ -127,6 +127,12 @@ export function draftDxfEntities(items: readonly DraftItem[], ctx: DraftDxfConte
         break;
       case 'purlin':
         break; // solo en alzado (sección)
+      case 'section':
+        // Línea de corte a trazos con su nombre en los dos extremos.
+        if (!a || !b) break;
+        out.push({ kind: 'line', layer: L.sections, a, b, dashed: true });
+        for (const p of [a, b]) out.push({ kind: 'text', layer: L.sections, at: p, text: i.text || 'Corte', height: h(2.5), center: true });
+        break;
     }
   }
   return out;

@@ -130,3 +130,32 @@ describe('puente: corte y columna', () => {
     fs.rmSync(dbPath, { force: true });
   });
 });
+
+describe('puente: proyecto nuevo y cortes guardados', () => {
+  it('crea el proyecto con su espacio y niveles, y guarda un corte que se lista y se proyecta', async () => {
+    const dbPath = path.join(os.tmpdir(), `bridge3-${Date.now()}.db`);
+    const db = new Database(dbPath);
+    await db.open();
+    await db.migrate();
+    const services = createAppServices(db);
+    const base: BridgeContext = { services, editor: null, projectId: null, spaceId: null };
+    const made = (await runBridgeCommand(base, 'createProject', {
+      name: 'NARG29 PRUEBA',
+      space: 'B1 Primer piso',
+      levels: [{ name: 'Piso', value: 0 }, { name: 'Muro', value: 2.5 }, { name: 'Cubierta', value: 3.4 }],
+    })) as { project: string; space: string };
+    const editor = new EditorController({ services, roomId: made.space as never, roomObjectId: made.space as never, initialTransform: { scale: 100, offsetX: 0, offsetY: 0 } });
+    await editor.init();
+    const ctx: BridgeContext = { ...base, editor, projectId: made.project, spaceId: made.space };
+    expect(((await runBridgeCommand(ctx, 'levels')) as { levels: { name: string }[] }).levels.map((l) => l.name)).toEqual(['Piso', 'Muro', 'Cubierta']);
+
+    await runBridgeCommand(ctx, 'ops', { list: [{ op: 'wall', start: [0, 0], end: [6, 0], thickness: 0.15, v: { base: 'Piso', top: 'Muro' } }] });
+    const [sec] = (await runBridgeCommand(ctx, 'ops', { list: [{ op: 'section', a: [3, -2], b: [3, 2], name: 'Transversal' }] })) as string[];
+    const objs = (await runBridgeCommand(ctx, 'objects')) as { sections: { id: string; name: string }[] };
+    expect(objs.sections).toEqual([{ id: sec, name: 'Transversal', a: [3, -2], b: [3, 2] }]);
+    const cut = (await runBridgeCommand(ctx, 'section', { a: [3, -2], b: [3, 2] })) as { cuts: unknown[] };
+    expect(cut.cuts).toHaveLength(1);
+    await db.close();
+    fs.rmSync(dbPath, { force: true });
+  });
+});

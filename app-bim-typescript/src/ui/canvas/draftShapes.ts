@@ -137,6 +137,20 @@ export function draftShapes(items: readonly DraftItem[], ctx: DraftRenderContext
         out.push({ kind: 'segs', segments: trussSegments(a, b, i.props.depth ?? 0.6), color, widthPx: w });
         out.push({ kind: 'label', at: off({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, -10), lines: [`Cercha ${f2(itemLength(i))} m`], color, size: 10 });
         break;
+      case 'section': {
+        // Convención de corte: trazo y punto, con flechas a la izquierda de A→B (hacia donde se mira).
+        const len = itemLength(i) || 1;
+        const nx = -(b.y - a.y) / len;
+        const ny = (b.x - a.x) / len;
+        const arrow = Math.min(0.6, len / 6);
+        out.push({ kind: 'segs', segments: [[a, b]], color, widthPx: w + 1.2, dash: true });
+        for (const p of [a, b]) {
+          const tip = { x: p.x + nx * arrow, y: p.y + ny * arrow };
+          out.push({ kind: 'segs', segments: [[p, tip]], color, widthPx: w + 1.2 });
+          out.push({ kind: 'label', at: { x: tip.x + nx * arrow * 0.6, y: tip.y + ny * arrow * 0.6 }, lines: [i.text || 'Corte'], color, size: 11 });
+        }
+        break;
+      }
       case 'purlin': {
         const hw = (i.props.width ?? 0.1) / 2;
         const hd = (i.props.depth ?? 0.2) / 2;

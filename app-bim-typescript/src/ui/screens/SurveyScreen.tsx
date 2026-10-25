@@ -78,7 +78,7 @@ import { zoneCode, zoneCode as zoneCodeOf } from '../../domain/objects/zone';
 
 import { ElevationEditor } from '../../application/elevation/ElevationEditor';
 import { ElevationView } from './ElevationView';
-import type { CanvasTransform } from '../../domain/geometry/types';
+import type { CanvasTransform, Point2D } from '../../domain/geometry/types';
 
 import { useStore } from 'zustand';
 import { CameraCaptureView } from '../components/CameraCaptureView';
@@ -450,17 +450,10 @@ export function SurveyScreen({
 
   // --- Corte y alzado de columna: vistas por plano vertical, encima de la planta ---
   const [projection, setProjection] = useState<Projection | null>(null);
-  const sectionLine = state.sectionLine;
-  useEffect(() => {
-    if (!sectionLine) return;
-    let cancelled = false;
-    void sectionProjection(services, roomId, projectLevels, sectionLine.a, sectionLine.b).then((p) => {
-      if (!cancelled) setProjection(p);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [sectionLine, services, roomId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const openSection = useCallback(
+    (a: Point2D, b: Point2D, name: string) => void sectionProjection(services, roomId, projectLevels, a, b, name).then(setProjection),
+    [services, roomId, projectLevels],
+  );
 
   // --- Alzado (F4): vive encima de la planta, que queda intacta debajo ---
   const [elevWallId, setElevWallId] = useState<string | null>(null);
@@ -1017,6 +1010,10 @@ export function SurveyScreen({
     bpcActions.push({ icon: 'undo-variant', label: 'Quitar punto', onPress: () => drafting.ctl.undoPolygonPoint() });
   }
   if (drafting.state.selectedId && !drafting.tool) {
+    const sec = drafting.ctl.selected;
+    if (sec?.kind === 'section' && sec.points.length >= 2) {
+      bpcActions.push({ icon: 'arrow-split-vertical', label: 'Ver corte', onPress: () => openSection(sec.points[0], sec.points[1], sec.text || 'Corte') });
+    }
     bpcActions.push({ icon: 'tune-variant', label: 'Dibujo', onPress: () => setDraftSheetOpen(true) });
   }
   if (review.active) {
@@ -1117,9 +1114,11 @@ export function SurveyScreen({
       if (c instanceof Column) setProjection(await columnProjection(services, roomId, projectLevels, c));
     };
     bridgeUi.current.section = async (a) => {
-      const [ax, ay] = a.a as [number, number];
-      const [bx, by] = a.b as [number, number];
-      setProjection(await sectionProjection(services, roomId, projectLevels, { x: ax, y: ay }, { x: bx, y: by }));
+      // Por id (un corte guardado) o por dos puntos sueltos.
+      const saved = a.id ? (await services.drafts.list(roomId as string)).find((d) => d.id === a.id && d.kind === 'section') : undefined;
+      const [ax, ay] = saved ? [saved.points[0].x, saved.points[0].y] : (a.a as [number, number]);
+      const [bx, by] = saved ? [saved.points[1].x, saved.points[1].y] : (a.b as [number, number]);
+      setProjection(await sectionProjection(services, roomId, projectLevels, { x: ax, y: ay }, { x: bx, y: by }, saved?.text ?? 'Corte'));
     };
     bridgeUi.current.tool = (a) => (a.id ? editor.setTool(a.id as never) : editor.setTool('select'));
   });
@@ -1312,7 +1311,7 @@ export function SurveyScreen({
           palette={canvasPalette}
           grid={{ show: gridLines || gridDots, lines: gridLines, dots: gridDots }}
           dragEnabled={editable && state.tool === 'select' && !state.busy}
-          drawEnabled={(editable && (state.tool === 'wall' || state.tool === 'section' || editor.shapeDragActive)) || progress.drawEnabled || review.drawEnabled || drafting.drawEnabled}
+          drawEnabled={(editable && (state.tool === 'wall' || editor.shapeDragActive)) || progress.drawEnabled || review.drawEnabled || drafting.drawEnabled}
           sketch={planSketch}
           doubleTapEnabled={state.tool === 'select' && wsState.workMode !== 'topografia'}
           rotationSnaps={topo.rotationSnaps}

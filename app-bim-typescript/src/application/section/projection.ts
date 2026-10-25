@@ -57,6 +57,8 @@ export async function sectionProjection(
   levels: readonly ProjectMarker[],
   a: Point2D,
   b: Point2D,
+  /** Nombre del corte guardado (Corte 1, Longitudinal…). */
+  name = 'Corte',
 ): Promise<Projection> {
   const model = await loadCutModel(services, spaceId, elevationsOf(levels), baseOf(levels));
   const length = Math.hypot(b.x - a.x, b.y - a.y);
@@ -68,7 +70,7 @@ export async function sectionProjection(
   for (const p of pieces) counts.set(p.kind, (counts.get(p.kind) ?? 0) + 1);
   const label: Record<CutKind, string> = { wall: 'muro(s)', column: 'columna(s)', slab: 'losa(s)', beam: 'viga(s)' };
   return {
-    title: 'Corte',
+    title: name,
     detail: pieces.length ? [...counts].map(([k, n]) => `${n} ${label[k]}`).join(' · ') : 'No corta nada',
     length,
     yBase,

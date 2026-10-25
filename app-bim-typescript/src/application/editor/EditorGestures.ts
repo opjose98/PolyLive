@@ -55,9 +55,6 @@ export abstract class EditorGestures extends EditorCore {
         return this.state.creation.floor === 'zone' ? this.addFloor(screenX, screenY) : this.shapeTap(screenX, screenY, tol);
       case 'void':
         return this.shapeTap(screenX, screenY, tol);
-      case 'section':
-        this.notify('info', 'Arrastra una línea por donde quieres cortar: se abre el corte.');
-        return;
       case 'opening':
         return this.addGenericOpening(world, tol);
       case 'measure':

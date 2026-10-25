@@ -83,7 +83,7 @@ export interface PhotoMarkerView {
 // Herramientas y estado
 // ---------------------------------------------------------------------------
 
-export type EditorTool = 'select' | 'wall' | 'door' | 'window' | 'column' | 'floor' | 'opening' | 'measure' | 'photo' | 'split' | 'void' | 'section';
+export type EditorTool = 'select' | 'wall' | 'door' | 'window' | 'column' | 'floor' | 'opening' | 'measure' | 'photo' | 'split' | 'void';
 
 /** Valores por defecto de los objetos que el editor crea. Editables en Ajustes. */
 interface EditorDefaults {
@@ -212,10 +212,6 @@ export interface EditorState {
   readonly creation: CreationMethods;
   readonly wallDraft: WallDraft | null;
   readonly shapeDraft: ShapeDraft | null;
-  /** Línea de corte en trazado (herramienta Corte). */
-  readonly sectionDraft: { readonly a: Point2D; readonly b: Point2D } | null;
-  /** Último corte trazado: la vista lo abre. */
-  readonly sectionLine: { readonly a: Point2D; readonly b: Point2D } | null;
   /** Recintos cerrados que forman los muros, recalculados en cada cambio. */
   readonly rooms: readonly DetectedRoom[];
   readonly selectedId: RevitObjectId | null;
@@ -368,8 +364,6 @@ export abstract class EditorCore {
       creation: { wall: 'drag', column: 'rectangular', floor: 'zone', void: 'rect' },
       wallDraft: null,
       shapeDraft: null,
-      sectionDraft: null,
-      sectionLine: null,
       rooms: [],
       selectedId: null,
       selectedZoneId: null,

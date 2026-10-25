@@ -82,6 +82,7 @@ export const DRAFT_DXF_LAYERS = {
   areas: 'A-AREA',
   beams: 'S-BEAM',
   trusses: 'S-TRUS',
+  sections: 'A-SECT',
 } as const;
 
 export type DxfDraftEntity =
@@ -298,6 +299,7 @@ export class DXFSerializer {
       [DRAFT_DXF_LAYERS.areas, 4],
       [DRAFT_DXF_LAYERS.beams, 30],
       [DRAFT_DXF_LAYERS.trusses, 30],
+      [DRAFT_DXF_LAYERS.sections, 1],
     ];
 
     this.tableHeader('LAYER', H_LAYER_TABLE, layers.length);
