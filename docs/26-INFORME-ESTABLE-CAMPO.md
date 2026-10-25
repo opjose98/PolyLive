@@ -288,6 +288,9 @@ muros levantados (≈1,9 cm por píxel en MARA): conviene confirmarlos en obra.
 
 **Hallazgos de la ronda:** H-79, H-80 y H-81 corregidos.
 
+Las sedes 5 a 15 (once con planos ARQ), el informe del puente con IA y el informe final de esta etapa están en
+docs/27.
+
 **Auditoría del código de la ronda** (revisión de todo el diff, 10 hallazgos, todos corregidos con pruebas): el puente
 exige una cabecera propia (una página web no puede mandarle comandos) y no martilla el puerto ante errores; las
 estaciones que quedan fuera al acortar un muro ya no suben su altura ni su restricción de Revit; los cortes ignoran
