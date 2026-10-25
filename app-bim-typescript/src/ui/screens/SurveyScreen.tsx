@@ -1101,6 +1101,26 @@ export function SurveyScreen({
   );
   const handleZoomFit = useCallback(() => handleZoom('zoomFit'), [handleZoom]);
   // --- Menú ☰ y entregables (IFC, plano PDF, cuadro de áreas, registro fotográfico, paquete) ---
+  // Acciones de pantalla del puente (se leen en el momento: siempre con el estado vigente).
+  const bridgeUi = useRef<Record<string, (a: Record<string, unknown>) => unknown>>({});
+  bridgeUi.current.fit = () => editor.zoomToFit(canvasSize.w, canvasSize.h);
+  bridgeUi.current.select = (a) => editor.select(revitObjectId(String(a.id)));
+  bridgeUi.current.close = () => {
+    setProjection(null);
+    if (elevWallId) closeElevation();
+  };
+  bridgeUi.current.elevation = (a) => openElevation(String(a.wall));
+  bridgeUi.current.column = async (a) => {
+    const c = await services.store.readObject(revitObjectId(String(a.id)));
+    if (c instanceof Column) setProjection(await columnProjection(services, roomId, projectLevels, c));
+  };
+  bridgeUi.current.section = async (a) => {
+    const [ax, ay] = a.a as [number, number];
+    const [bx, by] = a.b as [number, number];
+    setProjection(await sectionProjection(services, roomId, projectLevels, { x: ax, y: ay }, { x: bx, y: by }));
+  };
+  bridgeUi.current.tool = (a) => (a.id ? editor.setTool(a.id as never) : editor.setTool('select'));
+
   // Puente de desarrollo: ve este editor y exporta el IFC como el menú.
   useEffect(() => {
     if (!__DEV__) return;
@@ -1110,6 +1130,7 @@ export function SurveyScreen({
       spaceId: roomId as string,
       exportIfc: async () =>
         (await buildRevitIfc(services, { roomId, projectId, projectName: projectName ?? 'Proyecto', spaceName: roomName ?? 'Espacio', author: operatorName })).content,
+      ui: bridgeUi.current,
     });
     return () => updateBridgeContext({ editor: null, projectId: null, spaceId: null, exportIfc: undefined });
   }, [editor, services, projectId, roomId, projectName, roomName, operatorName]);
@@ -1434,6 +1455,14 @@ export function SurveyScreen({
                 ? () => {
                     setPanelOpen(false);
                     void columnProjection(services, roomId, projectLevels, selected).then(setProjection);
+                  }
+                : undefined
+            }
+            onMerge={
+              selected instanceof Wall && editor.mergeCandidate(selected)
+                ? () => {
+                    setPanelOpen(false);
+                    void editor.mergeSelectedWall();
                   }
                 : undefined
             }

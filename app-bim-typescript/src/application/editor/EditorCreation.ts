@@ -672,6 +672,60 @@ export abstract class EditorCreation extends EditorGestures {
     }
   }
 
+  /**
+   * Muro colineal que comparte un extremo con `wall` y su mismo espesor (lo
+   * que «Unir» junta con él), o null. Con dos candidatos, el del extremo final.
+   */
+  mergeCandidate(wall: Wall): Wall | null {
+    if (!wall.isStraight) return null;
+    const near = (p: Point2D, q: Point2D) => Math.hypot(p.x - q.x, p.y - q.y) <= 2e-3;
+    const dir = Math.atan2(wall.endPoint.y - wall.startPoint.y, wall.endPoint.x - wall.startPoint.x);
+    const parallel = (w: Wall) => {
+      let d = Math.abs(Math.atan2(w.endPoint.y - w.startPoint.y, w.endPoint.x - w.startPoint.x) - dir) % Math.PI;
+      if (d > Math.PI / 2) d = Math.PI - d;
+      return d < 0.01;
+    };
+    const candidates = this.walls.filter(
+      (w) =>
+        w.id !== wall.id &&
+        w.isStraight &&
+        Math.abs((w.thickness as number) - (wall.thickness as number)) < 1e-6 &&
+        parallel(w) &&
+        [w.startPoint, w.endPoint].some((p) => near(p, wall.startPoint) || near(p, wall.endPoint)),
+    );
+    // Un tercer muro en el nudo (T) no impide unir: la T sigue siendo T.
+    return candidates.find((w) => near(w.startPoint, wall.endPoint) || near(w.endPoint, wall.endPoint)) ?? candidates[0] ?? null;
+  }
+
+  /** Une el muro seleccionado con su tramo colineal (inverso de partir): un paso de deshacer. */
+  async mergeSelectedWall(): Promise<boolean> {
+    const sel = this.selected;
+    if (!(sel instanceof Wall)) return false;
+    const other = this.mergeCandidate(sel);
+    if (!other) {
+      this.notify('info', 'Este muro no tiene un tramo alineado con el que unirse.');
+      return false;
+    }
+    this.patch({ busy: true });
+    try {
+      const r = await this.services.useCases.mergeWalls.execute({
+        keepId: sel.id,
+        removeId: other.id,
+        keepVertical: this.wallVertical(sel),
+        removeVertical: this.wallVertical(other),
+        levels: this.levelElevations,
+      });
+      await this.reload();
+      this.notify('success', `Muros unidos: ${r.length.toFixed(2)} m.`);
+      return true;
+    } catch (err) {
+      this.fail(err, 'No se pudieron unir los muros.');
+      return false;
+    } finally {
+      this.patch({ busy: false });
+    }
+  }
+
   protected async splitWall(sel: Wall, distance: Meters): Promise<boolean> {
     this.patch({ busy: true });
     try {

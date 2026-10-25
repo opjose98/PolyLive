@@ -28,7 +28,9 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Arranca el bucle; devuelve la función que lo detiene. */
 export function startDevBridge(services: AppServices, url = DEFAULT_URL): () => void {
-  context = { services, editor: null, projectId: null, spaceId: null };
+  // Cada bucle tiene su contexto: un recargado en caliente para el bucle viejo y crea otro.
+  const own: MutableContext = { services, editor: null, projectId: null, spaceId: null };
+  context = own;
   let stopped = false;
   void (async () => {
     while (!stopped) {
@@ -38,7 +40,7 @@ export function startDevBridge(services: AppServices, url = DEFAULT_URL): () => 
         const c = (await r.json()) as { id: string; cmd: string; args?: Record<string, unknown> };
         let out: { id: string; ok: boolean; result?: unknown; error?: string };
         try {
-          out = { id: c.id, ok: true, result: await runBridgeCommand(context!, c.cmd, c.args) };
+          out = { id: c.id, ok: true, result: await runBridgeCommand(context ?? own, c.cmd, c.args) };
         } catch (err) {
           const e = err as { userMessage?: string; message?: string };
           out = { id: c.id, ok: false, error: e.userMessage ?? e.message ?? String(err) };
@@ -51,6 +53,6 @@ export function startDevBridge(services: AppServices, url = DEFAULT_URL): () => 
   })();
   return () => {
     stopped = true;
-    context = null;
+    if (context === own) context = null;
   };
 }

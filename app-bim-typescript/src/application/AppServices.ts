@@ -44,6 +44,7 @@ import {
 import { ExportRoomDxfUseCase } from './use-cases/ExportRoomDxfUseCase';
 import { ReshapeWallsUseCase } from './use-cases/ReshapeWallsUseCase';
 import { SplitWallUseCase } from './use-cases/SplitWallUseCase';
+import { MergeWallsUseCase } from './use-cases/MergeWallsUseCase';
 import { CreateFloorUseCase } from './use-cases/CreateFloorUseCase';
 import { WallElevationService } from './elevation/WallElevationService';
 import { IFCSerializerAdapter } from '../infrastructure/export/ifc/IFCSerializerAdapter';
@@ -97,6 +98,8 @@ export interface AppServices {
     reshapeWalls: ReshapeWallsUseCase;
     /** Partir un muro en un punto (H-74). */
     splitWall: SplitWallUseCase;
+    /** Unir dos muros colineales (inverso de partir). */
+    mergeWalls: MergeWallsUseCase;
     deleteObject: DeleteObjectUseCase;
     capturePhoto: CapturePhotoUseCase;
     linkPhotoToObject: LinkPhotoToObjectUseCase;
@@ -152,6 +155,7 @@ export function createAppServices(db: IDatabase): AppServices {
       updateObjectProperty: new UpdateObjectPropertyUseCase(store, commandStack, validationService),
       reshapeWalls: new ReshapeWallsUseCase(store, commandStack),
       splitWall: new SplitWallUseCase(store, commandStack, elevations),
+      mergeWalls: new MergeWallsUseCase(store, commandStack, elevations),
       deleteObject: new DeleteObjectUseCase(store, commandStack),
       capturePhoto: new CapturePhotoUseCase(store, commandStack),
       linkPhotoToObject: new LinkPhotoToObjectUseCase(store, commandStack),

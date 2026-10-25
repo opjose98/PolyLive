@@ -22,6 +22,7 @@ import { roomId, revitObjectId, levelId, measurementId, wallId, RoomId, RevitObj
 import { meters } from '../../src/domain/geometry/types';
 import { extent, WallVertical } from '../../src/domain/objects/vertical';
 import { placeSpan, planWallSplit, splitSnapCandidates } from '../../src/domain/objects/wall-split';
+import { planWallMerge } from '../../src/domain/objects/wall-merge';
 import { wallOpeningId } from '../../src/domain/objects/wall-elevation';
 
 const ROOM: RoomId = roomId('split-room');
@@ -81,6 +82,41 @@ describe('planWallSplit / placeSpan', () => {
     expect(placeSpan({ xOffset: 3.6, width: 1 }, 3, 6)).toEqual({ second: true, xOffset: 0.6000000000000001, clamped: false });
     expect(placeSpan({ xOffset: 2.0, width: 1.2 }, 3, 6)).toEqual({ second: false, xOffset: 1.8, clamped: true });
     expect(placeSpan({ xOffset: 2.6, width: 1.2 }, 3, 6)).toMatchObject({ second: true, xOffset: 0, clamped: true });
+  });
+});
+
+describe('planWallMerge', () => {
+  const muro = extent({ baseLevelId: 'piso', topLevelId: 'muro', unconnectedHeight: 2.5 });
+  const cumbrera = extent({ baseLevelId: 'piso', topLevelId: 'cubierta', unconnectedHeight: 3.5 });
+
+  it('dos mitades de culata (la segunda dibujada al revés) dan un muro con estación en la cumbrera', () => {
+    const plan = planWallMerge(
+      { start: { x: 0, y: 0 }, end: { x: 3, y: 0 }, vertical: { start: muro, end: cumbrera } },
+      { start: { x: 7, y: 0 }, end: { x: 3, y: 0 }, vertical: { start: muro, end: cumbrera } },
+      LEVELS,
+    );
+    if (typeof plan === 'string') throw new Error(plan);
+    expect(plan.start).toEqual({ x: 0, y: 0 });
+    expect(plan.end).toEqual({ x: 7, y: 0 });
+    expect(plan.vertical).toEqual({ start: muro, end: muro, stations: [{ at: 3, ext: cumbrera }] });
+    expect(plan.flipB).toBe(true);
+    expect(plan.mapB(1)).toBe(6);
+  });
+
+  it('sin quiebre en el punto común no deja estación; no alineados no se unen', () => {
+    const plan = planWallMerge(
+      { start: { x: 0, y: 0 }, end: { x: 3, y: 0 }, vertical: { start: muro, end: muro } },
+      { start: { x: 3, y: 0 }, end: { x: 5, y: 0 }, vertical: { start: muro, end: muro } },
+      LEVELS,
+    );
+    expect(typeof plan !== 'string' && plan.vertical).toEqual({ start: muro, end: muro });
+    expect(
+      planWallMerge(
+        { start: { x: 0, y: 0 }, end: { x: 3, y: 0 }, vertical: { start: muro, end: muro } },
+        { start: { x: 3, y: 0 }, end: { x: 3, y: 2 }, vertical: { start: muro, end: muro } },
+        LEVELS,
+      ),
+    ).toMatch(/alineados/);
   });
 });
 
@@ -196,6 +232,36 @@ describe('SplitWallUseCase', () => {
     expect((await read<Window>(win.id))!.parentWallId).toBe(newWallId);
     expect((await read<Wall>(wall.id))!.endPoint).toEqual({ x: 3, y: 0 });
     expect(await services.store.listMeasurementsForWall(wallId(newWallId as string))).toHaveLength(1);
+  });
+
+  it('unir deshace partir: vanos, antepechos y estaciones vuelven a su sitio; deshacer y rehacer', async () => {
+    const { newWallId } = await services.useCases.splitWall.execute({ wallId: wall.id, distance: 3, vertical: SLOPED, levels: LEVELS });
+    const first = (await read<Wall>(wall.id))!;
+    const second = (await read<Wall>(newWallId))!;
+    await services.useCases.mergeWalls.execute({
+      keepId: wall.id,
+      removeId: newWallId,
+      keepVertical: first.vertical!,
+      removeVertical: second.vertical!,
+      levels: LEVELS,
+    });
+    const w = (await read<Wall>(wall.id))!;
+    expect(w.endPoint).toEqual({ x: 6, y: 0 });
+    expect(w.vertical).toEqual(SLOPED); // el punto común no quiebra el perfil: sin estación
+    expect(await read(newWallId)).toBeNull();
+    const win2 = (await read<Window>(win.id))!;
+    expect(win2.parentWallId).toBe(wall.id);
+    expect(win2.offsetAlongWall as number).toBeCloseTo(3.6);
+    const e = await services.elevations.getElevation(w);
+    expect(e.openings.find((o) => o.vanoId === (win.id as string))?.sillHeight).toBe(1.4);
+    expect(e.openings.find((o) => o.id === 'hueco')?.xOffset).toBeCloseTo(4.5);
+
+    await services.commandStack.undo();
+    expect((await read<Wall>(wall.id))!.endPoint).toEqual({ x: 3, y: 0 });
+    expect((await read<Window>(win.id))!.parentWallId).toBe(newWallId);
+    await services.commandStack.redo();
+    expect(await read(newWallId)).toBeNull();
+    expect((await read<Window>(win.id))!.parentWallId).toBe(wall.id);
   });
 
   it('un vano sobre el corte se arrima a su tramo y se cuenta', async () => {

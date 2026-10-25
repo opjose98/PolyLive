@@ -52,6 +52,8 @@ export interface BridgeContext {
   readonly open?: (projectId: string, spaceId: string) => Promise<void>;
   /** Acciones que viven en la UI (exportar el IFC tal como lo exporta el menú). */
   readonly exportIfc?: () => Promise<string>;
+  /** Acciones de pantalla (encuadrar, abrir alzado o corte…), para revisar a ojo. */
+  readonly ui?: Readonly<Record<string, (args: Record<string, unknown>) => unknown>>;
 }
 
 type Args = Record<string, unknown>;
@@ -81,11 +83,12 @@ const HELP = {
     'column {at:[x,y], w, d, circular, rotation, v:{base,top}} · ' +
     'floor {zone | outline:[[x,y]…], holes, thickness} · void {floor, hole:[[x,y]…]} · ' +
     'vertical {id, v | a, b, stations} · station {wall, at, top, topOffset, base, baseOffset} (at sin top = quitarla) · ' +
-    'sill {id (puerta/ventana), sill} · props {id, set:{clave: valor}} · delete {id} · split {wall, at}',
+    'sill {id (puerta/ventana), sill} · props {id, set:{clave: valor}} · delete {id} · split {wall, at} · merge {wall, with} (une tramos alineados; el común pasa a estación si quiebra)',
   undo: 'Deshace el último paso.',
   redo: 'Rehace.',
   section: '{ a:[x,y], b:[x,y] } lo que corta esa línea (piezas rayadas del corte).',
   columnView: '{ id } alzado desdoblado de una columna: caras y lo que las atraviesa.',
+  ui: '{ action: fit | select {id} | elevation {wall} | column {id} | section {a, b} | close | tool {id} }: mueve la pantalla para revisar a ojo.',
   exportIfc: 'IFC del espacio (el mismo del menú) como texto.',
 } as const;
 
@@ -122,6 +125,11 @@ export async function runBridgeCommand(ctx: BridgeContext, cmd: string, args: Ar
       const c = await ctx.services.store.readObject(revitObjectId(String(args.id)));
       if (!(c instanceof Column)) throw new Error(`"${String(args.id)}" no es una columna.`);
       return columnProjection(ctx.services, scope(ctx).spaceId as never, await markers(ctx, 'level'), c);
+    }
+    case 'ui': {
+      const fn = ctx.ui?.[String(args.action)];
+      if (!fn) throw new Error(`Acción de pantalla desconocida. Disponibles: ${Object.keys(ctx.ui ?? {}).join(', ')}.`);
+      return (await fn(args)) ?? { ok: true };
     }
     case 'exportIfc':
       if (!ctx.exportIfc) throw new Error('Abre un espacio para exportar su IFC.');
@@ -493,6 +501,18 @@ async function ops(ctx: BridgeContext, args: Args) {
       case 'delete':
         await ctx.services.useCases.deleteObject.execute({ objectId: revitObjectId(String(o.id)) });
         return o.id;
+      case 'merge': {
+        const a = await wallOf(o.wall);
+        const b = await wallOf(o.with);
+        const r = await ctx.services.useCases.mergeWalls.execute({
+          keepId: a.id,
+          removeId: b.id,
+          keepVertical: wallVerticalOf(a, base, LEVEL_PROP),
+          removeVertical: wallVerticalOf(b, base, LEVEL_PROP),
+          levels: elev,
+        });
+        return { id: a.id, length: r.length };
+      }
       case 'split': {
         const wall = await wallOf(o.wall);
         const r = await ctx.services.useCases.splitWall.execute({

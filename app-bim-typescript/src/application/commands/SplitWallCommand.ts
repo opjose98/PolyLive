@@ -75,7 +75,7 @@ export class SplitWallCommand extends Command {
   }
 }
 
-async function writeWall(store: IObjectStore, id: string, s: SplitWallState): Promise<void> {
+export async function writeWall(store: IObjectStore, id: string, s: SplitWallState): Promise<void> {
   await store.updateObject(revitObjectId(id), {
     startPoint: s.start,
     endPoint: s.end,
