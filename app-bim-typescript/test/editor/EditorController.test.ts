@@ -1134,6 +1134,18 @@ describe('EditorController', () => {
       expect(editor.getState().selectedId).toBeNull();
     });
 
+    it('un espacio sin muros en la base (2.º piso con cotas absolutas) cierra su Recinto con el nivel más bajo', async () => {
+      editor.setScope(levels('L1'), null);
+      editor.setSnapEnabled(false);
+      editor.setNodeSnapEnabled(false);
+      await drawRectangle();
+      // Mirando otro nivel, el Recinto persistido sigue siendo el de L1 (el único con muros).
+      editor.setScope(levels('L2'), null);
+      await editor.reload();
+      const room = (await services.store.readObject(ROOM_OBJECT_ID)) as Room;
+      expect(room.geometry).toHaveLength(4);
+    });
+
     it('lo que no tiene nivel (levantado antes) pertenece a la base', async () => {
       editor.setSnapEnabled(false);
       editor.setNodeSnapEnabled(false);
@@ -1275,11 +1287,16 @@ describe('EditorController', () => {
     });
 
     it('el recinto que se guarda es el de la base, aunque se esté trazando en otro nivel', async () => {
+      editor.setScope(levels('L0'), null);
+      await drawRectangle(); // 4 × 3 en la base
       editor.setScope(levels('L1'), null);
-      await drawRectangle();
+      await drawWall(0, 0, 6, 0);
+      await drawWall(6, 0, 6, 5);
+      await drawWall(6, 5, 0, 5);
+      await drawWall(0, 5, 0, 0);
       expect(editor.getState().rooms).toHaveLength(1); // se ve en el nivel activo
       const room = (await services.store.readObject(ROOM_OBJECT_ID)) as Room;
-      expect(room.geometry).toHaveLength(0); // pero no reescribe el de la base
+      expect(Math.max(...room.geometry.map((p) => p.x))).toBeCloseTo(4); // pero no reescribe el de la base
     });
   });
 

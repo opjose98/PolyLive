@@ -561,6 +561,13 @@ export abstract class EditorCore {
     return typeof raw === 'string' && lv.all.has(raw) ? raw : lv.base;
   }
 
+  /** Nivel del Recinto persistido: la base, o el más bajo con muros si la base no tiene ninguno. */
+  protected roomLevelOf(objects: readonly RevitObjectBase[], lv: LevelScope): string {
+    const levels = new Set(objects.filter((o) => o instanceof Wall && !o.is_deleted).map((o) => this.levelOf(o, lv)));
+    if (levels.size === 0 || levels.has(lv.base)) return lv.base;
+    return [...levels].sort((a, b) => (lv.elevations.get(a) ?? 0) - (lv.elevations.get(b) ?? 0))[0];
+  }
+
   /**
    * ¿Se ve (y se edita) en la planta del nivel activo? Lo de su nivel, y los
    * muros y columnas de otros niveles que atraviesan su plano de corte. Una
@@ -697,12 +704,14 @@ export abstract class EditorCore {
     const scopedWalls = objects.filter((o): o is Wall => o instanceof Wall && this.inScope(o));
     const rooms = await this.syncZones(detect(scopedWalls), scopedWalls);
     // El Recinto persistido (el que exportan IFC y DXF) es el de su nivel, la
-    // base: navegar a otro nivel no debe reescribir su geometría.
+    // base: navegar a otro nivel no debe reescribir su geometría. Un espacio sin
+    // muros en la base (el 2.º piso con cotas absolutas) toma el nivel más bajo con muros.
     const lv = this.levelScope;
+    const roomLevel = lv && this.roomLevelOf(objects, lv);
     const baseRooms =
-      !lv || lv.active === lv.base
+      !lv || lv.active === roomLevel
         ? rooms
-        : detect(objects.filter((o): o is Wall => o instanceof Wall && this.levelOf(o, lv) === lv.base));
+        : detect(objects.filter((o): o is Wall => o instanceof Wall && this.levelOf(o, lv) === roomLevel));
     if (await this.syncRoomGeometry(objects, baseRooms)) {
       objects = await this.services.store.listObjects(this.roomId);
     }

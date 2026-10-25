@@ -23,6 +23,7 @@ import { Wall } from '../../domain/objects/wall';
 import { Door } from '../../domain/objects/door';
 import { Window } from '../../domain/objects/window';
 import { Column } from '../../domain/objects/column';
+import { projectId as toProjectId } from '../../domain/objects/project';
 import { Floor, floorZoneId } from '../../domain/objects/floor';
 import { BASE_MARKER_NAME, LEVEL_PROP, LEVEL_TEMPLATE, PHASE_PROP, ProjectMarker } from '../../domain/objects/marker';
 import { applySpaceSetup } from '../projects/spaceSetup';
@@ -82,6 +83,7 @@ const HELP = {
   projects: 'Proyectos con sus espacios (ids y nombres).',
   createProject:
     '{ name, code?, author?, space, levels: [{ name, value }], phases?: [nombre] } crea el proyecto y su espacio con niveles y fases (como el diálogo); luego «open».',
+  createSpace: '{ project (id o nombre), name, levels?, phases? } añade un espacio al proyecto (otro bloque de la sede); luego «open».',
   open: '{ project, space } (id o nombre): abre el espacio en la tableta.',
   levels: 'Niveles y fases del espacio abierto.',
   setLevels: '{ levels: [{ name, value }] } crea o ajusta niveles por nombre (no borra; los objetos siguen atados).',
@@ -99,7 +101,7 @@ const HELP = {
   redo: 'Rehace.',
   section: '{ a:[x,y], b:[x,y] } lo que corta esa línea (piezas rayadas del corte).',
   columnView: '{ id } alzado desdoblado de una columna: caras y lo que las atraviesa.',
-  ui: '{ action: fit | select {id} | elevation {wall} | column {id} | section {a, b} | close | tool {id} }: mueve la pantalla para revisar a ojo.',
+  ui: '{ action: fit | select {id} | elevation {wall} | column {id} | section {id | a, b} | close | tool {id} | level {name} }: mueve la pantalla para revisar a ojo; «level» cambia el nivel activo (los recintos se detectan en él).',
   exportIfc: 'IFC del espacio (el mismo del menú) como texto.',
 } as const;
 
@@ -113,6 +115,8 @@ export async function runBridgeCommand(ctx: BridgeContext, cmd: string, args: Ar
       return listProjects(ctx);
     case 'createProject':
       return createProject(ctx, args);
+    case 'createSpace':
+      return createSpace(ctx, args);
     case 'open':
       return open(ctx, args);
     case 'levels':
@@ -178,11 +182,27 @@ async function createProject(ctx: BridgeContext, args: Args) {
     ...(args.code ? { bimCode: String(args.code) } : {}),
     ...(args.author ? { author: String(args.author) } : {}),
   });
-  const { room } = await ctx.services.projects.createSpace({ projectId: project.id, name: String(args.space ?? 'Espacio 1') });
+  const space = await addSpace(ctx, project.id as string, String(args.space ?? 'Espacio 1'), args);
+  return { project: project.id, code: project.bimCode, space };
+}
+
+async function createSpace(ctx: BridgeContext, args: Args) {
+  const want = String(args.project ?? '');
+  const p = (await listProjects(ctx)).find((x) => x.id === want || x.name === want || x.code === want);
+  if (!p) throw new Error(`No hay proyecto "${want}".`);
+  const name = String(args.name ?? '').trim();
+  if (!name) throw new Error('Falta el nombre del espacio.');
+  if (p.spaces.some((s) => s.name === name)) throw new Error(`El proyecto ${p.name} ya tiene el espacio "${name}".`);
+  return { project: p.id, space: await addSpace(ctx, p.id, name, args) };
+}
+
+/** Espacio nuevo con sus niveles y fases, como el diálogo. */
+async function addSpace(ctx: BridgeContext, projectId: string, name: string, args: Args): Promise<string> {
+  const { room } = await ctx.services.projects.createSpace({ projectId: toProjectId(projectId), name });
   const levels = (args.levels as { name: string; value: number }[] | undefined) ?? [...LEVEL_TEMPLATE];
   const phases = (args.phases as string[] | undefined) ?? [BASE_MARKER_NAME.phase];
-  await applySpaceSetup(ctx.services.markers, { projectId: project.id as string, spaceId: room.roomId as string }, { levels, phases });
-  return { project: project.id, code: project.bimCode, space: room.roomId };
+  await applySpaceSetup(ctx.services.markers, { projectId, spaceId: room.roomId as string }, { levels, phases });
+  return room.roomId as string;
 }
 
 async function open(ctx: BridgeContext, args: Args) {
@@ -222,7 +242,11 @@ async function setLevels(ctx: BridgeContext, args: Args) {
       m = await ctx.services.markers.add(sc, 'level', l.name);
       current = await markers(ctx, 'level');
     }
-    if (m.name !== l.name) await ctx.services.markers.rename(sc, m.id, l.name);
+    if (m.name !== l.name) {
+      await ctx.services.markers.rename(sc, m.id, l.name);
+      // Sin releer, un nivel siguiente con el nombre viejo de la base la volvería a tomar.
+      current = await markers(ctx, 'level');
+    }
     if (!m.isBase && Math.abs(m.value - l.value) > 1e-9) {
       const r = await ctx.services.markers.setValue(sc, m.id, l.value);
       if (!r.ok) throw new Error(`No se pudo poner ${l.name} a ${l.value} m (${r.reason}).`);
@@ -354,8 +378,9 @@ async function ops(ctx: BridgeContext, args: Args) {
       unconnectedHeight: s?.height ?? dflt?.unconnectedHeight ?? 2.8,
     });
   const verticalOf = (o: Args, current?: WallVertical): WallVertical => {
-    const start = o.v || o.a ? toExtent((o.v ?? o.a) as ExtentSpec, current?.start) : current?.start ?? toExtent(undefined);
-    const end = o.v || o.b ? toExtent((o.v ?? o.b) as ExtentSpec, current?.end) : current?.end ?? start;
+    // «a»/«b» (un extremo) mandan sobre «v» (los dos).
+    const start = o.a || o.v ? toExtent((o.a ?? o.v) as ExtentSpec, current?.start) : current?.start ?? toExtent(undefined);
+    const end = o.b || o.v ? toExtent((o.b ?? o.v) as ExtentSpec, current?.end) : current?.end ?? start;
     let v: WallVertical = { start, end, ...(current?.stations ? { stations: current.stations } : {}) };
     for (const s of (o.stations as (ExtentSpec & { at: number })[] | undefined) ?? []) {
       v = withStation(v, { at: s.at, ext: toExtent(s, start) });

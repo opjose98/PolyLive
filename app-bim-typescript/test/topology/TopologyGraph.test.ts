@@ -235,6 +235,15 @@ describe('findMinimalCycles', () => {
     expect(graph.findMinimalCycles()).toHaveLength(2);
   });
 
+  it('dos muros que se cruzan en X sin extremo común parten el recinto en cuatro (H-83)', () => {
+    const graph = new TopologyGraph();
+    graph.addWalls(rectangleWalls());
+    graph.addWall(wall({ x: 2, y: 0 }, { x: 2, y: 3 }));
+    // Cruza al tabique vertical por su mitad: Pala, cabinas de baño.
+    graph.addWall(wall({ x: 0, y: 1.5 }, { x: 4, y: 1.5 }));
+    expect(graph.findMinimalCycles()).toHaveLength(4);
+  });
+
   it('excluye las particiones no estructurales del cierre de recintos', () => {
     const graph = new TopologyGraph();
     const muros = rectangleWalls();

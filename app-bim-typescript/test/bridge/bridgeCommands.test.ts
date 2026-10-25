@@ -39,6 +39,24 @@ describe('puente: comandos', () => {
     fs.rmSync(dbPath, { force: true });
   });
 
+  it('un extremo «a» manda sobre «v» al crear el muro', async () => {
+    const [id] = (await runBridgeCommand(ctx, 'ops', {
+      list: [{ op: 'wall', start: [0, 0], end: [4, 0], thickness: 0.15, v: { base: 'Piso', top: 'Muro' }, a: { base: 'Piso', top: 'Muro', topOffset: 0.4 } }],
+    })) as string[];
+    const w = (await services.store.readObject(revitObjectId(id))) as Wall;
+    expect(w.vertical?.start.topOffset).toBeCloseTo(0.4);
+    expect(w.vertical?.end.topOffset).toBeCloseTo(0);
+  });
+
+  it('setLevels renombra la base y crea un nivel con el nombre que tenía', async () => {
+    await runBridgeCommand(ctx, 'setLevels', { levels: [{ name: 'Andén', value: 0 }] });
+    const r = (await runBridgeCommand(ctx, 'setLevels', { levels: [{ name: 'Piso', value: 0 }, { name: 'Andén', value: -0.2 }] })) as {
+      levels: { name: string; value: number; base: boolean }[];
+    };
+    expect(r.levels.find((l) => l.base)?.name).toBe('Piso');
+    expect(r.levels.find((l) => l.name === 'Andén')?.value).toBeCloseTo(-0.2);
+  });
+
   it('crea una culata con estación, una ventana con antepecho y un andén; se lee y se deshace', async () => {
     const [wallId] = (await runBridgeCommand(ctx, 'ops', {
       list: [{ op: 'wall', start: [0, 0], end: [7, 0], thickness: 0.15, v: { base: 'Piso', top: 'Muro' }, stations: [{ at: 3.5, top: 'Cubierta' }] }],
@@ -144,6 +162,11 @@ describe('puente: proyecto nuevo y cortes guardados', () => {
       space: 'B1 Primer piso',
       levels: [{ name: 'Piso', value: 0 }, { name: 'Muro', value: 2.5 }, { name: 'Cubierta', value: 3.4 }],
     })) as { project: string; space: string };
+    // Otro bloque de la sede en su propio espacio, con niveles propios.
+    await runBridgeCommand(base, 'createSpace', { project: 'NARG29 PRUEBA', name: 'B2 Batería', levels: [{ name: 'Piso', value: 0 }, { name: 'Muro', value: 2.2 }] });
+    await expect(runBridgeCommand(base, 'createSpace', { project: 'NARG29 PRUEBA', name: 'B2 Batería' })).rejects.toThrow('ya tiene');
+    const [p] = (await runBridgeCommand(base, 'projects')) as { spaces: { name: string }[] }[];
+    expect(p.spaces.map((x) => x.name).sort()).toEqual(['B1 Primer piso', 'B2 Batería']);
     const editor = new EditorController({ services, roomId: made.space as never, roomObjectId: made.space as never, initialTransform: { scale: 100, offsetX: 0, offsetY: 0 } });
     await editor.init();
     const ctx: BridgeContext = { ...base, editor, projectId: made.project, spaceId: made.space };

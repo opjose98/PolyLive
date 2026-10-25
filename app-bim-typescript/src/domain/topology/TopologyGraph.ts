@@ -39,6 +39,25 @@ export interface TopologyCycle {
   readonly fromNodeIds: string[];
 }
 
+/**
+ * Punto donde se cruzan los segmentos ab y cd, si cae en el interior de los dos (a más de `tol`
+ * de cada extremo: lo que toca un extremo ya es una T y lo parte `splitEdgesAt`). Paralelos: null.
+ */
+function crossingPoint(a: Point2D, b: Point2D, c: Point2D, d: Point2D, tol: number): Point2D | null {
+  const rx = b.x - a.x;
+  const ry = b.y - a.y;
+  const sx = d.x - c.x;
+  const sy = d.y - c.y;
+  const den = rx * sy - ry * sx;
+  if (Math.abs(den) < 1e-12) return null;
+  const t = ((c.x - a.x) * sy - (c.y - a.y) * sx) / den;
+  const u = ((c.x - a.x) * ry - (c.y - a.y) * rx) / den;
+  const lr = Math.hypot(rx, ry);
+  const ls = Math.hypot(sx, sy);
+  if (t * lr < tol || (1 - t) * lr < tol || u * ls < tol || (1 - u) * ls < tol) return null;
+  return { x: a.x + t * rx, y: a.y + t * ry };
+}
+
 /** Límite de aristas por ciclo, para no colgarse en grafos degenerados. */
 const MAX_CYCLE_LENGTH = 200;
 
@@ -95,6 +114,22 @@ export class TopologyGraph {
     for (const node of [...this.nodes.values()]) {
       if (node === startNode || node === endNode) continue;
       if (distanceToSegment(node.position, a, b) < this.snapTolerance) this.splitEdgesAt(node);
+    }
+
+    // Cruce en X sin extremo común: el punto de cruce es un nudo de los dos muros (H-83).
+    const crossings: Point2D[] = [];
+    for (const other of this.edges.values()) {
+      if (other.geometryType !== 'line' || other.id === edge.id) continue;
+      const c = this.nodes.get(other.startNodeId)?.position;
+      const d = this.nodes.get(other.endNodeId)?.position;
+      const p = c && d ? crossingPoint(a, b, c, d, this.snapTolerance) : null;
+      if (p) crossings.push(p);
+    }
+    for (const p of crossings) {
+      const node = this.getOrCreateNode(p);
+      // Una vez para el muro existente y otra para el nuevo (o su tramo).
+      this.splitEdgesAt(node);
+      this.splitEdgesAt(node);
     }
   }
 

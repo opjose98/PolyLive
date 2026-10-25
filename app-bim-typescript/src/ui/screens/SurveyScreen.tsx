@@ -1121,6 +1121,12 @@ export function SurveyScreen({
       setProjection(await sectionProjection(services, roomId, projectLevels, { x: ax, y: ay }, { x: bx, y: by }, saved?.text ?? 'Corte'));
     };
     bridgeUi.current.tool = (a) => (a.id ? editor.setTool(a.id as never) : editor.setTool('select'));
+    // Nivel activo por nombre, como mover el deslizador «Nivel» (los recintos se detectan por nivel).
+    bridgeUi.current.level = (a) => {
+      const idx = workspaceStore.getState().levels.items.findIndex((i) => i.name === a.name);
+      if (idx < 0) throw new Error(`No hay nivel "${String(a.name)}".`);
+      workspaceStore.getState().moveRangeThumb('levels', 'nivel', idx);
+    };
   });
 
   // Puente de desarrollo: ve este editor y exporta el IFC como el menú.
